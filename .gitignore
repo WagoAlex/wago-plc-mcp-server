@@ -1,0 +1,36 @@
+# Secrets — never commit
+.env
+*.env
+.env.*
+!_env          # keep the template
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+wago_proxy.py
+
+# uv lockfile (optional — commit if you want reproducible builds)
+# uv.lock
+
+# Logs
+*.log
+mcp_server.log
+
+# Docker
+docker-compose.override.yml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db

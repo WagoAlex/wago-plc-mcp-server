@@ -1,0 +1,49 @@
+# ─────────────────────────── wago-plc-mcp deployment ───────────────────────────
+# Two common deployment patterns. Pick one and remove the other.
+
+services:
+  wago-plc-mcp-server:
+    image: wagoalex/wago-plc-mcp-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wmcp
+    env_file:
+      - .env
+    restart: unless-stopped
+
+    # ── Pattern A: Host networking (default for routed PLC subnets) ──
+    # Use this when your PLCs are on a subnet reachable from the host.
+    # The container shares the host's IP and routing table.
+    network_mode: host
+
+    # ── Pattern B: Bridge networking with port forward (cloud / portable) ──
+    # Comment out 'network_mode: host' above and uncomment the block below.
+    # PLCs must be reachable from the host's outbound interface.
+    #
+    # ports:
+    #   - "6042:6042"
+    # networks:
+    #   - wago-net
+
+    # ── Optional: live code mount for development (no rebuild needed) ──
+    # volumes:
+    #   - ./src:/app/src:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 2 -o /dev/null -w '%{http_code}' -X POST http://localhost:6042/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"1.0\"}},\"id\":1}' | grep -qE '200|400'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Uncomment when using Pattern B
+# networks:
+#   wago-net:
+#     driver: bridge

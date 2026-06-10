@@ -1,0 +1,37 @@
+# ─────────────────────────── wago-plc-mcp config ───────────────────────────
+# Copy to .env and customize for your deployment.
+
+# ── PLC list (pick ONE format, or combine; format 2 overrides format 1) ──
+
+# Format 1 — Shared credentials, comma-separated IPs (simplest):
+WAGO_PLC_HOSTS=192.168.2.17,192.168.42.42
+# Format 2 — Per-PLC credentials (use underscores in IP keys):
+# PLC_PASSWORDS_10_0_0_1=secret_a
+# PLC_PASSWORDS_10_0_0_2=secret_b
+# PLC_PASSWORDS_10_0_0_3=secret_c
+
+# ── Default credentials (used when password not specified per-PLC) ──
+DEFAULT_PLC_USERNAME=admin
+DEFAULT_PLC_PASSWORD=wago
+
+# ── MCP server bind ──
+HOST=0.0.0.0
+PORT=6042
+#TRANSPORT=sse
+TRANSPORT=streamable-http
+# ── Optional tuning ──
+# Connection timeout per PLC HTTP request, in seconds (default 5)
+WAGO_TIMEOUT_SECONDS=15
+
+# Page size when walking large collections (default 500)
+WAGO_PAGE_LIMIT=500
+
+# Log level: DEBUG | INFO | WARNING | ERROR (default INFO)
+LOG_LEVEL=INFO
+# Semaphore in register_many — max 5 PLCs parallel 
+WAGO_MAX_CONCURRENT_REGISTRATIONS=5
+# PLC Timeout
+WAGO_TIMEOUT_SECONDS=45
+
+# Log file path inside container (default /app/mcp_server.log)
+LOG_FILE=/app/mcp_server.log
