@@ -255,18 +255,3 @@ while next_url:
 Parameter: `0-0-version-firmwareversion` · Latest: **04.09.01 (index 31)**
 
 ---
-
-## Debugging Guide
-
-| Symptom | Root Cause | Fix |
-|---------|-----------|-----|
-| Logs show `/sse` despite `TRANSPORT=streamable-http` | Old `main.py` in image | Replace file on disk, then `docker rm -f wmcp && docker compose up -d --build` |
-| Healthcheck 406 | Wrong Accept header | Add `-H 'Accept: application/json, text/event-stream'` |
-| Healthcheck 400 | Stateless probe, no session ID | Normal — accept 400 as healthy |
-| LAN client 421 / refused | `transport_security` not disabled | Add `transport_security=None` to FastMCP constructor |
-| `unexpected keyword 'timeout_seconds'` | Wrong kwarg in `create_monitoring_list` | Use `timeout=` |
-| `read_watchlist` empty parameters | Wrong kwarg in `get_monitoring_list` | Use `include_parameters=True` |
-| Claude Desktop "not valid MCP config" | `type: "url"` needs HTTPS + OAuth | Use proxy script with stdio transport |
-| `FastMCP.as_proxy()` deprecation | Removed in fastmcp 3.x | Use `create_proxy()` from `fastmcp.server` |
-| CC100 registration timeout | Slow ARM WDA | `WAGO_TIMEOUT_SECONDS=45` |
-| `--build` has no effect | Old container still running | `docker rm -f wmcp` first |
