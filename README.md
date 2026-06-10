@@ -1,3 +1,6 @@
+[![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 # wago-plc-mcp-server
 
 > MCP server that connects WAGO PLCs to LLM agents via the WDx/WDA REST API.
