@@ -53,14 +53,14 @@ INCREMENT_TYPE="patch"
 PUSH_DOCKER_FLAG=false
 USE_NO_CACHE=false
 START_SERVER=false
+BUMP_EXPLICITLY_SET=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --major) INCREMENT_TYPE="major"; shift ;;
-        --minor) INCREMENT_TYPE="minor"; shift ;;
-        --patch) INCREMENT_TYPE="patch"; shift ;;
+        --major) INCREMENT_TYPE="major"; BUMP_EXPLICITLY_SET=true; shift ;;
+        --minor) INCREMENT_TYPE="minor"; BUMP_EXPLICITLY_SET=true; shift ;;
+        --patch) INCREMENT_TYPE="patch"; BUMP_EXPLICITLY_SET=true; shift ;;
         --release)
-            INCREMENT_TYPE="none"
             PUSH_DOCKER_FLAG=true
             shift ;;
         --no-cache) USE_NO_CACHE=true; shift ;;
@@ -113,9 +113,9 @@ increment_version() {
     echo "$major.$minor.$patch"
 }
 
-if [ "$INCREMENT_TYPE" == "none" ]; then
+if [ "$PUSH_DOCKER_FLAG" == "true" ] && [ "$BUMP_EXPLICITLY_SET" == "false" ]; then
     NEW_VERSION=$CURRENT_VERSION
-    echo "Using current version (specified by --release): $NEW_VERSION"
+    echo "Using current version for release: $NEW_VERSION"
 else
     NEW_VERSION=$(increment_version "$CURRENT_VERSION" "$INCREMENT_TYPE")
     echo "Incrementing version ($INCREMENT_TYPE): $CURRENT_VERSION -> $NEW_VERSION"

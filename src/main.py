@@ -168,21 +168,18 @@ def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
         or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
     )
     per_plc_secrets = _load_per_plc_secrets()
-    plcs: dict[str, tuple[str, str]] = {}  # ip → (user, pwd)
+    plcs: dict[str, tuple[str, str]] = {}
 
-    # Format 1: comma-separated list with shared credentials
     hosts_csv = os.getenv("WAGO_PLC_HOSTS", "").strip()
     if hosts_csv:
         for ip in (h.strip() for h in hosts_csv.split(",")):
             if ip:
                 plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
 
-    # Format 2: per-IP env vars (override or extend)
     for key, val in os.environ.items():
         m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)
         if m:
             ip = m.group(1).replace("_", ".")
-            # Secret beats env var for the same IP
             plcs[ip] = (user, per_plc_secrets.get(ip) or val or default_pwd)
 
     return [(ip, u, p) for ip, (u, p) in plcs.items()]
