@@ -10,9 +10,24 @@ WAGO_PLC_HOSTS=192.168.2.17,192.168.42.42
 # PLC_PASSWORDS_10_0_0_2=secret_b
 # PLC_PASSWORDS_10_0_0_3=secret_c
 
-# ── Default credentials (used when password not specified per-PLC) ──
+# ── Default credentials ──
 DEFAULT_PLC_USERNAME=admin
-DEFAULT_PLC_PASSWORD=wago
+
+# DEPRECATED: Store the password as a Docker Secret instead (recommended for production).
+# Create secrets/plc_default_password.txt and declare it in docker-compose.yml.
+# This env var is kept as a dev/local fallback only — remove it from .env in production.
+# DEFAULT_PLC_PASSWORD=wago
+
+# ── T1: Bearer auth on /mcp (recommended for production) ──
+# Store the key as a Docker Secret (highest priority):
+#   echo "$(openssl rand -hex 32)" > secrets/mcp_api_key.txt
+#   chmod 600 secrets/mcp_api_key.txt
+#   # then uncomment mcp_api_key in docker-compose.yml secrets section
+# Fallback (dev only — prefer the secret):
+# MCP_API_KEY=your-random-hex-key
+#
+# Add to .mcp.json when auth is enabled:
+#   "headers": {"Authorization": "Bearer <your-key>"}
 
 # ── MCP server bind ──
 HOST=0.0.0.0

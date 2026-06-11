@@ -9,10 +9,10 @@ Ask an AI assistant to read sensor values, change configuration, trigger firmwar
 
 ```
 Claude Desktop / OpenClaw / any MCP client
-        │  stdio or Streamable HTTP
+        │  stdio or Streamable HTTP  +  Bearer token
         ▼
 wago-plc-mcp-server  (Docker, port 6042)
-        │  HTTPS / WDA REST API
+        │  HTTPS / WDA REST API  +  Bearer token per PLC
         ▼
 WAGO PLC fleet  (PFC200, PFC300, CC100, Edge Controller)
 ```
@@ -43,6 +43,14 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 - **Dual transport** — Streamable HTTP (default) or SSE, switched via env var
 - **Docker-first** — single container, host networking for routed PLC subnets
 
+### Security (CRA Tier-1)
+
+- **Bearer auth on `/mcp`** — auto-generated key persisted to `./data/`; Docker Secret and env var override; `/health` always exempt
+- **WDA Bearer token auth** — credentials sent once per PLC at startup; all subsequent WDA calls use a cached Bearer token
+- **Audit log** — every `set_parameters` and `invoke_method` call written as JSON to `/app/audit.log` with timestamp, agent ID, PLC, and result
+- **Docker Secrets** — PLC passwords and the MCP API key can be mounted as secrets instead of env vars
+- **CycloneDX SBOM** — generated automatically on every build via syft
+
 ---
 
 ## Quick Start
@@ -50,7 +58,7 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/your-username/wago-plc-mcp-server.git
+git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
 cd wago-plc-mcp-server
 cp _env .env
 ```
@@ -61,51 +69,105 @@ Edit `.env`:
 WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
 DEFAULT_PLC_USERNAME=admin
 DEFAULT_PLC_PASSWORD=wago
-TRANSPORT=streamable-http
 PORT=6042
 WAGO_TIMEOUT_SECONDS=15     # use 45 for CC100
 ```
 
-### 2. Start
+### 2. Create the PLC password secret
+
+```bash
+mkdir -p secrets
+echo "your-plc-password" > secrets/plc_default_password.txt
+chmod 600 secrets/plc_default_password.txt
+```
+
+### 3. Start
 
 ```bash
 docker compose up -d
 docker logs wmcp -f
 ```
 
-Expected output:
+On first boot the server prints the auto-generated API key — **copy it now**:
+
 ```
+════════════════════════════════════════════════════════════════════════
+  MCP API KEY — COPY THIS NOW (shown once; stored in ./data/mcp_api_key)
+
+  Bearer 7290f42b…
+
+  .mcp.json:
+    "headers": {"Authorization": "Bearer 7290f42b…"}
+
+  Regenerate:  docker exec wmcp python src/mcp_keygen.py
+════════════════════════════════════════════════════════════════════════
+
 Registration: 3/3 ready
 MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
-StreamableHTTP session manager started
 ```
 
-### 3. Verify
+### 4. Verify
 
 ```bash
+TOKEN="<your-api-key>"
+
 curl -X POST http://localhost:6042/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}'
+
+# Health check (no token required)
+curl http://localhost:6042/health
+```
+
+---
+
+## API Key Management
+
+The server resolves the MCP API key in priority order:
+
+1. **Docker Secret** `/run/secrets/mcp_api_key` — highest trust, recommended for production
+2. **Env var** `MCP_API_KEY` — dev override
+3. **Persisted file** `./data/mcp_api_key` — auto-generated on first boot, survives container recreations via volume mount
+4. **Auto-generate** — generates a new key if none of the above exist
+
+**Regenerate the key:**
+```bash
+docker exec wmcp python src/mcp_keygen.py
+docker restart wmcp   # pick up new key
+```
+
+**Use a Docker Secret instead:**
+```bash
+echo "$(openssl rand -hex 32)" > secrets/mcp_api_key.txt
+chmod 600 secrets/mcp_api_key.txt
+# Uncomment mcp_api_key in docker-compose.yml, then:
+docker rm -f wmcp && docker compose up -d
 ```
 
 ---
 
 ## Connecting to Claude Desktop (Windows)
 
-Claude Desktop requires a local stdio proxy. Install prerequisites on Windows:
+Install prerequisites on the Windows machine:
 
 ```powershell
-python -m pip install fastmcp
+python -m pip install fastmcp httpx
 ```
 
-Create `wago_proxy.py`:
+Create `wago_proxy.py` — the proxy injects the Bearer token so Claude Desktop can reach the authenticated server:
 
 ```python
-from fastmcp import FastMCP, Client
+import os, sys
+from fastmcp import Client
 from fastmcp.server import create_proxy
 
-client = Client("http://<MCP_SERVER_IP>:6042/mcp")
+api_key = os.environ.get("WAGO_MCP_API_KEY", "")
+url = "http://<MCP_SERVER_IP>:6042/mcp"
+headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+client = Client(url)
 mcp = create_proxy(client, name="wago-plc")
 mcp.run(transport="stdio")
 ```
@@ -117,7 +179,10 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   "mcpServers": {
     "wago-plc": {
       "command": "python",
-      "args": ["C:\\path\\to\\wago_proxy.py"]
+      "args": ["C:\\path\\to\\wago_proxy.py"],
+      "env": {
+        "WAGO_MCP_API_KEY": "<your-api-key>"
+      }
     }
   }
 }
@@ -127,25 +192,41 @@ Fully quit and relaunch Claude Desktop. A hammer icon appears with the tool coun
 
 ---
 
-## Connecting to OpenClaw / other agents
+## Connecting via `.mcp.json` (Claude Code / direct HTTP)
 
-Point directly at the SSE or Streamable HTTP endpoint:
-
-```env
-TRANSPORT=sse   # for OpenClaw
+```json
+{
+  "mcpServers": {
+    "wago-plc": {
+      "type": "http",
+      "url": "http://localhost:6042/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-api-key>"
+      }
+    }
+  }
+}
 ```
 
-OpenClaw config:
+---
+
+## Connecting to OpenClaw / other agents
+
 ```json
 {
   "mcpServers": {
     "wago-plc": {
       "type": "url",
-      "url": "http://<MCP_SERVER_IP>:6042/sse"
+      "url": "http://<MCP_SERVER_IP>:6042/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-api-key>"
+      }
     }
   }
 }
 ```
+
+For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` instead of `/mcp`.
 
 ---
 
@@ -214,14 +295,33 @@ delete_watchlist("192.168.1.10", "1") # cleanup
 
 ---
 
+## Audit Log
+
+Every write operation is appended to `/app/audit.log` as a JSON line:
+
+```json
+{"ts":"2026-06-11T14:05:13+00:00","action":"set_parameters","plc":"192.168.1.10","agent":"key-7290f42b","result":"ok","params":[{"id":"0-0-ntpclient-updateinterval","value":600}]}
+{"ts":"2026-06-11T14:05:56+00:00","action":"invoke_method","plc":"192.168.1.10","agent":"key-7290f42b","result":"done","method":"0-0-ntpclient-updatetime","args":{}}
+```
+
+```bash
+docker exec wmcp tail -f /app/audit.log
+```
+
+The `agent` field is `key-<first 8 chars of API key>`, linking each write to the bearer token used.
+
+---
+
 ## Configuration Reference
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WAGO_PLC_HOSTS` | — | Comma-separated PLC IPs |
 | `DEFAULT_PLC_USERNAME` | `admin` | Shared username |
-| `DEFAULT_PLC_PASSWORD` | `wago` | Shared password |
-| `PLC_PASSWORDS_<ip_with_underscores>` | — | Per-PLC password override |
+| `DEFAULT_PLC_PASSWORD` | `wago` | Shared password (use Docker Secret instead) |
+| `PLC_PASSWORDS_<ip_underscores>` | — | Per-PLC password override |
+| `MCP_API_KEY` | — | Bearer token for `/mcp`; auto-generated if absent |
+| `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
 | `TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `6042` | Listen port |
@@ -229,22 +329,27 @@ delete_watchlist("192.168.1.10", "1") # cleanup
 | `WAGO_PAGE_LIMIT` | `500` | Pagination page size |
 | `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Parallel PLC init limit |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `LOG_FILE` | `/app/mcp_server.log` | Log file path inside container |
+| `LOG_FILE` | `/app/mcp_server.log` | Debug log path inside container |
 
 ---
 
 ## Building
 
 ```bash
-# Dev build (patch version bump)
+# Dev build (bump patch version)
 ./build.sh --patch
 
 # Build and start immediately
 ./build.sh --patch --start
 
-# Release and push to Docker Hub
+# Bump major version, build, and push to Docker Hub
+./build.sh --major --release
+
+# Publish current version without bumping
 ./build.sh --release
 ```
+
+A CycloneDX SBOM is generated automatically after every build via syft and written to `sbom-<version>.json`. `--release` archives a copy under `sbom/`.
 
 ---
 

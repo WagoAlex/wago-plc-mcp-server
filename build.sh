@@ -53,14 +53,14 @@ INCREMENT_TYPE="patch"
 PUSH_DOCKER_FLAG=false
 USE_NO_CACHE=false
 START_SERVER=false
+BUMP_EXPLICITLY_SET=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --major) INCREMENT_TYPE="major"; shift ;;
-        --minor) INCREMENT_TYPE="minor"; shift ;;
-        --patch) INCREMENT_TYPE="patch"; shift ;;
+        --major) INCREMENT_TYPE="major"; BUMP_EXPLICITLY_SET=true; shift ;;
+        --minor) INCREMENT_TYPE="minor"; BUMP_EXPLICITLY_SET=true; shift ;;
+        --patch) INCREMENT_TYPE="patch"; BUMP_EXPLICITLY_SET=true; shift ;;
         --release)
-            INCREMENT_TYPE="none"
             PUSH_DOCKER_FLAG=true
             shift ;;
         --no-cache) USE_NO_CACHE=true; shift ;;
@@ -113,9 +113,9 @@ increment_version() {
     echo "$major.$minor.$patch"
 }
 
-if [ "$INCREMENT_TYPE" == "none" ]; then
+if [ "$PUSH_DOCKER_FLAG" == "true" ] && [ "$BUMP_EXPLICITLY_SET" == "false" ]; then
     NEW_VERSION=$CURRENT_VERSION
-    echo "Using current version (specified by --release): $NEW_VERSION"
+    echo "Using current version for release: $NEW_VERSION"
 else
     NEW_VERSION=$(increment_version "$CURRENT_VERSION" "$INCREMENT_TYPE")
     echo "Incrementing version ($INCREMENT_TYPE): $CURRENT_VERSION -> $NEW_VERSION"
@@ -134,6 +134,12 @@ fi
 docker compose build ${BUILD_ARGS} wago-plc-mcp-server
 docker tag "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${NEW_VERSION}"
 
+# --- SBOM (T5) ---
+SBOM_FILE="sbom-${NEW_VERSION}.json"
+echo "Generating SBOM for ${IMAGE_NAME}:${NEW_VERSION}..."
+syft "${IMAGE_NAME}:${NEW_VERSION}" -o cyclonedx-json --file "${SBOM_FILE}"
+echo "SBOM written to ${SBOM_FILE}"
+
 # --- Start the Server (Optional) ---
 if [ "$START_SERVER" = true ]; then
     echo "Starting the server using 'docker compose up'..."
@@ -148,6 +154,9 @@ if [ "$PUSH_DOCKER_FLAG" = true ]; then
     echo "Pushing ${IMAGE_NAME}:latest..."
     docker push "${IMAGE_NAME}:latest"
     echo "Docker images pushed."
+    mkdir -p sbom
+    cp "${SBOM_FILE}" "sbom/${SBOM_FILE}"
+    echo "SBOM archived to sbom/${SBOM_FILE}"
 else
     echo "Skipping Docker Hub push (specify --release flag to push this version)."
 fi

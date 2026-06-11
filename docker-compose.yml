@@ -1,6 +1,20 @@
 # ─────────────────────────── wago-plc-mcp deployment ───────────────────────────
 # Two common deployment patterns. Pick one and remove the other.
 
+secrets:
+  plc_default_password:
+    file: ./secrets/plc_default_password.txt
+  # T1: Bearer auth on /mcp. Create secrets/mcp_api_key.txt first:
+  #   echo "$(openssl rand -hex 32)" > secrets/mcp_api_key.txt && chmod 600 secrets/mcp_api_key.txt
+  # When the secret file exists, this takes priority over the auto-generated key.
+  # mcp_api_key:
+  #   file: ./secrets/mcp_api_key.txt
+  # Per-PLC passwords — add one entry per IP (use underscores in the secret name):
+  # plc_password_192_168_2_17:
+  #   file: ./secrets/plc_password_192_168_2_17.txt
+  # plc_password_192_168_42_42:
+  #   file: ./secrets/plc_password_192_168_42_42.txt
+
 services:
   wago-plc-mcp-server:
     image: wagoalex/wago-plc-mcp-server:latest
@@ -10,7 +24,17 @@ services:
     container_name: wmcp
     env_file:
       - .env
+    environment:
+      AUDIT_LOG_FILE: /app/audit.log
     restart: unless-stopped
+    secrets:
+      - plc_default_password
+      # - mcp_api_key  # uncomment once secrets/mcp_api_key.txt exists
+      # - plc_password_192_168_2_17
+      # - plc_password_192_168_42_42
+
+    volumes:
+      - ./data:/app/data  # persists auto-generated API key across container recreations
 
     # ── Pattern A: Host networking (default for routed PLC subnets) ──
     # Use this when your PLCs are on a subnet reachable from the host.
@@ -24,14 +48,14 @@ services:
     # ports:
     #   - "6042:6042"
     # networks:
-    #   - wago-net
+    #   - waa
 
     # ── Optional: live code mount for development (no rebuild needed) ──
     # volumes:
     #   - ./src:/app/src:ro
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf --max-time 2 -o /dev/null -w '%{http_code}' -X POST http://localhost:6042/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"1.0\"}},\"id\":1}' | grep -qE '200|400'"]
+      test: ["CMD-SHELL", "curl -sf --max-time 2 http://localhost:6042/health"]
       interval: 30s
       timeout: 5s
       retries: 3
