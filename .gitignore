@@ -53,5 +53,7 @@ Thumbs.db
 .claude/
 .mcp.json
 docs/*
+CLAUDE.md
+AGENTS.md
 
 claude_desktop_config.json

@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "wago-plc": {
-    "command": "python",
-    "args": ["C:\\Users\\u0100068\\wago_proxy.py"]
-  }
-}
