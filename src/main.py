@@ -7,6 +7,8 @@ import json
 import os
 import re
 import secrets as _secrets
+import time
+from collections import deque
 from datetime import datetime, timezone
 from difflib import get_close_matches
 from pathlib import Path
@@ -31,7 +33,7 @@ setup_logging(
 setup_audit_logging(audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
 
 plc_manager = PLCManager(
-    timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "10")),
+    timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "30")),
     page_limit=int(os.getenv("WAGO_PAGE_LIMIT", "500")),
     max_concurrent_registrations=int(os.getenv("WAGO_MAX_CONCURRENT_REGISTRATIONS", "5")),
 )
@@ -167,6 +169,11 @@ def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
         _read_secret("plc_default_password")
         or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
     )
+    if default_pwd in {"wago", "admin", "password", "123456", ""}:
+        logger.warning(
+            "[config] DEFAULT_PLC_PASSWORD is a known factory default — "
+            "set a strong password via Docker Secret (plc_default_password) or env var"
+        )
     per_plc_secrets = _load_per_plc_secrets()
     plcs: dict[str, tuple[str, str]] = {}
 
@@ -185,19 +192,28 @@ def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
     return [(ip, u, p) for ip, (u, p) in plcs.items()]
 
 
+_RATE_WINDOW = 60.0   # seconds
+_RATE_LIMIT   = 60    # max requests per IP per window
+_AUTH_ALERT   = 10    # failed auth attempts before ERROR alert
+
+
 class _AuthMiddleware:
     """ASGI middleware: serves /health unauthenticated; enforces Bearer auth on all other paths.
 
+    Also applies per-IP rate limiting and alerts on repeated auth failures.
     When api_key is empty, auth enforcement is disabled (dev mode) but /health still works.
     """
 
-    _HEALTH = b'{"status":"ok"}'
-    _UNAUTH = b'{"error":"Unauthorized"}'
+    _HEALTH    = b'{"status":"ok"}'
+    _UNAUTH    = b'{"error":"Unauthorized"}'
+    _RATE_BODY = b'{"error":"Too Many Requests"}'
 
     def __init__(self, app, api_key: str) -> None:
         self._app = app
         # None signals "auth disabled — pass all traffic through"
         self._key: bytes | None = api_key.encode() if api_key else None
+        self._rate: dict[str, deque] = {}
+        self._failures: dict[str, int] = {}
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
@@ -211,21 +227,43 @@ class _AuthMiddleware:
             await send({"type": "http.response.body", "body": self._HEALTH})
             return
 
+        ip: str = (scope.get("client") or ("", 0))[0]
+
+        # Rate limit
+        now = time.monotonic()
+        bucket = self._rate.setdefault(ip, deque())
+        while bucket and now - bucket[0] > _RATE_WINDOW:
+            bucket.popleft()
+        if len(bucket) >= _RATE_LIMIT:
+            logger.warning(f"[auth] rate limit exceeded for {ip}")
+            await send({"type": "http.response.start", "status": 429,
+                        "headers": [(b"content-type", b"application/json"),
+                                    (b"content-length", str(len(self._RATE_BODY)).encode()),
+                                    (b"retry-after", b"60")]})
+            await send({"type": "http.response.body", "body": self._RATE_BODY})
+            return
+        bucket.append(now)
+
         if self._key is not None:
             headers = {k.lower(): v for k, v in scope.get("headers", [])}
             auth = headers.get(b"authorization", b"").decode("latin-1")
             token = auth[7:] if auth.startswith("Bearer ") else ""
 
             if not _secrets.compare_digest(token.encode(), self._key):
-                method = scope.get("method", "?")
-                path = scope.get("path", "?")
-                logger.warning(f"[auth] rejected {method} {path}")
+                self._failures[ip] = self._failures.get(ip, 0) + 1
+                count = self._failures[ip]
+                if count >= _AUTH_ALERT:
+                    logger.error(f"[auth] ALERT — {count} failed attempts from {ip}")
+                else:
+                    logger.warning(f"[auth] rejected {scope.get('method','?')} {scope.get('path','?')} from {ip}")
                 await send({"type": "http.response.start", "status": 401,
                             "headers": [(b"content-type", b"application/json"),
                                         (b"content-length", str(len(self._UNAUTH)).encode()),
                                         (b"www-authenticate", b"Bearer")]})
                 await send({"type": "http.response.body", "body": self._UNAUTH})
                 return
+
+            self._failures.pop(ip, None)  # reset on successful auth
 
         await self._app(scope, receive, send)
 
