@@ -134,6 +134,12 @@ fi
 docker compose build ${BUILD_ARGS} wago-plc-mcp-server
 docker tag "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${NEW_VERSION}"
 
+# --- SBOM (T5) ---
+SBOM_FILE="sbom-${NEW_VERSION}.json"
+echo "Generating SBOM for ${IMAGE_NAME}:${NEW_VERSION}..."
+syft "${IMAGE_NAME}:${NEW_VERSION}" -o cyclonedx-json --file "${SBOM_FILE}"
+echo "SBOM written to ${SBOM_FILE}"
+
 # --- Start the Server (Optional) ---
 if [ "$START_SERVER" = true ]; then
     echo "Starting the server using 'docker compose up'..."
@@ -148,6 +154,9 @@ if [ "$PUSH_DOCKER_FLAG" = true ]; then
     echo "Pushing ${IMAGE_NAME}:latest..."
     docker push "${IMAGE_NAME}:latest"
     echo "Docker images pushed."
+    mkdir -p sbom
+    cp "${SBOM_FILE}" "sbom/${SBOM_FILE}"
+    echo "SBOM archived to sbom/${SBOM_FILE}"
 else
     echo "Skipping Docker Hub push (specify --release flag to push this version)."
 fi

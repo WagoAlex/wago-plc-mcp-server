@@ -20,7 +20,7 @@ class InterceptHandler(logging.Handler):
 
 
 def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") -> None:
-    """Single logger, single format, no duplicates."""
+    """Single logger, single format, no duplicates. AUDIT entries go to the audit log only."""
     logger.remove()
 
     fmt = (
@@ -30,7 +30,9 @@ def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") ->
         "{message}"
     )
 
-    logger.add(sys.stderr, format=fmt, level=level, colorize=True, enqueue=False)
+    _not_audit = lambda r: r["level"].name != "AUDIT"
+
+    logger.add(sys.stderr, format=fmt, level=level, colorize=True, enqueue=False, filter=_not_audit)
     logger.add(
         log_file,
         format=fmt,
@@ -40,6 +42,7 @@ def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") ->
         enqueue=True,
         backtrace=False,
         diagnose=False,
+        filter=_not_audit,
     )
 
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
@@ -54,3 +57,23 @@ def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") ->
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+
+def setup_audit_logging(audit_log_file: str = "/app/audit.log") -> None:
+    """Add a separate JSON-lines sink that receives only AUDIT-level entries."""
+    try:
+        logger.level("AUDIT")
+    except ValueError:
+        logger.level("AUDIT", no=25, color="<yellow>", icon="AUDIT")
+
+    logger.add(
+        audit_log_file,
+        level="AUDIT",
+        format="{message}\n",
+        filter=lambda r: r["level"].name == "AUDIT",
+        rotation="50 MB",
+        retention=10,
+        enqueue=True,
+        backtrace=False,
+        diagnose=False,
+    )

@@ -3,16 +3,21 @@
 12 tools, compact responses, smart pre-validation.
 """
 import asyncio
+import json
 import os
 import re
+import secrets as _secrets
+from datetime import datetime, timezone
 from difflib import get_close_matches
+from pathlib import Path
 
+import uvicorn
 from dotenv import load_dotenv
 from loguru import logger
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.fastmcp.prompts import base
 
-from logging_config import setup_logging
+from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 
@@ -23,6 +28,7 @@ setup_logging(
     log_file=os.getenv("LOG_FILE", "/app/mcp_server.log"),
     level=os.getenv("LOG_LEVEL", "INFO"),
 )
+setup_audit_logging(audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
 
 plc_manager = PLCManager(
     timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "10")),
@@ -45,43 +51,186 @@ mcp = FastMCP(
 FIND_LIMIT_MAX = 100
 FIND_LIMIT_DEFAULT = 20
 
+_AGENT_ID: str = "unknown"
+
 
 # ───────────────────────── Helpers ─────────────────────────
 
+def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "plc": plc_ip,
+        "agent": _AGENT_ID,
+        "result": result,
+        **details,
+    }
+    logger.log("AUDIT", json.dumps(entry, default=str))
+
+
+def _read_secret(name: str) -> str | None:
+    """Read a Docker Secret from /run/secrets/. Returns None if absent or empty."""
+    try:
+        return Path(f"/run/secrets/{name}").read_text().strip() or None
+    except OSError:
+        return None
+
+
+def _load_per_plc_secrets() -> dict[str, str]:
+    """Scan /run/secrets/ for plc_password_<ip> files and return {ip: password}.
+
+    Secret name 'plc_password_10_0_0_1' maps to IP '10.0.0.1'.
+    """
+    secrets_dir = Path("/run/secrets")
+    result: dict[str, str] = {}
+    if not secrets_dir.is_dir():
+        return result
+    for f in secrets_dir.iterdir():
+        if f.name.startswith("plc_password_"):
+            ip = f.name.removeprefix("plc_password_").replace("_", ".")
+            pwd = f.read_text().strip()
+            if pwd:
+                result[ip] = pwd
+    return result
+
+
+_KEY_PATH = Path("/app/data/mcp_api_key")
+
+
+def _resolve_api_key() -> tuple[str, bool]:
+    """Resolve the MCP API key, auto-generating one if none is configured.
+
+    Priority:
+      1. Docker Secret  /run/secrets/mcp_api_key  (prod — highest trust)
+      2. Env var        MCP_API_KEY                (dev override)
+      3. Persisted file /app/data/mcp_api_key      (auto-generated, volume-backed)
+      4. Generate new → persist to /app/data/mcp_api_key
+
+    Returns (api_key, is_newly_generated).
+    """
+    key = _read_secret("mcp_api_key")
+    if key:
+        return key, False
+
+    key = os.getenv("MCP_API_KEY", "").strip()
+    if key:
+        return key, False
+
+    if _KEY_PATH.exists():
+        key = _KEY_PATH.read_text().strip()
+        if key:
+            return key, False
+
+    key = _secrets.token_hex(32)
+    try:
+        _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _KEY_PATH.write_text(key)
+    except OSError as e:
+        logger.warning(f"[auth] Could not persist generated key ({e}) — key resets on restart; mount ./data:/app/data")
+    return key, True
+
+
+def _print_key_banner(key: str) -> None:
+    sep = "=" * 72
+    print(f"""
+{sep}
+  MCP API KEY — COPY THIS NOW (shown once; stored in ./data/mcp_api_key)
+
+  Bearer {key}
+
+  .mcp.json:
+    "headers": {{"Authorization": "Bearer {key}"}}
+
+  Regenerate:  docker exec wmcp python src/mcp_keygen.py
+{sep}
+""", flush=True)
+    logger.info(f"[auth] New API key generated and persisted to {_KEY_PATH}")
+
+
 def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
-    """Parse PLC list from environment, supporting three formats.
+    """Parse PLC list from environment + Docker Secrets, supporting three formats.
 
-    1. WAGO_PLC_HOSTS (preferred for shared credentials):
-         WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2,10.0.0.3
-         DEFAULT_PLC_USERNAME=admin
-         DEFAULT_PLC_PASSWORD=secret
+    Password resolution order (highest priority first):
+      1. Docker Secret  /run/secrets/plc_password_<ip-with-underscores>  (per-PLC)
+      2. Env var        PLC_PASSWORDS_<ip-with-underscores>               (per-PLC, backward-compat)
+      3. Docker Secret  /run/secrets/plc_default_password                 (shared default)
+      4. Env var        DEFAULT_PLC_PASSWORD                              (shared default, dev fallback)
+      5. Hardcoded      "wago"
 
-    2. PLC_PASSWORDS_<ip-with-underscores> (per-PLC credentials, backward-compat):
-         PLC_PASSWORDS_10_0_0_1=secret_a
-         PLC_PASSWORDS_10_0_0_2=secret_b
-
-    3. Both formats can be combined; PLC_PASSWORDS_* overrides WAGO_PLC_HOSTS for
-       matching IPs.
+    Host formats:
+      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2   (shared credentials)
+      PLC_PASSWORDS_10_0_0_1=secret_a     (per-PLC env, also extends host list)
+    Both can be combined; per-PLC credentials override the shared default for matching IPs.
     """
     user = os.getenv("DEFAULT_PLC_USERNAME", "admin")
-    default_pwd = os.getenv("DEFAULT_PLC_PASSWORD", "wago")
+    default_pwd = (
+        _read_secret("plc_default_password")
+        or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
+    )
+    per_plc_secrets = _load_per_plc_secrets()
     plcs: dict[str, tuple[str, str]] = {}  # ip → (user, pwd)
 
-    # Format 1: comma-separated list
+    # Format 1: comma-separated list with shared credentials
     hosts_csv = os.getenv("WAGO_PLC_HOSTS", "").strip()
     if hosts_csv:
         for ip in (h.strip() for h in hosts_csv.split(",")):
             if ip:
-                plcs[ip] = (user, default_pwd)
+                plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
 
     # Format 2: per-IP env vars (override or extend)
     for key, val in os.environ.items():
         m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)
         if m:
             ip = m.group(1).replace("_", ".")
-            plcs[ip] = (user, val or default_pwd)
+            # Secret beats env var for the same IP
+            plcs[ip] = (user, per_plc_secrets.get(ip) or val or default_pwd)
 
     return [(ip, u, p) for ip, (u, p) in plcs.items()]
+
+
+class _AuthMiddleware:
+    """ASGI middleware: serves /health unauthenticated; enforces Bearer auth on all other paths.
+
+    When api_key is empty, auth enforcement is disabled (dev mode) but /health still works.
+    """
+
+    _HEALTH = b'{"status":"ok"}'
+    _UNAUTH = b'{"error":"Unauthorized"}'
+
+    def __init__(self, app, api_key: str) -> None:
+        self._app = app
+        # None signals "auth disabled — pass all traffic through"
+        self._key: bytes | None = api_key.encode() if api_key else None
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        if scope.get("path") == "/health":
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [(b"content-type", b"application/json"),
+                                    (b"content-length", str(len(self._HEALTH)).encode())]})
+            await send({"type": "http.response.body", "body": self._HEALTH})
+            return
+
+        if self._key is not None:
+            headers = {k.lower(): v for k, v in scope.get("headers", [])}
+            auth = headers.get(b"authorization", b"").decode("latin-1")
+            token = auth[7:] if auth.startswith("Bearer ") else ""
+
+            if not _secrets.compare_digest(token.encode(), self._key):
+                method = scope.get("method", "?")
+                path = scope.get("path", "?")
+                logger.warning(f"[auth] rejected {method} {path}")
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [(b"content-type", b"application/json"),
+                                        (b"content-length", str(len(self._UNAUTH)).encode()),
+                                        (b"www-authenticate", b"Bearer")]})
+                await send({"type": "http.response.body", "body": self._UNAUTH})
+                return
+
+        await self._app(scope, receive, send)
 
 
 def _require_plc(ip: str):
@@ -284,9 +433,11 @@ async def set_parameters(
     try:
         result = await plc.client.set_parameters(parameters)
         logger.info(f"[{plc_ip}] set {len(parameters)} parameter(s)")
+        _audit_log("set_parameters", plc_ip, {"params": parameters}, "ok")
         return {"status": "ok", "result": result}
     except Exception as e:
         logger.error(f"[{plc_ip}] set_parameters failed: {e}")
+        _audit_log("set_parameters", plc_ip, {"params": parameters}, f"error: {e}")
         return {"error": str(e)}
 
 
@@ -358,11 +509,13 @@ async def invoke_method(
         run = await plc.client.invoke_method(method_id, arguments, sync=wait)
     except Exception as e:
         logger.error(f"[{plc_ip}] invoke_method({method_id}) failed: {e}")
+        _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, f"error: {e}")
         return {"error": str(e)}
 
     attrs = run.get("attributes", {})
     status = attrs.get("executionStatus", "unknown")
     logger.info(f"[{plc_ip}] method {method_id} → {status}")
+    _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, status)
 
     response: dict = {
         "status": status,
@@ -520,17 +673,30 @@ async def main() -> None:
     port = os.getenv("PORT", "6042")
     transport = os.getenv("TRANSPORT", "streamable-http").strip().lower()
 
+    api_key, is_new_key = _resolve_api_key()
+    if is_new_key:
+        _print_key_banner(api_key)
+
+    global _AGENT_ID
+    _AGENT_ID = "key-" + api_key[:8]
+
     if transport == "sse":
         endpoint = f"http://{host}:{port}/sse"
         logger.info(f"MCP server listening on {endpoint} (SSE — legacy)")
-        run_fn = mcp.run_sse_async
+        base_app = mcp.sse_app()
     else:
         endpoint = f"http://{host}:{port}/mcp"
         logger.info(f"MCP server listening on {endpoint} (Streamable HTTP)")
-        run_fn = mcp.run_streamable_http_async
+        base_app = mcp.streamable_http_app()
 
+    app = _AuthMiddleware(base_app, api_key)
+    if not is_new_key:
+        logger.info("[auth] Bearer auth enabled — GET /health is exempt")
+
+    config = uvicorn.Config(app, host=host, port=int(port), log_level="warning")
+    server = uvicorn.Server(config)
     try:
-        await run_fn()
+        await server.serve()
     finally:
         await plc_manager.close_all()
 
