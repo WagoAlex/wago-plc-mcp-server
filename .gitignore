@@ -44,7 +44,16 @@ Thumbs.db
 # Leading slash keeps released SBOMs under sbom/ tracked.
 /sbom-*.json
 /sbom*.json
+/sbom/
 # Docker secrets (T2) — credentials must never be committed at rest
 /secrets/
 # Auto-generated API key persistence volume (T1)
 /data/
+
+.claude/
+.mcp.json
+docs/*
+CLAUDE.md
+AGENTS.md
+
+claude_desktop_config.json
