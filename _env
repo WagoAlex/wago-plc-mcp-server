@@ -87,3 +87,19 @@ WAGO_TIMEOUT_SECONDS=45
 
 # Log file path inside container (default /app/mcp_server.log)
 LOG_FILE=/app/mcp_server.log
+
+# ── T4.3: SIEM / syslog export ──
+# When SYSLOG_HOST is set, AUDIT entries are forwarded to the syslog receiver in
+# addition to the local file. Local audit log retention drops from 5 to 2 rotated
+# files (SIEM becomes the authoritative copy).
+#
+# Log budgets (on-disk inside container):
+#   Debug log  : 10 MB × 3 files  =  30 MB max
+#   Audit log  : 10 MB × 5 files  =  50 MB max (20 MB when SYSLOG_HOST is set)
+#
+# SYSLOG_HOST=syslog.internal        # hostname or IP of syslog receiver
+# SYSLOG_PORT=514                    # default 514
+# SYSLOG_TCP=false                   # true = TCP (reliable), false = UDP (default)
+#
+# Note: syslog truncates messages >2 KB (RFC 5424). Long set_parameters calls
+# with many parameters may be clipped at the receiver.

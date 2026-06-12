@@ -31,7 +31,12 @@ setup_logging(
     log_file=os.getenv("LOG_FILE", "/app/mcp_server.log"),
     level=os.getenv("LOG_LEVEL", "INFO"),
 )
-setup_audit_logging(audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+setup_audit_logging(
+    audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"),
+    syslog_host=os.getenv("SYSLOG_HOST") or None,
+    syslog_port=int(os.getenv("SYSLOG_PORT", "514")),
+    syslog_tcp=os.getenv("SYSLOG_TCP", "").lower() in {"1", "true"},
+)
 
 def _resolve_tls_verify() -> bool | str:
     """Resolve WDA TLS verification from WAGO_TLS_CA env var.

@@ -422,6 +422,9 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 | `MCP_TLS_KEY` | — | Path to TLS private key for MCP endpoint |
 | `MCP_TLS_KEY_PASSWORD` | — | Password for encrypted TLS private key (optional) |
 | `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
+| `SYSLOG_HOST` | — | Syslog/SIEM receiver hostname or IP; enables audit forwarding when set |
+| `SYSLOG_PORT` | `514` | Syslog receiver port |
+| `SYSLOG_TCP` | `false` | `true` = TCP (reliable), `false` = UDP |
 | `TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `6042` | Listen port |
