@@ -52,7 +52,9 @@ Thumbs.db
 
 .claude/
 .mcp.json
-docs/*
+# Internal planning files — keep private
+docs/*-todo.md
+docs/tier*
 CLAUDE.md
 AGENTS.md
 

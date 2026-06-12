@@ -1,0 +1,52 @@
+version: 2
+
+updates:
+  # Python dependencies (pip ecosystem via pyproject.toml / uv.lock)
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security
+    groups:
+      # Batch patch-level bumps for core runtime deps into one PR
+      runtime-patch:
+        patterns:
+          - "httpx"
+          - "uvicorn"
+          - "mcp"
+          - "loguru"
+          - "python-dotenv"
+        update-types:
+          - patch
+
+  # Docker base image
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - docker
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions

@@ -4,6 +4,7 @@
 """
 import asyncio
 import hashlib
+import importlib.metadata
 import json
 import os
 import re
@@ -275,6 +276,11 @@ _RATE_WINDOW = 60.0   # seconds
 _RATE_LIMIT   = 60    # max requests per IP per window
 _AUTH_ALERT   = 10    # failed auth attempts before ERROR alert
 
+try:
+    _APP_VERSION = importlib.metadata.version("wago-plc-mcp-server")
+except importlib.metadata.PackageNotFoundError:
+    _APP_VERSION = "unknown"
+
 
 class _AuthMiddleware:
     """ASGI middleware: serves /health unauthenticated; enforces Bearer auth on all other paths.
@@ -283,7 +289,7 @@ class _AuthMiddleware:
     When api_key is empty, auth enforcement is disabled (dev mode) but /health still works.
     """
 
-    _HEALTH    = b'{"status":"ok"}'
+    _HEALTH    = json.dumps({"status": "ok", "version": _APP_VERSION}).encode()
     _UNAUTH    = b'{"error":"Unauthorized"}'
     _RATE_BODY = b'{"error":"Too Many Requests"}'
 

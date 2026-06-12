@@ -67,6 +67,10 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 | TLS — MCP endpoint | ⚙️ | Off by default; enable with `MCP_TLS_CERT` + `MCP_TLS_KEY` |
 | CycloneDX SBOM | ✅ | Generated on every build via syft |
 | Docker Secrets | ✅ | PLC passwords, MCP key, TLS certs all mountable as secrets |
+| CVE scanning | ✅ | Weekly grype scan on SBOM; HIGH/CRITICAL fails CI |
+| Dependabot | ✅ | Weekly PRs for pip, Docker, and GitHub Actions dep updates |
+
+For the vulnerability disclosure policy, patch SLA, and support lifetime see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -482,6 +486,20 @@ networks:
 - Network route from Docker host to PLC subnets
 
 For Claude Desktop proxy: Python 3.11+ and `fastmcp` on the client machine.
+
+---
+
+## Security & CRA Compliance
+
+This project targets compliance with the EU Cyber Resilience Act (Regulation 2024/2847).
+
+| Document | Purpose |
+|----------|---------|
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting, patch SLA, support lifetime |
+| [docs/threat-model.md](docs/threat-model.md) | STRIDE risk assessment |
+| [docs/cra-compliance-matrix.md](docs/cra-compliance-matrix.md) | Annex I requirements → evidence mapping |
+| [docs/eu-declaration-of-conformity.md](docs/eu-declaration-of-conformity.md) | CRA Article 28 self-declaration |
+| [docs/technical-file.md](docs/technical-file.md) | CRA Article 31 technical file index |
 
 ---
 
