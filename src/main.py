@@ -153,6 +153,18 @@ def _load_per_plc_secrets() -> dict[str, str]:
 
 
 _KEY_PATH = Path("/app/data/mcp_api_key")
+_MIN_KEY_LENGTH = 32  # 128-bit minimum (characters); auto-gen produces 64
+
+
+def _check_key_entropy(key: str, source: str) -> None:
+    """Abort startup if a supplied API key is shorter than the minimum length."""
+    if len(key) < _MIN_KEY_LENGTH:
+        logger.error(
+            f"[auth] API key from {source} is too short "
+            f"({len(key)} chars, minimum {_MIN_KEY_LENGTH}). "
+            f"Generate a strong key:  openssl rand -hex 32"
+        )
+        raise SystemExit(1)
 
 
 def _resolve_api_key() -> tuple[str, bool]:
@@ -164,19 +176,25 @@ def _resolve_api_key() -> tuple[str, bool]:
       3. Persisted file /app/data/mcp_api_key      (auto-generated, volume-backed)
       4. Generate new → persist to /app/data/mcp_api_key
 
+    Supplied keys (paths 1-3) must be at least _MIN_KEY_LENGTH chars; shorter
+    keys abort startup with SystemExit(1).
+
     Returns (api_key, is_newly_generated).
     """
     key = _read_secret("mcp_api_key")
     if key:
+        _check_key_entropy(key, "Docker Secret mcp_api_key")
         return key, False
 
     key = os.getenv("MCP_API_KEY", "").strip()
     if key:
+        _check_key_entropy(key, "env var MCP_API_KEY")
         return key, False
 
     if _KEY_PATH.exists():
         key = _KEY_PATH.read_text().strip()
         if key:
+            _check_key_entropy(key, f"persisted file {_KEY_PATH}")
             return key, False
 
     key = _secrets.token_hex(32)
