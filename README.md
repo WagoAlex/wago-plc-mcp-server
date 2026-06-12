@@ -8,13 +8,23 @@
 Ask an AI assistant to read sensor values, change configuration, trigger firmware updates, or monitor entire PLC fleets — with no custom code.
 
 ```
-Claude Desktop / OpenClaw / any MCP client
-        │  stdio or Streamable HTTP  +  Bearer token
+ MCP Client (Claude Desktop / OpenClaw / Claude Code)
+        │
+        │  Bearer token  +  optional TLS ◄── MCP_TLS_CERT + MCP_TLS_KEY
+        │
         ▼
-wago-plc-mcp-server  (Docker, port 6042)
-        │  HTTPS / WDA REST API  +  Bearer token per PLC
-        ▼
-WAGO PLC fleet  (PFC200, PFC300, CC100, Edge Controller)
+ ┌──────────────────────────────────────────────────────┐
+ │          wago-plc-mcp-server  (Docker, port 6042)    │
+ │                                                       │
+ │   Bearer auth · Rate limiting · Audit log (chained)  │
+ └────────────────────────┬─────────────────────────────┘
+                          │
+                          │  WDA Bearer token  +  TLS ◄── WAGO_TLS_CA / per-PLC cert
+                          │
+              ┌───────────┴───────────┐
+              ▼                       ▼
+    WAGO PLC 192.168.1.10    WAGO PLC 192.168.1.11
+    PFC200 / PFC300 / CC100  Edge Controller
 ```
 
 ---
@@ -43,13 +53,20 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 - **Dual transport** — Streamable HTTP (default) or SSE, switched via env var
 - **Docker-first** — single container, host networking for routed PLC subnets
 
-### Security (CRA Tier-1)
+### Security
 
-- **Bearer auth on `/mcp`** — auto-generated key persisted to `./data/`; Docker Secret and env var override; `/health` always exempt
-- **WDA Bearer token auth** — credentials sent once per PLC at startup; all subsequent WDA calls use a cached Bearer token
-- **Audit log** — every `set_parameters` and `invoke_method` call written as JSON to `/app/audit.log` with timestamp, agent ID, PLC, and result
-- **Docker Secrets** — PLC passwords and the MCP API key can be mounted as secrets instead of env vars
-- **CycloneDX SBOM** — generated automatically on every build via syft
+| Feature | Status | Details |
+|---------|--------|---------|
+| Bearer auth on `/mcp` | ✅ | Auto-generated key; Docker Secret + env override; `/health` exempt |
+| Rate limiting | ✅ | 60 req / 60 s per source IP; `429` with `Retry-After` |
+| Auth failure alerts | ✅ | WARNING per failure; ERROR alert at 10 consecutive failures from same IP |
+| WDA Bearer token auth | ✅ | Credentials sent once; cached token refreshed reactively on 401 |
+| Hash-chained audit log | ✅ | Every write is a tamper-evident JSON-lines entry with `prev` SHA-256 |
+| Default password warning | ✅ | Startup WARNING if factory default password detected |
+| TLS — WDA connections | ⚙️ | Off by default; enable with `WAGO_TLS_CA` or per-PLC Docker Secret |
+| TLS — MCP endpoint | ⚙️ | Off by default; enable with `MCP_TLS_CERT` + `MCP_TLS_KEY` |
+| CycloneDX SBOM | ✅ | Generated on every build via syft |
+| Docker Secrets | ✅ | PLC passwords, MCP key, TLS certs all mountable as secrets |
 
 ---
 
@@ -104,7 +121,12 @@ On first boot the server prints the auto-generated API key — **copy it now**:
 
 Registration: 3/3 ready
 MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
+[tls] WDA TLS verification DISABLED — set WAGO_TLS_CA=... to enable.
+[tls] MCP endpoint TLS DISABLED — set MCP_TLS_CERT + MCP_TLS_KEY to enable.
+[audit] Hash chain seeded from existing audit log
 ```
+
+> The two `[tls]` warnings are expected on a default install. See [TLS Configuration](#tls-configuration) to enable.
 
 ### 4. Verify
 
@@ -145,6 +167,58 @@ chmod 600 secrets/mcp_api_key.txt
 # Uncomment mcp_api_key in docker-compose.yml, then:
 docker rm -f wmcp && docker compose up -d
 ```
+
+---
+
+## TLS Configuration
+
+Both TLS legs are **opt-in**. The server starts without TLS and logs a startup warning for each disabled leg.
+
+### WDA connections (server → PLC)
+
+WAGO PLCs use HTTPS with self-signed certificates. Three options:
+
+**Option A — Per-PLC cert pinning** *(recommended for self-signed certs)*
+```bash
+# Extract the cert from each PLC
+openssl s_client -connect 192.168.1.10:443 </dev/null 2>/dev/null \
+  | openssl x509 > secrets/plc_cert_192_168_1_10
+
+# Declare the secret in docker-compose.yml, then restart
+docker rm -f wmcp && docker compose up -d
+```
+The server detects `plc_cert_<ip_underscored>` Docker Secrets automatically — no extra env var needed.
+
+**Option B — Private CA bundle** *(recommended for managed fleets)*
+```env
+WAGO_TLS_CA=/run/secrets/wago_ca.pem
+```
+
+**Option C — System trust store** *(only if PLC certs are CA-signed)*
+```env
+WAGO_TLS_CA=true
+```
+
+### MCP endpoint (client → server)
+
+```bash
+# Generate a self-signed cert for dev
+openssl req -x509 -newkey rsa:4096 \
+  -keyout secrets/mcp_tls_key.pem \
+  -out secrets/mcp_tls_cert.pem \
+  -days 365 -nodes -subj "/CN=wago-mcp"
+chmod 600 secrets/mcp_tls_key.pem
+```
+
+Declare the secrets in `docker-compose.yml`, then set:
+
+```env
+MCP_TLS_CERT=/run/secrets/mcp_tls_cert
+MCP_TLS_KEY=/run/secrets/mcp_tls_key
+# MCP_TLS_KEY_PASSWORD=   # only if key is password-protected
+```
+
+When TLS is active, update your client URLs from `http://` to `https://`.
 
 ---
 
@@ -297,18 +371,40 @@ delete_watchlist("192.168.1.10", "1") # cleanup
 
 ## Audit Log
 
-Every write operation is appended to `/app/audit.log` as a JSON line:
+Every write operation (`set_parameters`, `invoke_method`) is appended to `/app/audit.log` as a tamper-evident JSON line. Each entry includes a `prev` field — the SHA-256 of the previous entry — forming a hash chain:
 
-```json
-{"ts":"2026-06-11T14:05:13+00:00","action":"set_parameters","plc":"192.168.1.10","agent":"key-7290f42b","result":"ok","params":[{"id":"0-0-ntpclient-updateinterval","value":600}]}
-{"ts":"2026-06-11T14:05:56+00:00","action":"invoke_method","plc":"192.168.1.10","agent":"key-7290f42b","result":"done","method":"0-0-ntpclient-updatetime","args":{}}
+```
+Entry 1  {"ts":"…","action":"set_parameters",…,"prev":"0000…0000"}  ← genesis
+            │  sha256
+            ▼
+Entry 2  {"ts":"…","action":"invoke_method",…,"prev":"a3f1…c2d8"}
+            │  sha256
+            ▼
+Entry 3  {"ts":"…","action":"set_parameters",…,"prev":"7b2e…91fa"}
 ```
 
+**Full example entry:**
+```json
+{"ts":"2026-06-12T09:14:22+00:00","action":"set_parameters","plc":"192.168.1.10","agent":"key-7290f42b","result":"ok","prev":"a3f1c2d8…","params":[{"id":"0-0-ntpclient-updateinterval","value":600}]}
+```
+
+The `agent` field is `key-<first 8 chars of API key>`, linking each write to the bearer token used.
+
+**Tail the live log:**
 ```bash
 docker exec wmcp tail -f /app/audit.log
 ```
 
-The `agent` field is `key-<first 8 chars of API key>`, linking each write to the bearer token used.
+**Verify chain integrity:**
+```bash
+docker exec wmcp python src/audit_verify.py
+# → [PASS] Chain intact — 42 entries verified (/app/audit.log)
+
+# For a rotated segment (supply the hash of the last line of the previous file):
+docker exec wmcp python src/audit_verify.py --log /app/audit.log.1 --seed <hex>
+```
+
+Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 
 ---
 
@@ -321,11 +417,15 @@ The `agent` field is `key-<first 8 chars of API key>`, linking each write to the
 | `DEFAULT_PLC_PASSWORD` | `wago` | Shared password (use Docker Secret instead) |
 | `PLC_PASSWORDS_<ip_underscores>` | — | Per-PLC password override |
 | `MCP_API_KEY` | — | Bearer token for `/mcp`; auto-generated if absent |
+| `WAGO_TLS_CA` | — | WDA TLS: `false` (off), `true` (system CA), or path to CA bundle |
+| `MCP_TLS_CERT` | — | Path to TLS cert for MCP endpoint (enables HTTPS when set with key) |
+| `MCP_TLS_KEY` | — | Path to TLS private key for MCP endpoint |
+| `MCP_TLS_KEY_PASSWORD` | — | Password for encrypted TLS private key (optional) |
 | `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
 | `TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `6042` | Listen port |
-| `WAGO_TIMEOUT_SECONDS` | `10` | Per-PLC HTTP timeout (use 45 for CC100) |
+| `WAGO_TIMEOUT_SECONDS` | `30` | Per-PLC HTTP timeout in seconds (use 45 for CC100) |
 | `WAGO_PAGE_LIMIT` | `500` | Pagination page size |
 | `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Parallel PLC init limit |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |

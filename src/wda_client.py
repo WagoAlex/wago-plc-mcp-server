@@ -25,6 +25,7 @@ class WDAClient:
         password: str,
         timeout: float = 5.0,
         page_limit: int = DEFAULT_PAGE_LIMIT,
+        ssl_verify: bool | str = False,
     ):
         self.ip = ip
         self.username = username
@@ -32,7 +33,7 @@ class WDAClient:
         self.page_limit = page_limit
         self.client = httpx.AsyncClient(
             base_url=f"https://{ip}",
-            verify=False,
+            verify=ssl_verify,
             timeout=timeout,
             headers={"Accept": self.JSON_API},
         )

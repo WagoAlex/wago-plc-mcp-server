@@ -34,6 +34,43 @@ HOST=0.0.0.0
 PORT=6042
 #TRANSPORT=sse
 TRANSPORT=streamable-http
+# ── T2.2: TLS on the MCP endpoint ──
+# When both vars are set, uvicorn serves /mcp over HTTPS instead of plain HTTP.
+# Update wago_proxy.py (url=) and .mcp.json (url:) to https:// after enabling.
+#
+# Dev — generate a self-signed cert:
+#   openssl req -x509 -newkey rsa:4096 -keyout secrets/mcp_tls_key.pem \
+#     -out secrets/mcp_tls_cert.pem -days 365 -nodes -subj "/CN=wago-mcp"
+#   # then declare secrets in docker-compose.yml and set:
+#   MCP_TLS_CERT=/run/secrets/mcp_tls_cert
+#   MCP_TLS_KEY=/run/secrets/mcp_tls_key
+#
+# If the key is password-protected:
+# MCP_TLS_KEY_PASSWORD=your-key-password
+#
+# MCP_TLS_CERT=/run/secrets/mcp_tls_cert
+# MCP_TLS_KEY=/run/secrets/mcp_tls_key
+# MCP_TLS_KEY_PASSWORD=
+
+# ── T2.1: WDA TLS verification ──
+# Controls how the server verifies WAGO PLC HTTPS certificates.
+#
+# WAGO_TLS_CA=false          Disable verification (default — warns at startup).
+#                             Use only for dev/lab or when certs cannot be distributed.
+# WAGO_TLS_CA=true           Verify against the system trust store (only if PLC certs
+#                             are signed by a public or corporate CA).
+# WAGO_TLS_CA=/path/to/ca.pem  Verify against a custom CA bundle (recommended for
+#                             managed fleets with an internal CA).
+#
+# Per-PLC cert pinning (option A — for self-signed certs):
+#   Mount a PEM cert as Docker Secret plc_cert_<ip_with_underscores>
+#   e.g. plc_cert_192_168_1_10 → /run/secrets/plc_cert_192_168_1_10
+#   The presence of this secret overrides WAGO_TLS_CA for that PLC.
+#
+# WAGO_TLS_CA=false
+# WAGO_TLS_CA=true
+# WAGO_TLS_CA=/run/secrets/wago_ca.pem
+
 # ── Optional tuning ──
 # Connection timeout per PLC HTTP request, in seconds (default 5)
 WAGO_TIMEOUT_SECONDS=15

@@ -1,6 +1,7 @@
 """Registry of WDA-capable PLCs. Caches definitions + enums for rich introspection."""
 import asyncio
 from dataclasses import dataclass, field
+from pathlib import Path
 from loguru import logger
 from wda_client import WDAClient
 
@@ -45,20 +46,27 @@ class PLCManager:
         timeout_seconds: float = 5.0,
         page_limit: int = 500,
         max_concurrent_registrations: int = 5,
+        ssl_verify: bool | str = False,
     ):
         self.plcs: dict[str, PLCEntry] = {}
         self.timeout_seconds = timeout_seconds
         self.page_limit = page_limit
         self.max_concurrent_registrations = max_concurrent_registrations
+        self.ssl_verify = ssl_verify
         self._lock = asyncio.Lock()
 
     async def register(self, ip: str, username: str, password: str) -> PLCEntry | None:
+        # Per-PLC cert pinning: Docker Secret plc_cert_<ip_underscored> overrides global ssl_verify
+        cert_secret = Path(f"/run/secrets/plc_cert_{ip.replace('.', '_')}")
+        verify: bool | str = str(cert_secret) if cert_secret.exists() else self.ssl_verify
+
         client = WDAClient(
             ip,
             username,
             password,
             timeout=self.timeout_seconds,
             page_limit=self.page_limit,
+            ssl_verify=verify,
         )
 
         probe = await client.ping()

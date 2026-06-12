@@ -3,6 +3,7 @@
 12 tools, compact responses, smart pre-validation.
 """
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -32,10 +33,33 @@ setup_logging(
 )
 setup_audit_logging(audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
 
+def _resolve_tls_verify() -> bool | str:
+    """Resolve WDA TLS verification from WAGO_TLS_CA env var.
+
+    Not set / 'false' / '0' → False  (verification disabled — warns at startup)
+    'true' / '1'            → True   (system trust store)
+    Any other value         → path to CA bundle (PEM file or directory)
+    Per-PLC override: Docker Secret plc_cert_<ip_underscored> (resolved in PLCManager.register)
+    """
+    val = os.getenv("WAGO_TLS_CA", "").strip()
+    if not val or val.lower() in {"false", "0"}:
+        logger.warning(
+            "[tls] WDA TLS verification DISABLED — connections to PLCs are not verified. "
+            "Set WAGO_TLS_CA=true (system CA) or WAGO_TLS_CA=/path/to/ca.pem to enable."
+        )
+        return False
+    if val.lower() in {"true", "1"}:
+        logger.info("[tls] WDA TLS verification enabled (system trust store)")
+        return True
+    logger.info(f"[tls] WDA TLS verification enabled (CA bundle: {val})")
+    return val
+
+
 plc_manager = PLCManager(
     timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "30")),
     page_limit=int(os.getenv("WAGO_PAGE_LIMIT", "500")),
     max_concurrent_registrations=int(os.getenv("WAGO_MAX_CONCURRENT_REGISTRATIONS", "5")),
+    ssl_verify=_resolve_tls_verify(),
 )
 
 mcp = FastMCP(
@@ -54,20 +78,52 @@ FIND_LIMIT_MAX = 100
 FIND_LIMIT_DEFAULT = 20
 
 _AGENT_ID: str = "unknown"
+_AUDIT_PREV_HASH: str = "0" * 64  # genesis sentinel; seeded from last log line on startup
 
 
 # ───────────────────────── Helpers ─────────────────────────
 
 def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
+    global _AUDIT_PREV_HASH
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "action": action,
         "plc": plc_ip,
         "agent": _AGENT_ID,
         "result": result,
+        "prev": _AUDIT_PREV_HASH,
         **details,
     }
-    logger.log("AUDIT", json.dumps(entry, default=str))
+    line = json.dumps(entry, default=str)
+    _AUDIT_PREV_HASH = hashlib.sha256(line.encode()).hexdigest()
+    logger.log("AUDIT", line)
+
+
+def _seed_audit_hash(audit_log_path: str) -> None:
+    """Seed _AUDIT_PREV_HASH from the last entry of an existing audit log.
+
+    Reads only the tail of the file (4 KB) — safe on large logs.
+    On any error, leaves _AUDIT_PREV_HASH at genesis and logs a warning.
+    """
+    global _AUDIT_PREV_HASH
+    try:
+        path = Path(audit_log_path)
+        if not path.exists():
+            return
+        with path.open("rb") as f:
+            f.seek(0, 2)
+            tail_size = min(f.tell(), 4096)
+            f.seek(-tail_size, 2)
+            tail = f.read().decode("utf-8", errors="replace")
+        lines = [ln.strip() for ln in tail.splitlines() if ln.strip()]
+        if not lines:
+            return
+        last_line = lines[-1]
+        json.loads(last_line)  # reject non-JSON (e.g. partial write at rotation boundary)
+        _AUDIT_PREV_HASH = hashlib.sha256(last_line.encode()).hexdigest()
+        logger.info("[audit] Hash chain seeded from existing audit log")
+    except Exception as e:
+        logger.warning(f"[audit] Could not seed hash chain from {audit_log_path}: {e} — starting from genesis")
 
 
 def _read_secret(name: str) -> str | None:
@@ -695,6 +751,8 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
+    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+
     plcs = _parse_plcs_from_env()
     logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")
 
@@ -715,20 +773,43 @@ async def main() -> None:
     global _AGENT_ID
     _AGENT_ID = "key-" + api_key[:8]
 
+    tls_cert = os.getenv("MCP_TLS_CERT") or None
+    tls_key  = os.getenv("MCP_TLS_KEY")  or None
+    tls_password = os.getenv("MCP_TLS_KEY_PASSWORD") or None
+    tls_enabled = bool(tls_cert and tls_key)
+    scheme = "https" if tls_enabled else "http"
+
     if transport == "sse":
-        endpoint = f"http://{host}:{port}/sse"
+        endpoint = f"{scheme}://{host}:{port}/sse"
         logger.info(f"MCP server listening on {endpoint} (SSE — legacy)")
         base_app = mcp.sse_app()
     else:
-        endpoint = f"http://{host}:{port}/mcp"
+        endpoint = f"{scheme}://{host}:{port}/mcp"
         logger.info(f"MCP server listening on {endpoint} (Streamable HTTP)")
         base_app = mcp.streamable_http_app()
+
+    if tls_enabled:
+        logger.info(f"[tls] MCP endpoint TLS enabled (cert: {tls_cert})")
+    else:
+        logger.warning(
+            "[tls] MCP endpoint TLS DISABLED — plain HTTP. "
+            "Set MCP_TLS_CERT + MCP_TLS_KEY to enable. "
+            "Also update wago_proxy.py and .mcp.json URLs to https:// when enabling."
+        )
 
     app = _AuthMiddleware(base_app, api_key)
     if not is_new_key:
         logger.info("[auth] Bearer auth enabled — GET /health is exempt")
 
-    config = uvicorn.Config(app, host=host, port=int(port), log_level="warning")
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=int(port),
+        log_level="warning",
+        ssl_certfile=tls_cert,
+        ssl_keyfile=tls_key,
+        ssl_keyfile_password=tls_password,
+    )
     server = uvicorn.Server(config)
     try:
         await server.serve()
