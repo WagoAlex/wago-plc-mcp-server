@@ -119,13 +119,20 @@ class WDAClient:
     async def _paginate(self, path: str) -> list[dict]:
         """Walk all pages via JSON:API links.next."""
         items: list[dict] = []
+        # Ensure unreadable parameters surface as error attributes rather than 500ing the page.
+        if "/wda/parameters" in path and "parameter-errors-as-data-attributes" not in path:
+            sep = "&" if "?" in path else "?"
+            path = f"{path}{sep}parameter-errors-as-data-attributes=true"
         sep = "&" if "?" in path else "?"
         next_url: str | None = f"{path}{sep}page[limit]={self.page_limit}&page[offset]=0"
         while next_url:
             r = await self._request("GET", next_url)
             r.raise_for_status()
             body = r.json()
-            items.extend(body.get("data", []))
+            page_data = body.get("data", [])
+            items.extend(page_data)
+            if len(page_data) < self.page_limit:
+                break  # shorter-than-full page → last page; guards against corrupt links.next
             next_url = body.get("links", {}).get("next")
         return items
 
