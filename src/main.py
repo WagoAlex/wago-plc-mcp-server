@@ -62,7 +62,7 @@ def _resolve_tls_verify() -> bool | str:
 
 
 plc_manager = PLCManager(
-    timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "30")),
+    timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "45")),
     page_limit=int(os.getenv("WAGO_PAGE_LIMIT", "500")),
     max_concurrent_registrations=int(os.getenv("WAGO_MAX_CONCURRENT_REGISTRATIONS", "5")),
     ssl_verify=_resolve_tls_verify(),

@@ -33,12 +33,12 @@ Ask an AI assistant to read sensor values, change configuration, trigger firmwar
 
 | Device | Notes |
 |--------|-------|
-| PFC200 Gen 2 | Full support |
-| PFC300 | Full support |
-| CC100 | Full support — set `WAGO_TIMEOUT_SECONDS=45` (slow ARM CPU) |
-| Edge Controller | Full support — Docker and CODESYS runtime visible via WDA |
+| PFC200 Gen 2 | |
+| PFC300 | |
+| CC100 | Slow ARM CPU — keep `WAGO_TIMEOUT_SECONDS` at default (45 s) |
+| Edge Controller | CODESYS runtime parameters visible via WDA |
 
-Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmware 04.09.01.
+Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
 
 ---
 
@@ -91,7 +91,7 @@ WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
 DEFAULT_PLC_USERNAME=admin
 DEFAULT_PLC_PASSWORD=wago
 PORT=6042
-WAGO_TIMEOUT_SECONDS=15     # use 45 for CC100
+WAGO_TIMEOUT_SECONDS=45
 ```
 
 > For fleets with mixed passwords, use per-PLC overrides:
@@ -437,7 +437,7 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 | `TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `6042` | Listen port |
-| `WAGO_TIMEOUT_SECONDS` | `30` | Per-PLC HTTP timeout in seconds (use 45 for CC100) |
+| `WAGO_TIMEOUT_SECONDS` | `45` | Per-PLC HTTP timeout in seconds |
 | `WAGO_PAGE_LIMIT` | `500` | Pagination page size |
 | `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Parallel PLC init limit |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
