@@ -11,7 +11,7 @@ description: |
 MCP server bridging WAGO PLCs (PFC200, PFC300, CC100, Edge Controller) to LLM agents via the WDx/WDA REST API. Agents can discover, read, write, and monitor PLC parameters using natural language.
 
 - **Transport:** Streamable HTTP (default) or SSE (legacy)
-- **Stack:** Python 3.12, FastMCP (`mcp` 1.27.1+), httpx, Docker
+- **Stack:** Python 3.14, FastMCP (`mcp` 1.27.1+), httpx, Docker
 - **Port:** 6042
 - **Container name:** `wmcp`
 - **Image:** `wagoalex/wago-plc-mcp-server:latest`
@@ -30,7 +30,7 @@ wago-plc-mcp-server/
 │   └── logging_config.py    # loguru structured logging, stdlib interception
 ├── .env                     # Runtime config (never commit)
 ├── docker-compose.yml       # Production deployment
-├── Dockerfile               # python:3.12-slim + uv
+├── Dockerfile               # python:3.14-slim + uv
 ├── pyproject.toml           # Dependencies
 └── build.sh                 # Version bump + build + optional push
 ```
@@ -165,8 +165,8 @@ LOG_FILE=/app/mcp_server.log
 | Tool | Purpose | Network? |
 |------|---------|---------|
 | `list_plcs` | List registered PLC IPs | No (cache) |
-| `describe_plc` | Capability summary | No (cache) |
-| `find_parameters` | Substring/fuzzy search | No (cache) |
+| `describe_plc` | Capability summary + `device_class`, `expected_parameter_count`, `parameter_count_ok` | No (cache) |
+| `find_parameters` | Substring/fuzzy search, up to 255 results | No (cache) |
 | `get_parameter` | Read one parameter | Yes |
 | `get_parameters_bulk` | Read one param from N PLCs in parallel | Yes × N concurrent |
 | `set_parameters` | Bulk PATCH, pre-validates writeability | Yes |
@@ -225,12 +225,19 @@ Content-Type: application/vnd.api+json  (writes only)
 # each inArg is {"value": ...} — NOT flat
 ```
 
-**Pagination:**
+**Pagination:** WDA hard-caps at 255 entries/page regardless of requested limit. Parameters
+return in registration order (not alphabetical). Always include
+`parameter-errors-as-data-attributes=true` for `/wda/parameters` — `_paginate()` injects
+this automatically. Use `--data-urlencode` for `page[limit]`/`page[offset]` in curl —
+literal bracket embedding is silently ignored causing an infinite page-0 loop.
 ```python
-next_url = f"{path}?page[limit]={limit}&page[offset]=0"
+next_url = f"{path}?page[limit]=255&page[offset]=0"
 while next_url:
     body = (await client.get(next_url)).json()
-    items.extend(body.get("data", []))
+    page = body.get("data", [])
+    items.extend(page)
+    if len(page) < page_limit:
+        break  # defensive: shorter-than-full page = last page
     next_url = body.get("links", {}).get("next")  # absent on last page
 ```
 
