@@ -11,3 +11,23 @@ dependencies = [
     "loguru>=0.7.2",
     "uvicorn>=0.27.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "httpx[asgi]>=0.28.1",
+    "pytest-cov>=5.0",
+    "pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "live: requires a reachable PLC — never run in CI",
+    "mutate: writes to a PLC — lab-gated only, never in CI",
+    "soak: long-running resilience / leak check — on-demand only",
+]

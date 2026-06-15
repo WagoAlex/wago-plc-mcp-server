@@ -21,6 +21,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: base  # production stage — pins build.sh and default `docker compose build`
+                    # to the prod image. Dev/test image is opt-in via docker-compose.dev.yml.
     container_name: wmcp
     env_file:
       - .env
