@@ -54,8 +54,12 @@ KNOWN_PARAM_COUNTS: dict[str, int] = {
 }
 
 
-def _infer_device_class(name: str) -> str:
-    """Map the WDA device name string to a normalised class label."""
+def _infer_device_class(name: str, order_number: str = "") -> str:
+    """Infer device class from WDA device name or orderNumber.
+
+    FW31 dropped the 'name' field; fall back to orderNumber prefix:
+      0751-  → CC100 | 0750-82 → PFC200 | 0750-83 → PFC300 | 0752- → Edge
+    """
     n = name.upper()
     if "CC100" in n:
         return "CC100"
@@ -65,6 +69,16 @@ def _infer_device_class(name: str) -> str:
         return "PFC200"
     if "EDGE" in n or n.startswith("EC"):
         return "Edge"
+    # Fallback: orderNumber prefix (FW31+)
+    o = order_number
+    if o.startswith("0751-"):
+        return "CC100"
+    if o.startswith("0752-"):
+        return "Edge"
+    if o.startswith("0750-82"):
+        return "PFC200"
+    if o.startswith("0750-83"):
+        return "PFC300"
     return ""
 
 
@@ -162,9 +176,11 @@ class PLCManager:
 
         # Device identity from first /wda/devices entry (non-essential)
         if not isinstance(devices, Exception) and devices:
-            first_name = devices[0].get("attributes", {}).get("name", "")
-            entry.device_name = first_name
-            entry.device_class = _infer_device_class(first_name)
+            attrs = devices[0].get("attributes", {})
+            first_name = attrs.get("name", "")
+            order_number = attrs.get("orderNumber", "")
+            entry.device_name = first_name or order_number
+            entry.device_class = _infer_device_class(first_name, order_number)
 
         # Non-essential — log warning but keep PLC
         for attr, result in (("devices", devices), ("features", features)):
