@@ -1,0 +1,33 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/methods?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-ntpclient-updatetime",
+        "type": "methods",
+        "attributes": {
+          "name": "UpdateTime",
+          "description": "Trigger NTP time synchronisation"
+        }
+      },
+      {
+        "id": "0-0-usermanagement-changepassword",
+        "type": "methods",
+        "attributes": {
+          "name": "ChangePassword",
+          "description": "Change the password for a user account"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

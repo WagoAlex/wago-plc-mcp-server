@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "class": "edge",
+    "firmware": "04.02.01(22)",
+    "recorded": "hand-authored",
+    "note": "GET /wda — service identity; no Bearer token (Basic-only path)"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": {
+      "id": "wda",
+      "type": "service-identities",
+      "attributes": {
+        "name": "WDA",
+        "version": "1.4.1",
+        "firmware": "04.02.01(22)",
+        "hostname": "EC7206-FAKESN001",
+        "orderNumber": "YYYY-YYYY/YYYY-YYYY"
+      },
+      "links": {
+        "self": "/wda"
+      }
+    }
+  }
+}

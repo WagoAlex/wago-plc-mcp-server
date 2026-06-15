@@ -1,0 +1,44 @@
+{
+  "_meta": {
+    "class": "edge",
+    "firmware": "04.02.01(22)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/parameters?parameter-errors-as-data-attributes=true&page[limit]=500&page[offset]=500 — page 2 of 2 (CT-04 pagination test)"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-edge-mqtt-broker",
+        "type": "parameters",
+        "attributes": {
+          "value": "mqtt.example.internal",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-edge-mqtt-port",
+        "type": "parameters",
+        "attributes": {
+          "value": 1883,
+          "dataType": "uint16",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-edge-container-runtime",
+        "type": "parameters",
+        "attributes": {
+          "value": 0,
+          "dataType": "enum_member",
+          "dataRank": "scalar"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

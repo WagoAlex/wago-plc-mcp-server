@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "class": "pfc200",
+    "firmware": "03.08.05(44)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/methods?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-ntpclient-updatetime",
+        "type": "methods",
+        "attributes": {
+          "name": "UpdateTime",
+          "description": "Trigger NTP time synchronisation"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

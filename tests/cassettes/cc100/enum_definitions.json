@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/enum-definitions?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "enum-webserver-protocols",
+        "type": "enum-definitions",
+        "attributes": {
+          "name": "WebserverTransferProtocols",
+          "cases": [
+            {"value": 0, "stringValue": "HTTP"},
+            {"value": 1, "stringValue": "HTTPS"},
+            {"value": 2, "stringValue": "HTTP_HTTPS"}
+          ]
+        }
+      }
+    ],
+    "links": {}
+  }
+}

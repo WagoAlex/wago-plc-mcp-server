@@ -40,7 +40,7 @@ The optimized approach keeps mocks as the fast pre-check layer and adds a live
 | Layer | Scope | Hardware | Runs in CI? | When |
 |------|-------|----------|-------------|------|
 | **L0 Unit** ✅ done | pure logic (`enricher`, scoring, env parse, audit chain) | none | ✅ yes | every commit |
-| **L1 Contract / cassette** | WDAClient replayed against *recorded real* per-device responses | none (cassettes) | ✅ yes | every commit |
+| **L1 Contract / cassette** ✅ done | WDAClient replayed against *recorded real* per-device responses | none (cassettes) | ✅ yes | every commit |
 | **L2 Auth/middleware integration** | `_AuthMiddleware`, rate limit, ASGI | none | ✅ yes | every commit |
 | **L3 Live conformance matrix** | read-only battery parametrized over all 4 classes | all reachable PLCs | ⚠️ nightly / on-demand | pre-release, firmware change |
 | **L4 Live mutate suite** | writes + method invocation, gated | **lab devices only** | ❌ manual gate | pre-release |
@@ -278,6 +278,13 @@ Legend: ✅ wrapped & on the live path · ◐ wrapped but not exposed as an MCP 
 Record real WDA responses **once per device class** during an L3 run, store them as
 cassettes, and replay them in CI with `respx`. This is what lets CI catch
 device-shape regressions without the fleet being online.
+
+**L1 status: ✅ done (TT3).** 62 tests in `tests/contract/`. Hand-authored cassettes for
+cc100/edge/pfc200 (`tests/cassettes/<class>/`), respx router fixtures, and
+`tests/tools/record_cassettes.py` with a unit-tested `scrub()`. CT-02..CT-07 covered
+incl. 2-page pagination merge and inArgs `{"value":…}` body assertion. **TT5 must
+re-record these from live hardware** — current cassette `_meta.firmware` values are
+illustrative and CT-07's stale-guard will enforce the swap. Suite total: 172.
 
 ```
 CT-01  Record cassettes per class: parameters, parameter-definitions, methods,

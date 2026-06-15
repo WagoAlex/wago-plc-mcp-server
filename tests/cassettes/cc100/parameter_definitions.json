@@ -1,0 +1,95 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/parameter-definitions?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/OrderNumber",
+          "writeable": false,
+          "userSetting": false,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-identity-firmware",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/Firmware",
+          "writeable": false,
+          "userSetting": false,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-identity-hostname",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/Hostname",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-network-ipaddress",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Network/IPAddress",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-webserver-protocol",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Webserver/Protocol",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "enum_member"
+        },
+        "relationships": {
+          "enum": {
+            "data": {
+              "id": "enum-webserver-protocols",
+              "type": "enum-definitions"
+            }
+          }
+        }
+      },
+      {
+        "id": "0-0-webserver-enabled",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Webserver/Enabled",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "boolean"
+        }
+      },
+      {
+        "id": "0-0-systemtime-local-now",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "SystemTime/Local/Now",
+          "writeable": true,
+          "userSetting": false,
+          "dataType": "string"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "class": "edge",
+    "firmware": "04.02.01(22)",
+    "recorded": "hand-authored",
+    "note": "POST /wda/monitoring-lists + GET with ?include=parameters"
+  },
+  "create_status": 201,
+  "create_headers": {
+    "Content-Type": "application/vnd.api+json",
+    "Location": "/wda/monitoring-lists/ml-edge-1"
+  },
+  "create_body": {
+    "data": {
+      "id": "ml-edge-1",
+      "type": "monitoring-lists",
+      "attributes": {
+        "timeout": 300
+      },
+      "relationships": {
+        "parameters": {
+          "data": [
+            {"id": "0-0-identity-ordernumber", "type": "parameters"},
+            {"id": "0-0-edge-cloudconnect-enabled", "type": "parameters"}
+          ]
+        }
+      }
+    }
+  },
+  "get_status": 200,
+  "get_headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "get_body": {
+    "data": {
+      "id": "ml-edge-1",
+      "type": "monitoring-lists",
+      "attributes": {
+        "timeout": 300
+      }
+    },
+    "included": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameters",
+        "attributes": {
+          "value": "YYYY-YYYY/YYYY-YYYY",
+          "dataType": "string",
+          "dataRank": "scalar",
+          "error": null
+        }
+      },
+      {
+        "id": "0-0-edge-cloudconnect-enabled",
+        "type": "parameters",
+        "attributes": {
+          "value": true,
+          "dataType": "boolean",
+          "dataRank": "scalar",
+          "error": null
+        }
+      }
+    ]
+  }
+}
