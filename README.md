@@ -440,23 +440,28 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 
 ---
 
-## Building
+## Building from Source
+
+A pre-built image is published on [Docker Hub](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server) and is the recommended way to run the server — `docker compose up -d` pulls it automatically.
+
+If you need to modify the source or build locally:
 
 ```bash
-# Dev build (bump patch version)
+# Clone the repository
+git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
+cd wago-plc-mcp-server
+
+# Build (bumps patch version)
 ./build.sh --patch
 
 # Build and start immediately
 ./build.sh --patch --start
 
-# Bump major version, build, and push to Docker Hub
-./build.sh --major --release
-
-# Publish current version without bumping
-./build.sh --release
+# Build without layer cache (after dependency changes)
+./build.sh --patch --no-cache
 ```
 
-A CycloneDX SBOM is generated automatically after every build via syft and written to `sbom-<version>.json`. `--release` archives a copy under `sbom/`.
+A CycloneDX SBOM is generated automatically after every build via syft and written to `sbom-<version>.json`.
 
 ---
 

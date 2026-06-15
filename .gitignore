@@ -39,6 +39,9 @@ Thumbs.db
 
 .claude/settings.local.json
 
+# Build tooling — local only, not for public repos
+build.sh
+
 # ── CRA / build artifacts ──
 # Ephemeral build-time SBOM at repo root (regenerated every build).
 # Leading slash keeps released SBOMs under sbom/ tracked.
