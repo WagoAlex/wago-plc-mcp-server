@@ -8,7 +8,7 @@
 Ask an AI assistant to read sensor values, change configuration, trigger firmware updates, or monitor entire PLC fleets — with no custom code.
 
 ```
- MCP Client (Claude Desktop / OpenClaw / Claude Code)
+ MCP Client (Claude Desktop / Claude Code / OpenClaw)
         │
         │  Bearer token  +  optional TLS ◄── MCP_TLS_CERT + MCP_TLS_KEY
         │
@@ -65,7 +65,7 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 | Default password warning | ✅ | Startup WARNING if factory default password detected |
 | TLS — WDA connections | ⚙️ | Off by default; enable with `WAGO_TLS_CA` or per-PLC Docker Secret |
 | TLS — MCP endpoint | ⚙️ | Off by default; enable with `MCP_TLS_CERT` + `MCP_TLS_KEY` |
-| CycloneDX SBOM | ✅ | Generated on every build via syft |
+| CycloneDX SBOM | ✅ | Published alongside every release image |
 | Docker Secrets | ✅ | PLC passwords, MCP key, TLS certs all mountable as secrets |
 | CVE scanning | ✅ | Weekly grype scan on SBOM; HIGH/CRITICAL fails CI |
 | Dependabot | ✅ | Weekly PRs for pip, Docker, and GitHub Actions dep updates |
@@ -84,7 +84,7 @@ cd wago-plc-mcp-server
 cp _env .env
 ```
 
-Edit `.env`:
+Edit `.env` with your PLC details:
 
 ```env
 WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
@@ -93,6 +93,9 @@ DEFAULT_PLC_PASSWORD=wago
 PORT=6042
 WAGO_TIMEOUT_SECONDS=15     # use 45 for CC100
 ```
+
+> For fleets with mixed passwords, use per-PLC overrides:
+> `PLC_PASSWORDS_192_168_1_11=secret` (IP with underscores).
 
 ### 2. Create the PLC password secret
 
@@ -109,7 +112,7 @@ docker compose up -d
 docker logs wmcp -f
 ```
 
-On first boot the server prints the auto-generated API key — **copy it now**:
+The container uses `network_mode: host` so it can reach PLCs on routed subnets directly. On first boot the server prints the auto-generated API key — **copy it now**:
 
 ```
 ════════════════════════════════════════════════════════════════════════
@@ -226,7 +229,29 @@ When TLS is active, update your client URLs from `http://` to `https://`.
 
 ---
 
-## Connecting to Claude Desktop (Windows)
+## Connecting Clients
+
+### Claude Code / direct HTTP (`.mcp.json`)
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "wago-plc": {
+      "type": "http",
+      "url": "http://localhost:6042/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-api-key>"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop (Windows)
+
+Claude Desktop uses stdio transport and cannot connect directly to an HTTP MCP server. A lightweight proxy bridges the gap.
 
 Install prerequisites on the Windows machine:
 
@@ -234,10 +259,10 @@ Install prerequisites on the Windows machine:
 python -m pip install fastmcp httpx
 ```
 
-Create `wago_proxy.py` — the proxy injects the Bearer token so Claude Desktop can reach the authenticated server:
+Create `wago_proxy.py`:
 
 ```python
-import os, sys
+import os
 from fastmcp import Client
 from fastmcp.server import create_proxy
 
@@ -268,27 +293,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 Fully quit and relaunch Claude Desktop. A hammer icon appears with the tool count.
 
----
-
-## Connecting via `.mcp.json` (Claude Code / direct HTTP)
-
-```json
-{
-  "mcpServers": {
-    "wago-plc": {
-      "type": "http",
-      "url": "http://localhost:6042/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-api-key>"
-      }
-    }
-  }
-}
-```
-
----
-
-## Connecting to OpenClaw / other agents
+### OpenClaw / other agents
 
 ```json
 {
@@ -440,20 +445,6 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 
 ---
 
-## Building from Source
-
-A pre-built image is published on [Docker Hub](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server) and is the recommended way to run the server — `docker compose up -d` pulls it automatically.
-
-A CycloneDX SBOM is generated for every release and published alongside the image.
-
----
-
-## Networking
-
-The container uses `network_mode: host` by default. This is required when PLCs are on routed subnets not directly reachable from a bridged Docker network.
-
----
-
 ## Requirements
 
 - Docker 24+ with Compose v2
@@ -461,6 +452,12 @@ The container uses `network_mode: host` by default. This is required when PLCs a
 - Network route from Docker host to PLC subnets
 
 For Claude Desktop proxy: Python 3.11+ and `fastmcp` on the client machine.
+
+---
+
+## Releases
+
+Pre-built images are published on [Docker Hub](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server). A CycloneDX SBOM is published alongside every release image. `docker compose up -d` pulls the latest automatically.
 
 ---
 
