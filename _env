@@ -10,15 +10,67 @@ WAGO_PLC_HOSTS=192.168.2.17,192.168.42.42
 # PLC_PASSWORDS_10_0_0_2=secret_b
 # PLC_PASSWORDS_10_0_0_3=secret_c
 
-# ── Default credentials (used when password not specified per-PLC) ──
+# ── Default credentials ──
 DEFAULT_PLC_USERNAME=admin
-DEFAULT_PLC_PASSWORD=wago
+
+# DEPRECATED: Store the password as a Docker Secret instead (recommended for production).
+# Create secrets/plc_default_password.txt and declare it in docker-compose.yml.
+# This env var is kept as a dev/local fallback only — remove it from .env in production.
+# DEFAULT_PLC_PASSWORD=wago
+
+# ── T1: Bearer auth on /mcp (recommended for production) ──
+# Store the key as a Docker Secret (highest priority):
+#   echo "$(openssl rand -hex 32)" > secrets/mcp_api_key.txt
+#   chmod 600 secrets/mcp_api_key.txt
+#   # then uncomment mcp_api_key in docker-compose.yml secrets section
+# Fallback (dev only — prefer the secret):
+# MCP_API_KEY=your-random-hex-key
+#
+# Add to .mcp.json when auth is enabled:
+#   "headers": {"Authorization": "Bearer <your-key>"}
 
 # ── MCP server bind ──
 HOST=0.0.0.0
 PORT=6042
 #TRANSPORT=sse
 TRANSPORT=streamable-http
+# ── T2.2: TLS on the MCP endpoint ──
+# When both vars are set, uvicorn serves /mcp over HTTPS instead of plain HTTP.
+# Update wago_proxy.py (url=) and .mcp.json (url:) to https:// after enabling.
+#
+# Dev — generate a self-signed cert:
+#   openssl req -x509 -newkey rsa:4096 -keyout secrets/mcp_tls_key.pem \
+#     -out secrets/mcp_tls_cert.pem -days 365 -nodes -subj "/CN=wago-mcp"
+#   # then declare secrets in docker-compose.yml and set:
+#   MCP_TLS_CERT=/run/secrets/mcp_tls_cert
+#   MCP_TLS_KEY=/run/secrets/mcp_tls_key
+#
+# If the key is password-protected:
+# MCP_TLS_KEY_PASSWORD=your-key-password
+#
+# MCP_TLS_CERT=/run/secrets/mcp_tls_cert
+# MCP_TLS_KEY=/run/secrets/mcp_tls_key
+# MCP_TLS_KEY_PASSWORD=
+
+# ── T2.1: WDA TLS verification ──
+# Controls how the server verifies WAGO PLC HTTPS certificates.
+#
+# WAGO_TLS_CA=false          Disable verification (default — warns at startup).
+#                             Use only for dev/lab or when certs cannot be distributed.
+# WAGO_TLS_CA=true           Verify against the system trust store (only if PLC certs
+#                             are signed by a public or corporate CA).
+# WAGO_TLS_CA=/path/to/ca.pem  Verify against a custom CA bundle (recommended for
+#                             managed fleets with an internal CA).
+#
+# Per-PLC cert pinning (option A — for self-signed certs):
+#   Mount a PEM cert as Docker Secret plc_cert_<ip_with_underscores>
+#   e.g. plc_cert_192_168_1_10 → /run/secrets/plc_cert_192_168_1_10
+#   The presence of this secret overrides WAGO_TLS_CA for that PLC.
+#
+# WAGO_TLS_CA=false
+# WAGO_TLS_CA=true
+# WAGO_TLS_CA=/run/secrets/wago_ca.pem
+
 # ── Optional tuning ──
 # Connection timeout per PLC HTTP request, in seconds (default 5)
 WAGO_TIMEOUT_SECONDS=15
@@ -35,3 +87,19 @@ WAGO_TIMEOUT_SECONDS=45
 
 # Log file path inside container (default /app/mcp_server.log)
 LOG_FILE=/app/mcp_server.log
+
+# ── T4.3: SIEM / syslog export ──
+# When SYSLOG_HOST is set, AUDIT entries are forwarded to the syslog receiver in
+# addition to the local file. Local audit log retention drops from 5 to 2 rotated
+# files (SIEM becomes the authoritative copy).
+#
+# Log budgets (on-disk inside container):
+#   Debug log  : 10 MB × 3 files  =  30 MB max
+#   Audit log  : 10 MB × 5 files  =  50 MB max (20 MB when SYSLOG_HOST is set)
+#
+# SYSLOG_HOST=syslog.internal        # hostname or IP of syslog receiver
+# SYSLOG_PORT=514                    # default 514
+# SYSLOG_TCP=false                   # true = TCP (reliable), false = UDP (default)
+#
+# Note: syslog truncates messages >2 KB (RFC 5424). Long set_parameters calls
+# with many parameters may be clipped at the receiver.

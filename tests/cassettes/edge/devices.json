@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "class": "edge",
+    "firmware": "04.02.01(22)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/devices?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0",
+        "type": "devices",
+        "attributes": {
+          "name": "EC7206",
+          "description": "WAGO Edge Controller 7206",
+          "orderNumber": "YYYY-YYYY/YYYY-YYYY",
+          "firmwareRevision": "04.02.01(22)"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

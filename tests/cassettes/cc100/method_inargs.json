@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/method-definitions/0-0-usermanagement-changepassword/inargs"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-usermanagement-changepassword-username",
+        "type": "method-inarg-definitions",
+        "attributes": {
+          "name": "username",
+          "dataType": "string",
+          "dataRank": "scalar",
+          "description": "The account whose password to change"
+        }
+      },
+      {
+        "id": "0-0-usermanagement-changepassword-newpassword",
+        "type": "method-inarg-definitions",
+        "attributes": {
+          "name": "newpassword",
+          "dataType": "string",
+          "dataRank": "scalar",
+          "description": "The new password (must meet complexity rules)"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

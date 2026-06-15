@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "POST /wda/methods/0-0-ntpclient-updatetime/runs?result-behavior=async — executionStatus=progress"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": {
+      "id": "2",
+      "type": "runs",
+      "attributes": {
+        "executionStatus": "progress",
+        "timeout": 5000
+      }
+    }
+  }
+}

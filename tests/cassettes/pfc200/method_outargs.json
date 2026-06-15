@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "class": "pfc200",
+    "firmware": "03.08.05(44)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/method-definitions/0-0-ntpclient-updatetime/outargs"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-ntpclient-updatetime-result",
+        "type": "method-outarg-definitions",
+        "attributes": {
+          "name": "result",
+          "dataType": "boolean",
+          "dataRank": "scalar",
+          "description": "true if the update succeeded"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

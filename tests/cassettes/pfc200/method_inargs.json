@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "class": "pfc200",
+    "firmware": "03.08.05(44)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/method-definitions/0-0-ntpclient-updatetime/inargs — no inargs"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [],
+    "links": {}
+  }
+}

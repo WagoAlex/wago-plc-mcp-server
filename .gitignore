@@ -34,3 +34,28 @@ docker-compose.override.yml
 # OS
 .DS_Store
 Thumbs.db
+
+# ── Claude Code ──
+
+.claude/settings.local.json
+
+# ── CRA / build artifacts ──
+# Ephemeral build-time SBOM at repo root (regenerated every build).
+# Leading slash keeps released SBOMs under sbom/ tracked.
+/sbom-*.json
+/sbom*.json
+/sbom/
+# Docker secrets (T2) — credentials must never be committed at rest
+/secrets/
+# Auto-generated API key persistence volume (T1)
+/data/
+
+.claude/
+.mcp.json
+# Internal planning files — keep private
+docs/*-todo.md
+docs/tier*
+CLAUDE.md
+AGENTS.md
+
+claude_desktop_config.json
