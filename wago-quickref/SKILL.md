@@ -243,6 +243,80 @@ while next_url:
 
 ---
 
+## Parameter Cheat Sheet (FW31, all device classes)
+
+Zero `find_parameters` round-trips for these — copy the ID directly.
+
+> **Not in WDA:** CPU load, memory usage, uptime — not exposed via WDA API at FW31.
+
+### Identity (CC100 · PFC200 · PFC300 · Edge)
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-version-firmwareversion` | Full firmware string e.g. `04.09.01` | — |
+| `0-0-version-softwarereleaseindex` | Build index (31) — use for firmware matrix | — |
+| `0-0-identity-ordernumber` | Article / order number e.g. `0752-8303/…` | — |
+| `0-0-identity-serialnumber` | Device serial number | — |
+
+### Network (CC100 · PFC200 · PFC300 · Edge)
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-networking-hostname-currentname` | Current active hostname | — |
+| `0-0-networking-hostname-customname` | Set a custom hostname | ✓ |
+| `0-0-networking-bridges-1-ipconfiguration-currentaddresses` | Active IP address(es) on bridge 1 | — |
+| `0-0-networking-bridges-1-ipconfiguration-currentdefaultgateway` | Active default gateway | — |
+| `0-0-networking-dns-utilizeddnsservers` | Active DNS servers | — |
+| `0-0-networking-dns-customdnsservers` | Set custom DNS servers | ✓ |
+
+### Time / NTP (CC100 · PFC200 · PFC300 · Edge)
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-systemtime-local-now` | Current local time (ISO 8601); write to set clock | ✓ |
+| `0-0-ntpclient-configuredtimeservers` | NTP server address(es) | ✓ |
+| `0-0-ntpclient-istimeserveravailable` | NTP sync OK? (bool) | — |
+| `0-0-ntpclient-enabled` | NTP client on/off | ✓ |
+
+### CODESYS Runtime (CC100 · PFC200 · PFC300 · Edge)
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-codesys3-enabled` | Runtime enabled/disabled | ✓ |
+| `0-0-codesys3-applications` | List of loaded applications | — |
+| `0-0-codesys3-webserver-enabled` | CODESYS WebVisu server on/off | ✓ |
+
+### System status (CC100 · PFC200 · PFC300 · Edge)
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-firmwareupdate-status` | Update state (idle / running / error) | — |
+| `0-0-firmwareupdate-progress` | Update progress % | — |
+| `0-0-reboot-status` | Reboot state; use `invoke_method` for actual reboot | — |
+| `0-0-memorycard-isavailable` | SD card present | — |
+
+### Edge / WP400 panel only
+
+| Parameter ID | What it gives you | W? |
+|---|---|---|
+| `0-0-integratedwebbrowser-startpage` | Kiosk/Webvisu start URL | ✓ |
+| `0-0-integratedwebbrowser-startpagefavorite` | Use a saved favourite as start page | ✓ |
+| `0-0-integratedwebbrowser-favorites` | Stored browser favourites list | ✓ |
+
+### Quick troubleshooting bundle (fleet-wide)
+
+Use `get_parameters_bulk` with this set for a fast health snapshot across all PLCs:
+```
+0-0-version-firmwareversion
+0-0-networking-hostname-currentname
+0-0-networking-bridges-1-ipconfiguration-currentaddresses
+0-0-ntpclient-istimeserveravailable
+0-0-codesys3-enabled
+0-0-firmwareupdate-status
+```
+
+---
+
 ## Firmware Version Reference
 | Firmware Version | Firmware Index |
 | ---------------- | -------------- |
