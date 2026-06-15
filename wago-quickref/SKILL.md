@@ -305,7 +305,11 @@ Zero `find_parameters` round-trips for these — copy the ID directly.
 
 ### Quick troubleshooting bundle (fleet-wide)
 
-Use `get_parameters_bulk` with this set for a fast health snapshot across all PLCs:
+Use `get_parameters_bulk` with this set for a fast health snapshot across all PLCs.
+Primary use: **one parameter × N PLCs** (e.g. firmware version from all 16 at once).
+When reading N parameters from a single PLC, keep batches ≤ 8 — larger batches can
+overload the PLC and return 500s even for valid parameter IDs.
+
 ```
 0-0-version-firmwareversion
 0-0-networking-hostname-currentname
@@ -314,6 +318,8 @@ Use `get_parameters_bulk` with this set for a fast health snapshot across all PL
 0-0-codesys3-enabled
 0-0-firmwareupdate-status
 ```
+
+All IDs above verified live on FW31 (Edge .124, CC100 .110, PFC200 .117, PFC300 .119).
 
 ---
 
