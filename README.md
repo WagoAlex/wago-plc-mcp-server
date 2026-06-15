@@ -15,7 +15,7 @@ Ask an AI assistant to read sensor values, change configuration, trigger firmwar
         ▼
  ┌──────────────────────────────────────────────────────┐
  │          wago-plc-mcp-server  (Docker, port 6042)    │
- │                                                       │
+ │                                                      │
  │   Bearer auth · Rate limiting · Audit log (chained)  │
  └────────────────────────┬─────────────────────────────┘
                           │
