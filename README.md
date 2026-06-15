@@ -344,9 +344,33 @@ For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` inste
 
 | Tool | Description |
 |------|-------------|
-| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Create server-side monitoring list |
-| `read_watchlist(plc_ip, watchlist_id)` | Read current values (resets timeout) |
-| `delete_watchlist(plc_ip, watchlist_id)` | Free watchlist before timeout |
+| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Register a server-side monitoring list on the PLC |
+| `read_watchlist(plc_ip, watchlist_id)` | Return current values for all watched parameters (resets timeout) |
+| `delete_watchlist(plc_ip, watchlist_id)` | Release the watchlist immediately rather than waiting for timeout |
+
+#### Why watchlists exist
+
+The WDA REST API is stateless — every `get_parameter` call opens a new HTTPS connection to the PLC, negotiates TLS, and fetches a single value. For occasional lookups this is fine. For repeated polling of a fixed set of parameters across a fleet, the overhead compounds quickly: reading 10 parameters from 15 PLCs every 30 seconds means 150 HTTPS round-trips per cycle.
+
+Watchlists solve this at the protocol level. On `create_watchlist`, the PLC registers the parameter set internally and assigns a numeric ID. Subsequent `read_watchlist` calls return all current values in a single request, with no per-parameter overhead. The watchlist persists on the PLC until either `delete_watchlist` is called or the inactivity timeout expires — whichever comes first.
+
+#### What values can be monitored
+
+The WDA is the **system management layer** of the PLC, not the real-time process image. Field I/O (digital inputs, analog sensor values, output states from attached I/O modules) is served by the CODESYS runtime via OPC-UA, Modbus TCP, or WAGO I/O-Check — not via WDA.
+
+What WDA *does* expose as live, poll-worthy values:
+
+| Category | Example parameters | Typical use |
+|---|---|---|
+| **Service health** | `0-0-ntpclient-isrunning`, `0-0-docker-isrunning`, `0-0-ssh-isrunning`, `0-0-openvpn-isrunning` | Detect silently stopped services |
+| **LED & fault state** | `0-0-ledstates-1-diagnosticinformation` (SYS), `0-0-ledstates-4-diagnosticinformation` (RUN), `0-0-ledstates-5-diagnosticinformation` (CAN/fieldbus) | Mirror the physical status LEDs; surface diagnostic text without physical access |
+| **Firmware update** | `0-0-firmwareupdate-status`, `0-0-firmwareupdate-progress`, `0-0-firmwareupdate-errorcause` | Track OTA update progress across a fleet |
+| **Reboot state** | `0-0-reboot-status` | Detect a pending or in-progress reboot |
+| **CODESYS runtime** | `0-0-codesys3-applications` | Confirm a PLC program is loaded and running |
+| **Cloud connectivity** | `0-0-cloudconnections-1-status-connected`, `0-0-cloudconnections-1-status-filllevel`, `0-0-cloudconnections-1-status-errorinformation` | Monitor WAGO Cloud or MQTT broker reachability and queue depth |
+| **System time** | `0-0-systemtime-now` | Verify clock synchronisation after NTP updates |
+
+A watchlist combining the LED diagnostic strings, service `isRunning` flags, and cloud connection status gives a complete operational health snapshot per PLC in a single HTTP call — suitable for a 30-second polling loop driven by an AI agent, an n8n workflow, or a custom dashboard.
 
 ### Example workflows
 
@@ -367,13 +391,21 @@ invoke_method("192.168.1.10", "0-0-ntpclient-updatetime", wait=True)
 → {"status": "done", "run_id": "1", "out_args": {}}
 ```
 
-**Monitor IO values repeatedly:**
+**Poll operational health repeatedly:**
 ```
-create_watchlist("192.168.1.10", ["param-a", "param-b"], timeout_seconds=300)
+create_watchlist("192.168.1.10", [
+  "0-0-ledstates-1-diagnosticinformation",   # SYS LED
+  "0-0-ledstates-4-diagnosticinformation",   # RUN LED
+  "0-0-ledstates-5-diagnosticinformation",   # CAN/fieldbus LED
+  "0-0-ntpclient-isrunning",
+  "0-0-docker-isrunning",
+  "0-0-cloudconnections-1-status-connected",
+  "0-0-firmwareupdate-status"
+], timeout_seconds=300)
 → {"watchlist_id": "1", "parameters": [...]}
 
-read_watchlist("192.168.1.10", "1")   # call repeatedly
-delete_watchlist("192.168.1.10", "1") # cleanup
+read_watchlist("192.168.1.10", "1")   # call every 30 s — one HTTP round-trip
+delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 ```
 
 ---
