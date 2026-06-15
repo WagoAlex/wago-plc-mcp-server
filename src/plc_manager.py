@@ -17,6 +17,10 @@ class PLCEntry:
     features: set[str] = field(default_factory=set)
     methods: set[str] = field(default_factory=set)
 
+    # Device identity (from first /wda/devices entry)
+    device_name: str = ""   # e.g. "PFC200 G2"
+    device_class: str = ""  # "CC100" | "PFC200" | "PFC300" | "Edge" | ""
+
     # Rich metadata for smart agent behavior
     param_path: dict[str, str] = field(default_factory=dict)        # id → human path
     param_writeable: set[str] = field(default_factory=set)
@@ -38,6 +42,30 @@ def _extract_enum_id(pdef: dict) -> str | None:
     if "/enum-definitions/" in link:
         return link.rsplit("/enum-definitions/", 1)[-1].split("?")[0]
     return None
+
+
+# Expected parameter counts per device class at FW build 31 (WDA 1.5.2).
+# Used by describe_plc to flag incomplete sweeps.
+KNOWN_PARAM_COUNTS: dict[str, int] = {
+    "CC100": 360,
+    "PFC200": 398,
+    "PFC300": 393,
+    "Edge": 394,
+}
+
+
+def _infer_device_class(name: str) -> str:
+    """Map the WDA device name string to a normalised class label."""
+    n = name.upper()
+    if "CC100" in n:
+        return "CC100"
+    if "PFC300" in n:
+        return "PFC300"
+    if "PFC200" in n:
+        return "PFC200"
+    if "EDGE" in n or n.startswith("EC"):
+        return "Edge"
+    return ""
 
 
 class PLCManager:
@@ -131,6 +159,12 @@ class PLCManager:
         # Simple ID sets (now safe to assign)
         entry.parameters = {item["id"] for item in params if "id" in item}
         entry.methods = {item["id"] for item in methods if "id" in item}
+
+        # Device identity from first /wda/devices entry (non-essential)
+        if not isinstance(devices, Exception) and devices:
+            first_name = devices[0].get("attributes", {}).get("name", "")
+            entry.device_name = first_name
+            entry.device_class = _infer_device_class(first_name)
 
         # Non-essential — log warning but keep PLC
         for attr, result in (("devices", devices), ("features", features)):

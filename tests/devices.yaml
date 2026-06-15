@@ -1,0 +1,31 @@
+# One entry per physical unit. Credentials come from Docker Secrets / env, never here.
+# Missing/unreachable units → skipped. firmware is recorded by CM-0, not trusted from here.
+units:
+  # CC100 ×5  (.110–.114)
+  - { id: cc100-110, class: cc100, ip: "192.168.42.110", timeout: 45, fw_hint: "04.09.01(31)" }
+  - { id: cc100-111, class: cc100, ip: "192.168.42.111", timeout: 45, fw_hint: "04.08.14(30)" }
+  - { id: cc100-112, class: cc100, ip: "192.168.42.112", timeout: 45, fw_hint: "04.07.50(29)" }
+  - { id: cc100-113, class: cc100, ip: "192.168.42.113", timeout: 45, fw_hint: "04.06.01(28)" }
+  - { id: cc100-114, class: cc100, ip: "192.168.42.114", timeout: 45, fw_hint: "?" }
+  # PFC200 ×4 (.115–.118)
+  - { id: pfc200-115, class: pfc200, ip: "192.168.42.115", timeout: 15, fw_hint: "04.09.01(31)" }
+  - { id: pfc200-116, class: pfc200, ip: "192.168.42.116", timeout: 15, fw_hint: "04.08.12(30)" }
+  - { id: pfc200-117, class: pfc200, ip: "192.168.42.117", timeout: 15, fw_hint: "04.07.03(29)" }
+  - { id: pfc200-118, class: pfc200, ip: "192.168.42.118", timeout: 15, fw_hint: "?" }
+  # PFC300 ×1 (.119)  — only unit of its class
+  - { id: pfc300-119, class: pfc300, ip: "192.168.42.119", timeout: 15, fw_hint: "04.09.01(31)" }
+  # Edge ×5    (.120–.124)
+  - { id: edge-120, class: edge, ip: "192.168.42.120", timeout: 15, fw_hint: "04.09.01(31)" }
+  - { id: edge-121, class: edge, ip: "192.168.42.121", timeout: 15, fw_hint: "04.08.09(30)" }
+  - { id: edge-122, class: edge, ip: "192.168.42.122", timeout: 15, fw_hint: "04.07.51(29)" }
+  - { id: edge-123, class: edge, ip: "192.168.42.123", timeout: 15, fw_hint: "?" }
+  - { id: edge-124, class: edge, ip: "192.168.42.124", timeout: 15, fw_hint: "?" }
+# fw_hint is a planning label only — CM-0 records the real (NN) build from the device.
+
+# Per-class expectations the matrix asserts against (min params, expected features, …)
+class_profiles:
+  cc100:  { expect_min_params: 200, mutate_allowed: false }
+  pfc200: { expect_min_params: 400, mutate_allowed: false }
+  pfc300: { expect_min_params: 400, mutate_allowed: false }
+  edge:   { expect_min_params: 800, mutate_allowed: false }
+# Flip mutate_allowed: true only on designated non-production lab units (see L4).

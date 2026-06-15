@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "class": "pfc200",
+    "firmware": "03.08.05(44)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/parameters?parameter-errors-as-data-attributes=true&page[limit]=500&page[offset]=0 — single page"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameters",
+        "attributes": {
+          "value": "ZZZZ-ZZZZ/ZZZZ-ZZZZ",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-identity-firmware",
+        "type": "parameters",
+        "attributes": {
+          "value": "03.08.05(44)",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-identity-hostname",
+        "type": "parameters",
+        "attributes": {
+          "value": "PFC200V3-FAKESN001",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-network-ipaddress",
+        "type": "parameters",
+        "attributes": {
+          "value": "10.0.0.115",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-fieldbus-protocol",
+        "type": "parameters",
+        "attributes": {
+          "value": 0,
+          "dataType": "enum_member",
+          "dataRank": "scalar"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

@@ -22,7 +22,7 @@ from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.fastmcp.prompts import base
 
 from logging_config import setup_logging, setup_audit_logging
-from plc_manager import PLCManager
+from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 
 # ───────────────────────── Bootstrap ─────────────────────────
@@ -80,7 +80,7 @@ mcp = FastMCP(
     port=int(os.getenv("PORT", "6042")),
 )
 
-FIND_LIMIT_MAX = 100
+FIND_LIMIT_MAX = 255
 FIND_LIMIT_DEFAULT = 20
 
 _AGENT_ID: str = "unknown"
@@ -425,9 +425,15 @@ async def describe_plc(ctx: Context, plc_ip: str) -> dict:
     plc, err = _require_plc(plc_ip)
     if err:
         return err
+    actual = len(plc.parameters)
+    expected = KNOWN_PARAM_COUNTS.get(plc.device_class) if plc.device_class else None
     return {
         "ip": plc_ip,
-        "parameter_count": len(plc.parameters),
+        "device_name": plc.device_name,
+        "device_class": plc.device_class,
+        "parameter_count": actual,
+        "expected_parameter_count": expected,
+        "parameter_count_ok": actual == expected if expected is not None else None,
         "writeable_parameter_count": len(plc.param_writeable),
         "user_setting_parameter_count": len(plc.param_user_setting),
         "device_count": len(plc.devices),

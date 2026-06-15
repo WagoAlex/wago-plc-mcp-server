@@ -1,0 +1,80 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/parameters?parameter-errors-as-data-attributes=true&page[limit]=500&page[offset]=0 — single page"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameters",
+        "attributes": {
+          "value": "XXXX-XXXX/XXXX-XXXX",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-identity-firmware",
+        "type": "parameters",
+        "attributes": {
+          "value": "03.09.10(99)",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-identity-hostname",
+        "type": "parameters",
+        "attributes": {
+          "value": "CC100-FAKESN001",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-network-ipaddress",
+        "type": "parameters",
+        "attributes": {
+          "value": "10.0.0.110",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-webserver-protocol",
+        "type": "parameters",
+        "attributes": {
+          "value": 1,
+          "dataType": "enum_member",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-webserver-enabled",
+        "type": "parameters",
+        "attributes": {
+          "value": true,
+          "dataType": "boolean",
+          "dataRank": "scalar"
+        }
+      },
+      {
+        "id": "0-0-systemtime-local-now",
+        "type": "parameters",
+        "attributes": {
+          "value": "2026-01-15T08:00:00",
+          "dataType": "string",
+          "dataRank": "scalar"
+        }
+      }
+    ],
+    "links": {}
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "class": "pfc200",
+    "firmware": "03.08.05(44)",
+    "recorded": "hand-authored",
+    "note": "GET /wda/parameter-definitions?page[limit]=500&page[offset]=0"
+  },
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/OrderNumber",
+          "writeable": false,
+          "userSetting": false,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-identity-firmware",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/Firmware",
+          "writeable": false,
+          "userSetting": false,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-identity-hostname",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Identity/Hostname",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-network-ipaddress",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Network/IPAddress",
+          "writeable": true,
+          "userSetting": true,
+          "dataType": "string"
+        }
+      },
+      {
+        "id": "0-0-fieldbus-protocol",
+        "type": "parameter-definitions",
+        "attributes": {
+          "path": "Fieldbus/Protocol",
+          "writeable": false,
+          "userSetting": false,
+          "dataType": "enum_member"
+        },
+        "relationships": {
+          "enum": {
+            "data": {
+              "id": "enum-fieldbus-protocols",
+              "type": "enum-definitions"
+            }
+          }
+        }
+      }
+    ],
+    "links": {}
+  }
+}

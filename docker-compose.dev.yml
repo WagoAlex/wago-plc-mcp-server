@@ -1,0 +1,15 @@
+# Development / test overlay — builds the 'dev' Dockerfile target so tests/ and dev
+# deps are present in the running container.
+#
+# NOT auto-merged. Opt in explicitly (otherwise you get the production image):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#   docker exec wmcp pytest tests/ -q
+#
+# Why explicit (not docker-compose.override.yml): build.sh runs `docker compose build`,
+# which auto-merges override files. An auto-merged dev target would leak tests + dev
+# deps into the pushed production image. Keeping this opt-in guarantees build.sh and a
+# plain `docker compose build` always produce the clean production image.
+services:
+  wago-plc-mcp-server:
+    build:
+      target: dev

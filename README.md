@@ -49,7 +49,7 @@ Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to firmw
 - **Server-side watchlists** — efficient repeated polling without repeated handshakes
 - **Enum resolution** — raw integer enum values translated to human-readable labels
 - **Writeability pre-validation** — read-only parameters rejected before hitting the PLC
-- **Fuzzy parameter search** — find parameters by keyword without knowing exact IDs
+- **Fuzzy parameter search** — find parameters by keyword without knowing exact IDs (up to 255 results)
 - **Dual transport** — Streamable HTTP (default) or SSE, switched via env var
 - **Docker-first** — single container, host networking for routed PLC subnets
 
@@ -315,7 +315,7 @@ For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` inste
 | Tool | Description |
 |------|-------------|
 | `list_plcs` | List all registered PLC IPs |
-| `describe_plc(plc_ip)` | Capability counts + feature names (cached, no network call) |
+| `describe_plc(plc_ip)` | Capability counts + feature names + `device_class`, `expected_parameter_count`, `parameter_count_ok` (cached, no network call) |
 
 ### Parameters
 

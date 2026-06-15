@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "class": "cc100",
+    "firmware": "03.09.10(99)",
+    "recorded": "hand-authored",
+    "note": "POST /wda/monitoring-lists?parameter-errors-as-data-attributes=true (create response) + GET with ?include=parameters"
+  },
+  "create_status": 201,
+  "create_headers": {
+    "Content-Type": "application/vnd.api+json",
+    "Location": "/wda/monitoring-lists/ml-cc100-1"
+  },
+  "create_body": {
+    "data": {
+      "id": "ml-cc100-1",
+      "type": "monitoring-lists",
+      "attributes": {
+        "timeout": 300
+      },
+      "relationships": {
+        "parameters": {
+          "data": [
+            {"id": "0-0-identity-ordernumber", "type": "parameters"},
+            {"id": "0-0-systemtime-local-now", "type": "parameters"}
+          ]
+        }
+      }
+    }
+  },
+  "get_status": 200,
+  "get_headers": {
+    "Content-Type": "application/vnd.api+json"
+  },
+  "get_body": {
+    "data": {
+      "id": "ml-cc100-1",
+      "type": "monitoring-lists",
+      "attributes": {
+        "timeout": 300
+      }
+    },
+    "included": [
+      {
+        "id": "0-0-identity-ordernumber",
+        "type": "parameters",
+        "attributes": {
+          "value": "XXXX-XXXX/XXXX-XXXX",
+          "dataType": "string",
+          "dataRank": "scalar",
+          "error": null
+        }
+      },
+      {
+        "id": "0-0-systemtime-local-now",
+        "type": "parameters",
+        "attributes": {
+          "value": "2026-01-15T08:00:00",
+          "dataType": "string",
+          "dataRank": "scalar",
+          "error": null
+        }
+      }
+    ]
+  }
+}
