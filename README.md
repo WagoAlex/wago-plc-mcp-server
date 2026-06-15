@@ -1,5 +1,5 @@
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](LICENSE)
 
 # wago-plc-mcp-server
 
@@ -444,43 +444,13 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 
 A pre-built image is published on [Docker Hub](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server) and is the recommended way to run the server — `docker compose up -d` pulls it automatically.
 
-If you need to modify the source or build locally:
-
-```bash
-# Clone the repository
-git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
-cd wago-plc-mcp-server
-
-# Build (bumps patch version)
-./build.sh --patch
-
-# Build and start immediately
-./build.sh --patch --start
-
-# Build without layer cache (after dependency changes)
-./build.sh --patch --no-cache
-```
-
-A CycloneDX SBOM is generated automatically after every build via syft and written to `sbom-<version>.json`.
+A CycloneDX SBOM is generated for every release and published alongside the image.
 
 ---
 
 ## Networking
 
 The container uses `network_mode: host` by default. This is required when PLCs are on routed subnets not directly reachable from a bridged Docker network.
-
-If your PLCs are on the same subnet as the Docker host and you prefer bridge networking, edit `docker-compose.yml`:
-
-```yaml
-# Comment out:
-# network_mode: host
-
-# Uncomment:
-ports:
-  - "6042:6042"
-networks:
-  - wago-net
-```
 
 ---
 
@@ -510,4 +480,4 @@ This project targets compliance with the EU Cyber Resilience Act (Regulation 202
 
 ## License
 
-MIT
+[Mozilla Public License 2.0](LICENSE)
