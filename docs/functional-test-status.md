@@ -386,6 +386,12 @@ EC-02  error_code is surfaced (more specific than HTTP status) in the tool respo
 EC-03  426 (HTTP-not-HTTPS) and 503 (WDA down) produce the right ping() reason per CM-01
 ```
 
+**Status: ✅ done (TT4)** — 60 tests in `tests/contract/test_datatypes.py` +
+`test_error_codes.py`. DT-01..04 and client-level EC (real `WDAClient` raising on all 9
+codes) are genuine. ⚠️ **Caveat:** the EC *tool-layer* mapping is verified via a
+reimplemented stub, not the real `main.py` tools — see **TT4-FU** in
+`test-implementation-todos.md` for the deferred fix. Suite total: 232.
+
 ---
 
 ## Tooling & how to run

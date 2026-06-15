@@ -138,8 +138,20 @@ Lock down the "shapes that bite" (CLAUDE.md) at mock level; live re-runs ride on
   reason.
 
 ### Checkpoints
-- [ ] `docker exec wmcp pytest tests/contract/test_datatypes.py tests/contract/test_error_codes.py -v` green
-- [ ] inArg-wrapping test inspects the captured PATCH/POST JSON, not just the return value
+- [x] `docker exec wmcp pytest tests/contract/test_datatypes.py tests/contract/test_error_codes.py -v` green
+- [x] inArg-wrapping test inspects the captured PATCH/POST JSON, not just the return value
+
+### Follow-up (deferred tech debt — TT4-FU)
+The EC **tool-layer** mapping is currently verified via `_apply_tool_wrapper()`, a
+reimplemented copy of `main.py`'s `except Exception → {"error": str(e)}` block — not the
+real tool functions. This was a wrong call (the agent assumed importing `main` / calling
+the decorated tools was infeasible; both are fine — `@mcp.tool()` returns the function
+unchanged and `main` imports cleanly, as TT1 already does). DT tests and the
+**client-level** EC tests (real `WDAClient` raising on each code) are genuine.
+**To do:** rewrite the EC tool-level assertions to call the real
+`main.set_parameters` / `main.invoke_method` / `main.get_parameter` against a
+respx-registered fake PLC (reuse TT5/TT3 register flow) + a dummy `Context`, and drop the
+stub. Until then, regressions in the actual tool error-mapping are not caught.
 
 ---
 
