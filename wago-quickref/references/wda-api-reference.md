@@ -138,6 +138,8 @@ PATCH  /files/{file_id}                              → upload chunk-wise (mult
 - `filter[definition.writeable]=true` — only writeable params
 - `filter[definition.userSetting]=true` — only user-settable params
 - `parameter-errors-as-data-attributes=true` — return per-parameter errors inline rather than failing the whole response (useful for batch reads)
+
+> **Required for bulk reads:** Always include `parameter-errors-as-data-attributes=true` when reading `/wda/parameters` in bulk. Without it, any single unreadable parameter (e.g. `bacnet-datalinks-1-sc-mode` on FW31) returns HTTP 500 for the entire page. With the flag, failed parameters appear in `data[]` with `attributes.error` populated instead of a value. The `_paginate()` helper in `wda_client.py` injects this flag automatically for all `/wda/parameters` paths.
 - `result-behavior=sync|async|auto` — for method invocation (POST /runs)
 - `include=parameters` — for monitoring lists, return values inline
 
@@ -256,14 +258,25 @@ These appear as `errors[].code` and can be more specific than HTTP status:
 JSON:API style. Response has `links.next`, `links.prev`, `links.first`, `links.last`. Walk until `next` is absent:
 
 ```python
-url = "/wda/parameters?page[limit]=500"
+url = "/wda/parameters?page[limit]=255"
 items = []
 while url:
     r = client.get(url)
     body = r.json()
-    items.extend(body["data"])
+    page = body["data"]
+    items.extend(page)
+    if len(page) < page_limit:
+        break  # defensive: shorter-than-full page means last page
     url = body.get("links", {}).get("next")
 ```
+
+**Termination rules (verified FW31, WDA 1.5.2):**
+- `links.next` is absent on the true last page — this is the primary signal.
+- Add a secondary break when `len(data) < page[limit]` to guard against a corrupt or always-present `links.next`.
+- The server hard-caps pages at **255 entries** regardless of the requested limit. Requesting `page[limit]=500` silently caps to 255.
+- Parameters are returned in internal **registration order** — NOT alphabetical. Do not rely on sort order.
+
+**URL encoding trap:** `page[limit]` and `page[offset]` MUST be sent via `--data-urlencode` (curl) or a proper query-param encoder — never embedded as literal bracket strings in a URL template. Literal embedding may be silently ignored by the WDA server, causing an infinite loop that repeatedly fetches page 0.
 
 ## Auth response headers
 
@@ -310,6 +323,18 @@ curl -k -u <user>:<pass> -X POST \
 # 5. List writeable parameters only
 curl -k -u <user>:<pass> \
   "https://<plc_ip>/wda/parameters?filter[definition.writeable]=true&page[limit]=10"
+
+# 7. Full parameter dump — correct pagination (WDA hard-caps at 255/page)
+# MUST use --data-urlencode; embedding page[offset] as a literal URL string causes
+# the server to silently ignore the param and repeat page 0 forever.
+IP=<plc_ip>
+for offset in 0 255; do
+  curl -sk -u <user>:<pass> -H "Accept: application/vnd.api+json" --max-time 90 \
+    -G --data-urlencode "parameter-errors-as-data-attributes=true" \
+       --data-urlencode "page[limit]=255" \
+       --data-urlencode "page[offset]=${offset}" \
+    "https://${IP}/wda/parameters"
+done
 
 # 6. Create monitoring list
 curl -k -u <user>:<pass> -X POST \

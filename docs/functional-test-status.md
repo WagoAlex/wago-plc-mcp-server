@@ -224,43 +224,43 @@ expectation. This is the authoritative answer to "are all WDA functions covered?
 Legend: ✅ wrapped & on the live path · ◐ wrapped but not exposed as an MCP tool ·
 ❌ **not wrapped (coverage gap)** · N/A not applicable.
 
-| WDA endpoint | WDAClient | MCP tool | Layer | Status |
-|--------------|-----------|----------|-------|--------|
-| `GET /wda` (identity) | `ping` / `_acquire_token` | — | L3 CM-01 | ✅ |
-| `GET /wda/devices` | `list_devices` | describe_plc (count) | L3 | ✅ |
-| `GET /wda/devices/{id}` | `get_device` | — | L1 | ◐ |
-| `GET /wda/devices/{id}/features` | — | — | — | ❌ gap |
-| `GET /wda/parameters` | `list_parameters` | find_parameters | L3 CM-05 | ✅ |
-| `GET /wda/parameters/{id}` | `get_parameter` | get_parameter | L3 CM-07 | ✅ |
-| `PATCH /wda/parameters` (bulk) | `set_parameters` | set_parameters | L4 | ✅ |
-| `PATCH /wda/parameters/{id}` | `set_parameter` | — | L4 | ◐ |
-| `GET …/{id}/referencedinstances` | — | — | — | ❌ gap |
-| `GET /wda/parameter-definitions` | `list_parameter_definitions` | (writeable cache) | L3 CM-06 | ✅ |
-| `GET /wda/parameter-definitions/{id}` | `get_parameter_definition` | — | L1 | ◐ |
-| `GET /wda/methods` | `list_methods` | find_methods | L3 CM-11 | ✅ |
-| `GET /wda/methods/{id}` | `get_method` | get_method | L3 CM-11 | ✅ |
-| `POST /wda/methods/{id}/runs` | `invoke_method` | invoke_method | L4 | ✅ |
-| `GET /wda/methods/{id}/runs` (list) | — | — | — | ❌ gap |
-| `GET …/runs/{run_id}` | `get_method_run` | get_method_run | L4 | ✅ |
-| `DELETE …/runs/{run_id}` | `delete_method_run` | — | L4 | ◐ |
-| `GET /wda/method-definitions/{id}/inargs` | `get_method_inargs` | get_method | L3 CM-11 | ✅ |
-| `GET …/inargs/{name}` | — | — | — | ❌ gap |
-| `GET /wda/method-definitions/{id}/outargs` | `get_method_outargs` | get_method | L3 CM-11 | ✅ |
-| `GET …/outargs/{name}` | — | — | — | ❌ gap |
-| `GET /wda/features` | `list_features` | describe_plc | L3 | ✅ |
-| `GET /wda/features/{id}` | `get_feature` | — | L1 | ◐ |
-| `GET …/includedfeatures` | — | — | — | ❌ gap |
-| `GET …/containedparameters` | — | — | — | ❌ gap |
-| `GET …/containedmethods` | — | — | — | ❌ gap |
-| `GET /wda/enum-definitions` | `list_enum_definitions` | (enum cache) | L3 CM-09 | ✅ |
-| `GET /wda/enum-definitions/{id}` | `get_enum_definition` | — | L1 | ◐ |
-| `POST /wda/monitoring-lists` | `create_monitoring_list` | create_watchlist | L3 CM-12 | ✅ |
-| `GET /wda/monitoring-lists` (list) | `list_monitoring_lists` | — | L1 | ◐ |
-| `GET /wda/monitoring-lists/{id}` | `get_monitoring_list` | read_watchlist | L3 CM-12 | ✅ |
-| `GET …/{id}/parameters` | `read_monitoring_list_parameters` | — | L1 | ◐ |
-| `DELETE /wda/monitoring-lists/{id}` | `delete_monitoring_list` | delete_watchlist | L3 CM-12 | ✅ |
-| Class instances `…/instances/**` | — | — | — | ❌ gap (read-only per spec) |
-| File API `/files/**` | — | — | — | ❌ gap |
+| WDA endpoint                               | WDAClient                         | MCP tool             | Layer    | Status                     |
+| ------------------------------------------ | --------------------------------- | -------------------- | -------- | -------------------------- |
+| `GET /wda` (identity)                      | `ping` / `_acquire_token`         | —                    | L3 CM-01 | ✅                          |
+| `GET /wda/devices`                         | `list_devices`                    | describe_plc (count) | L3       | ✅                          |
+| `GET /wda/devices/{id}`                    | `get_device`                      | —                    | L1       | ◐                          |
+| `GET /wda/devices/{id}/features`           | —                                 | —                    | —        | ❌ gap                      |
+| `GET /wda/parameters`                      | `list_parameters`                 | find_parameters      | L3 CM-05 | ✅                          |
+| `GET /wda/parameters/{id}`                 | `get_parameter`                   | get_parameter        | L3 CM-07 | ✅                          |
+| `PATCH /wda/parameters` (bulk)             | `set_parameters`                  | set_parameters       | L4       | ✅                          |
+| `PATCH /wda/parameters/{id}`               | `set_parameter`                   | —                    | L4       | ◐                          |
+| `GET …/{id}/referencedinstances`           | —                                 | —                    | —        | ❌ gap                      |
+| `GET /wda/parameter-definitions`           | `list_parameter_definitions`      | (writeable cache)    | L3 CM-06 | ✅                          |
+| `GET /wda/parameter-definitions/{id}`      | `get_parameter_definition`        | —                    | L1       | ◐                          |
+| `GET /wda/methods`                         | `list_methods`                    | find_methods         | L3 CM-11 | ✅                          |
+| `GET /wda/methods/{id}`                    | `get_method`                      | get_method           | L3 CM-11 | ✅                          |
+| `POST /wda/methods/{id}/runs`              | `invoke_method`                   | invoke_method        | L4       | ✅                          |
+| `GET /wda/methods/{id}/runs` (list)        | —                                 | —                    | —        | ❌ gap                      |
+| `GET …/runs/{run_id}`                      | `get_method_run`                  | get_method_run       | L4       | ✅                          |
+| `DELETE …/runs/{run_id}`                   | `delete_method_run`               | —                    | L4       | ◐                          |
+| `GET /wda/method-definitions/{id}/inargs`  | `get_method_inargs`               | get_method           | L3 CM-11 | ✅                          |
+| `GET …/inargs/{name}`                      | —                                 | —                    | —        | ❌ gap                      |
+| `GET /wda/method-definitions/{id}/outargs` | `get_method_outargs`              | get_method           | L3 CM-11 | ✅                          |
+| `GET …/outargs/{name}`                     | —                                 | —                    | —        | ❌ gap                      |
+| `GET /wda/features`                        | `list_features`                   | describe_plc         | L3       | ✅                          |
+| `GET /wda/features/{id}`                   | `get_feature`                     | —                    | L1       | ◐                          |
+| `GET …/includedfeatures`                   | —                                 | —                    | —        | ❌ gap                      |
+| `GET …/containedparameters`                | —                                 | —                    | —        | ❌ gap                      |
+| `GET …/containedmethods`                   | —                                 | —                    | —        | ❌ gap                      |
+| `GET /wda/enum-definitions`                | `list_enum_definitions`           | (enum cache)         | L3 CM-09 | ✅                          |
+| `GET /wda/enum-definitions/{id}`           | `get_enum_definition`             | —                    | L1       | ◐                          |
+| `POST /wda/monitoring-lists`               | `create_monitoring_list`          | create_watchlist     | L3 CM-12 | ✅                          |
+| `GET /wda/monitoring-lists` (list)         | `list_monitoring_lists`           | —                    | L1       | ◐                          |
+| `GET /wda/monitoring-lists/{id}`           | `get_monitoring_list`             | read_watchlist       | L3 CM-12 | ✅                          |
+| `GET …/{id}/parameters`                    | `read_monitoring_list_parameters` | —                    | L1       | ◐                          |
+| `DELETE /wda/monitoring-lists/{id}`        | `delete_monitoring_list`          | delete_watchlist     | L3 CM-12 | ✅                          |
+| Class instances `…/instances/**`           | —                                 | —                    | —        | ❌ gap (read-only per spec) |
+| File API `/files/**`                       | —                                 | —                    | —        | ❌ gap                      |
 
 **Action items surfaced by this matrix:**
 - The ◐ rows (`get_device`, `get_feature`, `get_enum_definition`, `list_monitoring_lists`,
