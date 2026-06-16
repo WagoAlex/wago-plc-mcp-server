@@ -78,16 +78,29 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 
 Short screen recordings of the server driving real WAGO controllers from
 Claude Desktop, end to end — connection setup through natural-language
-parameter reads. Click through to play (GitHub renders an inline player on
-the file's blob page).
+parameter reads. Animated previews below are silent/no controls by design
+(GIF) — click any preview to open the original video with audio and
+playback controls.
 
-| Video | What it shows |
-|---|---|
-| [Overview](docs/media/demo-overview.mp4) | Connecting Claude Desktop to the server and a first natural-language interaction |
-| [Use case 1](docs/media/demo-use-case-1.mp4) | A complete request/response walkthrough against a live PLC |
-| [Use case 2 — Edge Controller](docs/media/demo-use-case-2-edge-controller.mp4) | The same workflow against an Edge Controller |
-| [Use case 2 — PFC300](docs/media/demo-use-case-2-pfc300.mp4) | The same workflow against a PFC300 |
-| [Use case 3](docs/media/demo-use-case-3.mp4) | An additional usage scenario |
+### Overview — connecting Claude Desktop and a first interaction
+
+[![Overview demo](docs/media/demo-overview.gif)](docs/media/demo-overview.mp4)
+
+### Use case 1 — full request/response walkthrough against a live PLC
+
+[![Use case 1 demo](docs/media/demo-use-case-1.gif)](docs/media/demo-use-case-1.mp4)
+
+### Use case 2 — Edge Controller
+
+[![Use case 2 Edge Controller demo](docs/media/demo-use-case-2-edge-controller.gif)](docs/media/demo-use-case-2-edge-controller.mp4)
+
+### Use case 2 — PFC300
+
+[![Use case 2 PFC300 demo](docs/media/demo-use-case-2-pfc300.gif)](docs/media/demo-use-case-2-pfc300.mp4)
+
+### Use case 3
+
+[![Use case 3 demo](docs/media/demo-use-case-3.gif)](docs/media/demo-use-case-3.mp4)
 
 See [Connecting Clients](#connecting-clients) below for the setup shown in
 these recordings, including the config screenshot and connected-state
