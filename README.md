@@ -1,5 +1,9 @@
-[![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](LICENSE)
+![wago-plc-mcp-server — bridge WAGO PLCs to AI agents](docs/media/hero-banner.svg)
+
+[![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
+[![MCP Tools](https://img.shields.io/badge/MCP_tools-13-1F2837.svg)](#tool-reference)
+[![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#demo)
 
 # wago-plc-mcp-server
 
@@ -40,16 +44,17 @@ AI assistant things like *"what firmware version is PLC .10 running?"* or
 *"is the NTP service healthy on all 16 PLCs?"* in plain English, and it
 calls the right WDA endpoint(s) for you — no REST client, no custom script.
 
-**What it does NOT do:**
-- It is **WAGO-only** — there's no Siemens S7, Rockwell Logix, or Schneider
-  Modicon driver here.
-- It does **not** read or write your control program's I/O tags, real-time
-  process values, or PLC memory. Field I/O still goes through OPC-UA,
-  Modbus TCP, or WAGO I/O-Check — see
-  [What values can be monitored](#what-values-can-be-monitored) for exactly
-  what WDA *does* expose.
-- It is **not** an HMI/SCADA replacement — there's no graphical front end,
-  just tool calls an AI assistant makes on your behalf.
+> [!IMPORTANT]
+> **What this does NOT do:**
+> - It is **WAGO-only** — there's no Siemens S7, Rockwell Logix, or Schneider
+>   Modicon driver here.
+> - It does **not** read or write your control program's I/O tags, real-time
+>   process values, or PLC memory. Field I/O still goes through OPC-UA,
+>   Modbus TCP, or WAGO I/O-Check — see
+>   [What values can be monitored](#what-values-can-be-monitored) for exactly
+>   what WDA *does* expose.
+> - It is **not** an HMI/SCADA replacement — there's no graphical front end,
+>   just tool calls an AI assistant makes on your behalf.
 
 | Term | Plain meaning | Closest thing you already know |
 |---|---|---|
@@ -77,6 +82,22 @@ fleet of PLCs exposes" into a plain-English answer, without writing a
 custom integration for every question in advance.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor':'#1F2837',
+  'primaryTextColor':'#ffffff',
+  'primaryBorderColor':'#6EC800',
+  'lineColor':'#6EC800',
+  'secondaryColor':'#EFF0F1',
+  'secondaryTextColor':'#1F2837',
+  'secondaryBorderColor':'#A5A8AF',
+  'tertiaryColor':'#FFFFFF',
+  'tertiaryTextColor':'#1F2837',
+  'tertiaryBorderColor':'#DEDFE1',
+  'fontFamily':'Segoe UI, Helvetica, Arial, sans-serif',
+  'clusterBkg':'#EFF0F1',
+  'clusterBorder':'#A5A8AF',
+  'edgeLabelBackground':'#1F2837'
+}}}%%
 flowchart LR
     subgraph Clients["AI clients (any MCP client works)"]
         CD["Claude Desktop<br/>(stdio, via wago_proxy.py)"]
@@ -259,6 +280,7 @@ PORT=6042
 WAGO_TIMEOUT_SECONDS=45
 ```
 
+> [!TIP]
 > For fleets with mixed passwords, use per-PLC overrides:
 > `PLC_PASSWORDS_192_168_1_11=secret` (IP with underscores).
 
@@ -298,6 +320,7 @@ MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
 [audit] Hash chain seeded from existing audit log
 ```
 
+> [!NOTE]
 > The two `[tls]` warnings are expected on a default install. See [TLS Configuration](#tls-configuration) to enable.
 
 ### 4. Verify
