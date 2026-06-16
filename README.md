@@ -311,29 +311,33 @@ Fully quit and relaunch Claude Desktop. A hammer icon appears with the tool coun
 
 For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` instead of `/mcp`.
 
-### Recommended: install the project skill
+### Recommended: install a project skill
 
-`wago-quickref/SKILL.md` packages the non-obvious WDA REST API behaviour this
-README only summarizes — pagination encoding, the
-`parameter-errors-as-data-attributes` flag, device-class inference, and the
-full tool cheat sheet. Agents working against this server without it are far
-more likely to hit the exact landmines documented in
-[`wago-quickref/references/wda-api-reference.md`](wago-quickref/references/wda-api-reference.md).
+This repo ships three skills for three different audiences. Install the one
+that matches who (or what) is talking to the server — they're not
+interchangeable:
 
-**Claude Code / Claude Desktop:**
+| Skill | For | Covers |
+|---|---|---|
+| [`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) | **End users** in Claude Desktop / Claude Code who just want to ask for PLC data in plain English, with no prior MCP/Docker/REST knowledge | Natural-language tool mapping, when to use a watchlist vs a one-off read, safety/confirmation guidance, plain-language troubleshooting |
+| [`wago-plc-agent-skill/SKILL.md`](wago-plc-agent-skill/SKILL.md) | **Autonomous agents / orchestration pipelines** calling the tools programmatically | Tool I/O contracts, batching/concurrency limits, error and partial-failure shapes, retry/idempotency rules, watchlist lifecycle |
+| [`wago-quickref/SKILL.md`](wago-quickref/SKILL.md) | **Contributors developing this MCP server itself** | The underlying WDA REST/HTTP behaviour — pagination encoding, the `parameter-errors-as-data-attributes` flag, device-class inference, raw payload shapes |
+
+Install any of them the same way — copy the relevant directory into your
+skills folder:
+
 ```bash
 mkdir -p ~/.claude/skills
-cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server
+cp -r wago-plc-skill ~/.claude/skills/            # end users
+cp -r wago-plc-agent-skill ~/.claude/skills/      # autonomous agents
+cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server  # contributors
 ```
 
-**Project-local instead of user-global:**
-```bash
-mkdir -p .claude/skills
-cp -r wago-quickref .claude/skills/wago-plc-mcp-server
-```
+**Project-local instead of user-global:** swap `~/.claude/skills` for
+`.claude/skills` in any of the commands above.
 
-Either way, the assistant will pick up the skill automatically next session —
-no restart of the MCP server required.
+The assistant picks up installed skills automatically next session — no
+restart of the MCP server required.
 
 ---
 
