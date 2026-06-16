@@ -311,6 +311,30 @@ Fully quit and relaunch Claude Desktop. A hammer icon appears with the tool coun
 
 For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` instead of `/mcp`.
 
+### Recommended: install the project skill
+
+`wago-quickref/SKILL.md` packages the non-obvious WDA REST API behaviour this
+README only summarizes — pagination encoding, the
+`parameter-errors-as-data-attributes` flag, device-class inference, and the
+full tool cheat sheet. Agents working against this server without it are far
+more likely to hit the exact landmines documented in
+[`wago-quickref/references/wda-api-reference.md`](wago-quickref/references/wda-api-reference.md).
+
+**Claude Code / Claude Desktop:**
+```bash
+mkdir -p ~/.claude/skills
+cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server
+```
+
+**Project-local instead of user-global:**
+```bash
+mkdir -p .claude/skills
+cp -r wago-quickref .claude/skills/wago-plc-mcp-server
+```
+
+Either way, the assistant will pick up the skill automatically next session —
+no restart of the MCP server required.
+
 ---
 
 ## Tool Reference
