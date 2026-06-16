@@ -57,10 +57,17 @@ build.sh
 .mcp.json
 # Internal planning files — keep private
 docs/*-todo.md
+docs/*-todos.md
 docs/tier*
 docs/integrations-plan.md
 CLAUDE.md
 AGENTS.md
+
+# Obsidian vault config (editor artifact, not repo content)
+docs/.obsidian/
+
+# graphify knowledge-graph cache — regenerated locally, not release content
+/graphify-out/
 
 # Connector/integration sketches — local only until ready to publish
 /integrations/
