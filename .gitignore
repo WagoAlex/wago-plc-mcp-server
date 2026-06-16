@@ -58,7 +58,11 @@ build.sh
 # Internal planning files — keep private
 docs/*-todo.md
 docs/tier*
+docs/integrations-plan.md
 CLAUDE.md
 AGENTS.md
+
+# Connector/integration sketches — local only until ready to publish
+/integrations/
 
 claude_desktop_config.json

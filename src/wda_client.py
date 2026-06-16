@@ -271,7 +271,7 @@ class WDAClient:
             headers={"Content-Type": self.JSON_API},
         )
         r.raise_for_status()
-        return r.json().get("data", {})
+        return r.json()
 
     async def list_monitoring_lists(self) -> list[dict]:
         return await self._paginate("/wda/monitoring-lists")
