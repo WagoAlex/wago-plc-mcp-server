@@ -77,28 +77,59 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 ## Demo
 
 Short screen recordings of the server driving real WAGO controllers from
-Claude Desktop, end to end — connection setup through natural-language
-parameter reads.
+Claude Desktop, end to end. The use cases below are collapsed by default —
+expand the one you want to see rather than loading every animation at once.
 
 ### Overview — connecting Claude Desktop and a first interaction
 
 ![Overview demo](docs/media/demo-overview.gif)
 
-### Use case 1 — full request/response walkthrough against a live PLC
+<details>
+<summary><strong>Use case 1 — fleet-wide health report across all 16 PLCs</strong></summary>
+
+Asks the agent to reconcile a "health report" across the fleet — listing all
+PLCs, bulk-fetching firmware versions, and probing device types to figure
+out what's actually running where before trusting any conclusions.
 
 ![Use case 1 demo](docs/media/demo-use-case-1.gif)
 
-### Use case 2 — Edge Controller
+</details>
+
+<details>
+<summary><strong>Use case 2 — Edge Controller: building a CPU/LED health watchlist</strong></summary>
+
+Asks the agent to set up a watchlist monitoring CPU/service health and LED
+diagnostic state on the Edge Controllers, then read it back — including the
+agent pushing back to clarify ambiguous requirements before touching
+anything, and discovering the actual parameter IDs via `find_parameters`
+rather than guessing.
 
 ![Use case 2 Edge Controller demo](docs/media/demo-use-case-2-edge-controller.gif)
 
-### Use case 2 — PFC300
+</details>
+
+<details>
+<summary><strong>Use case 2 — PFC300: building a CPU/LED health watchlist</strong></summary>
+
+The same health-watchlist workflow as above, run against a PFC300 instead —
+shows the same parameter-discovery process landing on different actual
+parameter names for an equivalent capability.
 
 ![Use case 2 PFC300 demo](docs/media/demo-use-case-2-pfc300.gif)
 
-### Use case 3
+</details>
+
+<details>
+<summary><strong>Use case 3 — detecting and fixing NTP drift fleet-wide</strong></summary>
+
+Asks the agent to sync NTP time on any PLC that's drifted. The agent checks
+NTP status across the entire fleet first, identifies which PLCs are
+actually affected (stuck clocks, wrong timezone offsets), and only then
+invokes the time-sync method on the specific units that need it.
 
 ![Use case 3 demo](docs/media/demo-use-case-3.gif)
+
+</details>
 
 See [Connecting Clients](#connecting-clients) below for the setup shown in
 these recordings, including the config screenshot and connected-state
