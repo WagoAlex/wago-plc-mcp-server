@@ -29,7 +29,7 @@ Use GitHub's private advisory mechanism instead:
 2. Describe the vulnerability, affected versions, and reproduction steps
 3. We will acknowledge within **3 business days**
 
-Alternatively, email: **alexevgenichernich@gmail.com**  
+Alternatively, email: **alexander.fugmann@wago.com**  
 Subject line: `[SECURITY] wago-plc-mcp-server — <one-line summary>`
 
 PGP encryption is not required but is welcome. If you need the public key,
