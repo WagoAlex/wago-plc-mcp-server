@@ -74,6 +74,27 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 
 ---
 
+## Demo
+
+Short screen recordings of the server driving real WAGO controllers from
+Claude Desktop, end to end — connection setup through natural-language
+parameter reads. Click through to play (GitHub renders an inline player on
+the file's blob page).
+
+| Video | What it shows |
+|---|---|
+| [Overview](docs/media/demo-overview.mp4) | Connecting Claude Desktop to the server and a first natural-language interaction |
+| [Use case 1](docs/media/demo-use-case-1.mp4) | A complete request/response walkthrough against a live PLC |
+| [Use case 2 — Edge Controller](docs/media/demo-use-case-2-edge-controller.mp4) | The same workflow against an Edge Controller |
+| [Use case 2 — PFC300](docs/media/demo-use-case-2-pfc300.mp4) | The same workflow against a PFC300 |
+| [Use case 3](docs/media/demo-use-case-3.mp4) | An additional usage scenario |
+
+See [Connecting Clients](#connecting-clients) below for the setup shown in
+these recordings, including the config screenshot and connected-state
+screenshot.
+
+---
+
 ## Quick Start
 
 ### 1. Clone and configure
@@ -291,7 +312,16 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-Fully quit and relaunch Claude Desktop. A hammer icon appears with the tool count.
+Example, as seen editing the file directly in VS Code:
+
+![claude_desktop_config.json example](docs/media/claude-desktop-config-example.png)
+
+Fully quit and relaunch Claude Desktop. Depending on your Claude Desktop
+version you'll see either a hammer icon with the tool count, or the
+server listed under **Settings → Connectors** (some versions label this
+panel "Konnektoren"):
+
+![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
 ### OpenClaw / other agents
 
