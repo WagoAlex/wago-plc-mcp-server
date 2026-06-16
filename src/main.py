@@ -433,7 +433,12 @@ async def describe_plc(ctx: Context, plc_ip: str) -> dict:
         "device_class": plc.device_class,
         "parameter_count": actual,
         "expected_parameter_count": expected,
-        "parameter_count_ok": actual == expected if expected is not None else None,
+        # Floor, not exact match: WDA exposes dynamic instance parameters
+        # (e.g. SNMP/Communities/N/*) only when that instance is configured,
+        # so a unit with extra runtime config legitimately reports more
+        # parameters than the FW31 reference baseline. Fewer than expected
+        # still flags a real problem (incomplete sweep, wrong device class).
+        "parameter_count_ok": actual >= expected if expected is not None else None,
         "writeable_parameter_count": len(plc.param_writeable),
         "user_setting_parameter_count": len(plc.param_user_setting),
         "device_count": len(plc.devices),
