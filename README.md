@@ -408,6 +408,36 @@ read_watchlist("192.168.1.10", "1")   # call every 30 s — one HTTP round-trip
 delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 ```
 
+### Fetching raw parameter data directly (curl)
+
+For bulk exports, debugging, or building a contract-test cassette, you can bypass the MCP layer and query the WDA REST API on a PLC directly. The WDA hard-caps pagination at 255 entries per page regardless of the requested limit, so a full parameter dump on most device classes needs two pages. Always include `parameter-errors-as-data-attributes=true` — without it, a single unreadable parameter returns a 500 for the entire page.
+
+```bash
+IP=192.168.42.124   # set to your target PLC
+OUT=wda-parameters-${IP}.json
+
+{
+  curl -sk -u "admin:wago" -H "Accept: application/vnd.api+json" --max-time 90 \
+    -G --data-urlencode "parameter-errors-as-data-attributes=true" \
+       --data-urlencode "page[limit]=255" \
+       --data-urlencode "page[offset]=0" \
+    "https://${IP}/wda/parameters"
+  curl -sk -u "admin:wago" -H "Accept: application/vnd.api+json" --max-time 90 \
+    -G --data-urlencode "parameter-errors-as-data-attributes=true" \
+       --data-urlencode "page[limit]=255" \
+       --data-urlencode "page[offset]=255" \
+    "https://${IP}/wda/parameters"
+} | jq -s '{data: (map(.data) | add)}' > "$OUT"
+
+echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
+```
+
+Notes:
+- Replace `admin:wago` with the real credentials for the target PLC — never commit a file containing them.
+- The fixed offsets `0` and `255` cover up to 510 parameters, which is sufficient for all currently supported device classes (CC100, PFC200, PFC300, Edge Controller — max observed is 398 on PFC200). Add an `offset=510` page if a future device class exceeds that.
+- `jq -s '{data: (map(.data) | add)}'` merges the two pages' `data` arrays into a single JSON:API-shaped document instead of two concatenated payloads.
+- `page[limit]` / `page[offset]` **must** be passed via `--data-urlencode` (or an equivalent query-param encoder) — embedding literal brackets in the URL string is silently ignored by the WDA and causes an infinite page-0 loop.
+
 ---
 
 ## Audit Log
