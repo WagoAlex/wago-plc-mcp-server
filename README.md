@@ -7,25 +7,127 @@
 
 Ask an AI assistant to read sensor values, change configuration, trigger firmware updates, or monitor entire PLC fleets — with no custom code.
 
+---
+
+## New to WAGO, MCP, or WDA? Start here
+
+You know PLCs — TIA Portal, Studio 5000, EcoStruxure, ladder/structured
+text, fieldbuses. You've never touched a WAGO controller or heard of "MCP"
+or "WDA." Here's the 60-second translation.
+
+**What WAGO is:** A PLC vendor, same category as Siemens/Rockwell/Schneider.
+Their controllers (PFC200, PFC300, Edge Controller) run a CODESYS-based
+runtime — your IEC 61131-3 program logic looks the same as on any other
+CODESYS-compatible PLC.
+
+**What WDA/WDx is:** Every WAGO controller exposes a REST API called WDA
+(WAGO Device Access) for **system and diagnostic management** — firmware
+version, network config, service health, status LEDs, reboot/firmware-update
+control. Think of it as the machine-readable equivalent of TIA Portal's
+*Online & Diagnostics* view or Studio 5000's *Controller Properties* —
+**not** a fieldbus, **not** OPC-UA, and **not** access to your control
+program's I/O data.
+
+**What MCP is:** Model Context Protocol — a standard way for an AI
+assistant (Claude, etc.) to call a fixed set of defined "tools" against a
+system, instead of you writing custom integration code for every request.
+This repo implements an MCP server that turns the WDA REST API into 13
+tools an AI assistant can call directly: read a parameter, write a
+parameter, run a method, poll a watchlist of values, etc.
+
+**What this project actually does:** Bridges WDA → MCP, so you can ask an
+AI assistant things like *"what firmware version is PLC .10 running?"* or
+*"is the NTP service healthy on all 16 PLCs?"* in plain English, and it
+calls the right WDA endpoint(s) for you — no REST client, no custom script.
+
+**What it does NOT do:**
+- It is **WAGO-only** — there's no Siemens S7, Rockwell Logix, or Schneider
+  Modicon driver here.
+- It does **not** read or write your control program's I/O tags, real-time
+  process values, or PLC memory. Field I/O still goes through OPC-UA,
+  Modbus TCP, or WAGO I/O-Check — see
+  [What values can be monitored](#what-values-can-be-monitored) for exactly
+  what WDA *does* expose.
+- It is **not** an HMI/SCADA replacement — there's no graphical front end,
+  just tool calls an AI assistant makes on your behalf.
+
+| Term | Plain meaning | Closest thing you already know |
+|---|---|---|
+| WDA / WDx | WAGO's REST API for system/diagnostic management | TIA Portal *Online & Diagnostics*, Studio 5000 *Controller Properties* |
+| MCP | Protocol letting an AI assistant call a fixed set of "tools" | A structured API contract — but invoked by an LLM instead of your own code |
+| Parameter | A single named value on the PLC (firmware version, an LED state, a service flag) | A diagnostic/status tag — not a control-program I/O tag |
+| Method | A remote action you can trigger (e.g. sync NTP time, trigger reboot) | An RPC / "execute" command, similar to an online action in TIA/Studio 5000 |
+| Watchlist | A server-side list of parameters the PLC keeps "open" so repeated reads are cheap | Closest analog: a Watch Table (TIA) or Trend window (Studio 5000) — but polled by the AI agent, not displayed live in a GUI grid |
+
+New here and just want to see it work? Jump to the [Demo](#demo) section —
+short recordings of the exact kind of conversation described above, running
+against real hardware.
+
+---
+
+## Architecture & Workflow
+
+No one — neither the human asking the question nor the AI assistant
+answering it — needs to know WAGO parameter IDs or WDA's schema *upfront*.
+`describe_plc`, `find_parameters`, and `find_methods` let the agent discover
+what's actually available on each PLC live, the same way a new hire would
+explore an unfamiliar controller's diagnostics for the first time. That's
+the core problem this project solves: turning "I have no idea what this
+fleet of PLCs exposes" into a plain-English answer, without writing a
+custom integration for every question in advance.
+
+```mermaid
+flowchart LR
+    subgraph Clients["AI clients (any MCP client works)"]
+        CD["Claude Desktop<br/>(stdio, via wago_proxy.py)"]
+        CC["Claude Code<br/>(direct HTTP)"]
+        OC["OpenClaw<br/>(direct HTTP)"]
+    end
+
+    CD -- "Bearer token" --> MCP
+    CC -- "Bearer token" --> MCP
+    OC -- "Bearer token" --> MCP
+
+    subgraph Server["wago-plc-mcp-server — Docker, port 6042"]
+        MCP["13 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · …"]
+        Guard["Bearer auth · rate limiting<br/>hash-chained audit log"]
+        MCP --- Guard
+    end
+
+    MCP -- "WDA Bearer token + TLS<br/>parallel, semaphore-bounded" --> P1
+    MCP --> P2
+    MCP --> P3
+    MCP -. "…fans out to every registered PLC<br/>tested with 16, no hard ceiling below 100+" .-> Pn
+
+    subgraph Fleet["WAGO PLC fleet"]
+        P1["PFC200<br/>192.168.1.10"]
+        P2["PFC300<br/>192.168.1.11"]
+        P3["Edge Controller<br/>192.168.1.12"]
+        Pn["CC100 …<br/>192.168.1.N"]
+    end
 ```
- MCP Client (Claude Desktop / Claude Code / OpenClaw)
-        │
-        │  Bearer token  +  optional TLS ◄── MCP_TLS_CERT + MCP_TLS_KEY
-        │
-        ▼
- ┌──────────────────────────────────────────────────────┐
- │          wago-plc-mcp-server  (Docker, port 6042)    │
- │                                                      │
- │   Bearer auth · Rate limiting · Audit log (chained)  │
- └────────────────────────┬─────────────────────────────┘
-                          │
-                          │  WDA Bearer token  +  TLS ◄── WAGO_TLS_CA / per-PLC cert
-                          │
-              ┌───────────┴───────────┐
-              ▼                       ▼
-    WAGO PLC 192.168.1.10    WAGO PLC 192.168.1.11
-    PFC200 / PFC300 / CC100  Edge Controller
-```
+
+**What actually happens when you ask a fleet-wide question**, e.g.
+*"which PLCs are running outdated firmware?"*:
+
+1. **You ask** the AI client (Claude Desktop, Claude Code, OpenClaw, or any
+   other MCP-compatible client) in plain English — no parameter IDs, no
+   WDA knowledge required.
+2. **The assistant picks the right tool(s)** — here, `list_plcs` to enumerate
+   the fleet, then `get_parameters_bulk` to read
+   `0-0-version-firmwareversion` from every PLC in one call.
+3. **The server fans the request out** to each registered PLC in parallel
+   (semaphore-bounded, `WAGO_MAX_CONCURRENT_REGISTRATIONS`), opening a WDA
+   session per PLC with its own Bearer token and TLS settings.
+4. **Each PLC answers independently** — a slow or unreachable CC100 doesn't
+   block the other 15 (or 100+) PLCs in the fleet from responding.
+5. **Results are aggregated back into one answer** — the assistant
+   reconciles per-PLC values into the single fleet-wide answer you actually
+   asked for, e.g. *"3 of 16 PLCs are on FW28 or older: .14, .19, .22."*
+
+Demoed end to end with **16 PLCs** of mixed device class/firmware on a
+single rack; the parallel fan-out model has no architectural ceiling that
+caps it well below **100+**.
 
 ---
 
