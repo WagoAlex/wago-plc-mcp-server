@@ -472,28 +472,51 @@ async def deregister_plc(
 ) -> dict:
     """Remove a PLC from the live registry.
 
-    If confirm=False (default), returns a confirmation prompt without acting.
-    Pass confirm=True to proceed with removal.
+    If the PLC has active watchlists, a confirmation_required response is returned
+    listing them. Call again with confirm=True to cancel all watchlists and remove
+    the PLC. If there are no active watchlists, confirm=False still asks once.
     """
     ip = host.strip()
-    if not plc_manager.get(ip):
+    plc = plc_manager.get(ip)
+    if not plc:
         return {"error": f"PLC {ip} is not registered. Available: {plc_manager.list_ips()}"}
 
+    active = sorted(plc.active_watchlists)
+
     if not confirm:
-        return {
-            "status": "confirmation_required",
-            "message": (
-                f"PLC {ip} will be removed from the live registry. "
-                f"Call deregister_plc(host='{ip}', confirm=True) to proceed."
-            ),
-        }
+        msg = f"PLC {ip} will be removed from the live registry."
+        if active:
+            msg += f" {len(active)} active watchlist(s) will be cancelled: {active}."
+        msg += f" Call deregister_plc(host='{ip}', confirm=True) to proceed."
+        return {"status": "confirmation_required", "active_watchlists": active, "message": msg}
+
+    # Graceful watchlist teardown before removing the registry entry
+    cancelled, teardown_errors = [], []
+    for wid in active:
+        try:
+            await plc.client.delete_monitoring_list(wid)
+            plc.active_watchlists.discard(wid)
+            cancelled.append(wid)
+            logger.info(f"[{ip}] watchlist {wid} cancelled during deregistration")
+        except Exception as e:
+            teardown_errors.append(wid)
+            logger.warning(f"[{ip}] could not cancel watchlist {wid} during deregistration: {e}")
 
     removed = await plc_manager.deregister(ip)
     if not removed:
         return {"error": f"PLC {ip} was not registered (may have been removed concurrently)"}
 
-    _audit_log("deregister_plc", ip, {}, "ok")
-    return {"status": "ok", "ip": ip, "message": f"PLC {ip} removed from live registry"}
+    _audit_log(
+        "deregister_plc", ip,
+        {"watchlists_cancelled": cancelled, "watchlists_teardown_errors": teardown_errors},
+        "ok",
+    )
+    result: dict = {"status": "ok", "ip": ip, "message": f"PLC {ip} removed from live registry"}
+    if cancelled:
+        result["watchlists_cancelled"] = cancelled
+    if teardown_errors:
+        result["watchlists_teardown_errors"] = teardown_errors
+    return result
 
 
 @mcp.tool()
@@ -786,6 +809,7 @@ async def create_watchlist(
             parameter_ids, timeout=timeout_seconds
         )
         parsed = parse_watchlist_response(body)
+        plc.active_watchlists.add(parsed["id"])
         logger.info(
             f"[{plc_ip}] created watchlist {parsed['id']} "
             f"with {len(parameter_ids)} param(s), timeout={timeout_seconds}s"
@@ -826,6 +850,7 @@ async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict
         return err
     try:
         await plc.client.delete_monitoring_list(watchlist_id)
+        plc.active_watchlists.discard(watchlist_id)
         logger.info(f"[{plc_ip}] deleted watchlist {watchlist_id}")
         return {"status": "ok"}
     except Exception as e:

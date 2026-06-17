@@ -29,6 +29,9 @@ class PLCEntry:
     enum_cases: dict[str, list[dict]] = field(default_factory=dict) # enum_id → [{value, stringValue}]
     enum_name: dict[str, str] = field(default_factory=dict)         # enum_id → name
 
+    # Watchlists created via create_watchlist; cleared on delete or deregister
+    active_watchlists: set[str] = field(default_factory=set)
+
 
 def _extract_enum_id(pdef: dict) -> str | None:
     """Find the related enum-definition ID, robust to data/link forms."""
