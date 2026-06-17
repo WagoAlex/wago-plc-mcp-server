@@ -170,13 +170,13 @@ caps it well below **100+**.
 
 | Device | Article Numbers | Notes |
 |--------|----------------|-------|
-| CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - keep `WAGO_TIMEOUT_SECONDS` at default (45 s) |
+| CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - set `WAGO_TIMEOUT_SECONDS=45` |
 | PFC100 Gen 2 | `750-8110` (ECO) · `750-8111` · `750-8112` (RS-232/485) · `750-8112/025-000` (XTR) | |
 | PFC200 Gen 2 | `750-8210` · `750-8211` (SFP) · `750-8212` (Serial) · `750-8216` (Telecontrol) · `750-8217` (4G) | |
 | PFC300 | `750-8302` | |
-| Edge Controller | `752-8303/8000-0002` | CODESYS runtime parameters visible via WDA |
-| WP400 | `762-34xx` series | Panel PC - WDA available alongside local HMI runtime |
-| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Touch Panel - WDA available alongside local HMI runtime |
+| Edge Controller | `752-8303/8000-0002` | Exposes CODESYS runtime state via WDA (`0-0-plcruntime-*` parameters) |
+| WP400 | `762-34xx` series | HMI panel - no local I/O bus; WDA scope is system/network management only |
+| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | HMI panel - no local I/O bus; WDA scope is system/network management only |
 
 Requires firmware **build ≥ 28 (FW28)** with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
 
