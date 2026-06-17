@@ -676,7 +676,7 @@ echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
 
 Notes:
 - Replace `admin:wago` with the real credentials for the target PLC - never commit a file containing them.
-- The fixed offsets `0` and `255` cover up to 510 parameters, which is sufficient for all currently supported device classes (CC100, PFC200, PFC300, Edge Controller - max observed is 398 on PFC200). Add an `offset=510` page if a future device class exceeds that.
+- The fixed offsets `0` and `255` cover up to 510 parameters, which is sufficient for all currently supported device classes (CC100, PFC100 G2, PFC200, PFC300, Edge Controller, WP400, TP600 - max observed is 410 on TP600). Add an `offset=510` page if a future device class exceeds that.
 - `jq -s '{data: (map(.data) | add)}'` merges the two pages' `data` arrays into a single JSON:API-shaped document instead of two concatenated payloads.
 - `page[limit]` / `page[offset]` **must** be passed via `--data-urlencode` (or an equivalent query-param encoder) - embedding literal brackets in the URL string is silently ignored by the WDA and causes an infinite page-0 loop.
 
