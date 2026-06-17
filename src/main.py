@@ -420,6 +420,83 @@ async def list_plcs(ctx: Context) -> dict:
 
 
 @mcp.tool()
+async def register_plc(
+    ctx: Context,
+    host: str,
+    username: str = "",
+    password: str = "",
+) -> dict:
+    """Register a new PLC at runtime without restarting the server.
+
+    Credentials are optional — falls back to DEFAULT_PLC_USERNAME / DEFAULT_PLC_PASSWORD.
+    Returns {status, ip, device_name, device_class, parameter_count, method_count} on success.
+    """
+    ip = host.strip()
+    if not ip:
+        return {"error": "host must not be empty"}
+    if plc_manager.get(ip):
+        return {"error": f"PLC {ip} is already registered"}
+
+    user = username.strip() or os.getenv("DEFAULT_PLC_USERNAME", "admin")
+    pwd  = password.strip() or (
+        _read_secret("plc_default_password") or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
+    )
+
+    try:
+        entry = await plc_manager.register(ip, user, pwd)
+    except Exception as e:
+        logger.error(f"[{ip}] register_plc failed: {e}")
+        _audit_log("register_plc", ip, {"user": user}, f"error: {e}")
+        return {"error": str(e)}
+
+    if entry is None:
+        _audit_log("register_plc", ip, {"user": user}, "unreachable")
+        return {"error": f"PLC {ip} unreachable or essential cache failed — check logs"}
+
+    _audit_log("register_plc", ip, {"user": user}, "ok")
+    return {
+        "status": "ok",
+        "ip": ip,
+        "device_name": entry.device_name,
+        "device_class": entry.device_class,
+        "parameter_count": len(entry.parameters),
+        "method_count": len(entry.methods),
+    }
+
+
+@mcp.tool()
+async def deregister_plc(
+    ctx: Context,
+    host: str,
+    confirm: bool = False,
+) -> dict:
+    """Remove a PLC from the live registry.
+
+    If confirm=False (default), returns a confirmation prompt without acting.
+    Pass confirm=True to proceed with removal.
+    """
+    ip = host.strip()
+    if not plc_manager.get(ip):
+        return {"error": f"PLC {ip} is not registered. Available: {plc_manager.list_ips()}"}
+
+    if not confirm:
+        return {
+            "status": "confirmation_required",
+            "message": (
+                f"PLC {ip} will be removed from the live registry. "
+                f"Call deregister_plc(host='{ip}', confirm=True) to proceed."
+            ),
+        }
+
+    removed = await plc_manager.deregister(ip)
+    if not removed:
+        return {"error": f"PLC {ip} was not registered (may have been removed concurrently)"}
+
+    _audit_log("deregister_plc", ip, {}, "ok")
+    return {"status": "ok", "ip": ip, "message": f"PLC {ip} removed from live registry"}
+
+
+@mcp.tool()
 async def describe_plc(ctx: Context, plc_ip: str) -> dict:
     """Get capability summary for a PLC: counts + feature names. Cheap, cached."""
     plc, err = _require_plc(plc_ip)
@@ -761,6 +838,10 @@ async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict
 def wago_assistant(query: str) -> list[base.Message]:
     instructions = [
         "You are an agent operating WAGO PLCs via the WDx REST API.",
+        "",
+        "**Fleet management (runtime, no restart needed):**",
+        "- `register_plc(host, username='', password='')` — add a PLC to the live registry.",
+        "- `deregister_plc(host, confirm=False)` — remove a PLC (call twice: first to preview, then with confirm=True).",
         "",
         "**Standard workflow:**",
         "1. `list_plcs()` to see available PLCs, or read resource `wago://catalog`.",
