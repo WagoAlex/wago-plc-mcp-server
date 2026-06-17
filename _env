@@ -1,11 +1,16 @@
 # ─────────────────────────── wago-plc-mcp config ───────────────────────────
 # Copy to .env and customize for your deployment.
 
-# ── PLC list (pick ONE format, or combine; format 2 overrides format 1) ──
+# ── PLC list (formats can be combined; all discovered IPs are merged) ──
 
-# Format 1 — Shared credentials, comma-separated IPs (simplest):
+# Format 1 — Comma-separated IPs, shared credentials (up to ~20 PLCs):
 WAGO_PLC_HOSTS=192.168.2.17,192.168.42.42
-# Format 2 — Per-PLC credentials (use underscores in IP keys):
+
+# Format 2 — Host file, one IP per line (recommended for large fleets):
+# Create /app/data/fleet.txt on the data volume; comments with # are ignored.
+# WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt
+
+# Format 3 — Per-PLC credentials (use underscores in IP keys):
 # PLC_PASSWORDS_10_0_0_1=secret_a
 # PLC_PASSWORDS_10_0_0_2=secret_b
 # PLC_PASSWORDS_10_0_0_3=secret_c

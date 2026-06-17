@@ -284,15 +284,42 @@ cd wago-plc-mcp-server
 cp _env .env
 ```
 
-Edit `.env` with your PLC details:
+Edit `.env` with your PLC details.
+
+**Small fleet — comma-separated IPs:**
 
 ```env
 WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
 DEFAULT_PLC_USERNAME=admin
-DEFAULT_PLC_PASSWORD=wago
 PORT=6042
 WAGO_TIMEOUT_SECONDS=45
 ```
+
+**Large fleet — host file (recommended for hundreds of PLCs):**
+
+Create `data/fleet.txt` on the host (one IP per line, `#` comments supported):
+
+```
+# Production floor A
+192.168.1.10
+192.168.1.11
+192.168.1.12
+
+# Production floor B
+192.168.2.10
+# 192.168.2.11   decommissioned
+```
+
+Then reference it in `.env`:
+
+```env
+WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt
+DEFAULT_PLC_USERNAME=admin
+PORT=6042
+WAGO_TIMEOUT_SECONDS=45
+```
+
+Both `WAGO_PLC_HOSTS` and `WAGO_PLC_HOSTS_FILE` can be set at the same time — all discovered IPs are merged. Fleet changes require a container restart; the audit log persists across restarts on the `./data` volume.
 
 > [!TIP]
 > For fleets with mixed passwords, use per-PLC overrides:

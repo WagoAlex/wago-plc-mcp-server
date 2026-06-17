@@ -263,6 +263,17 @@ def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
             if ip:
                 plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
 
+    hosts_file = os.getenv("WAGO_PLC_HOSTS_FILE", "").strip()
+    if hosts_file:
+        p = Path(hosts_file)
+        if p.exists():
+            for line in p.read_text().splitlines():
+                ip = line.split("#")[0].strip()
+                if ip:
+                    plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
+        else:
+            logger.warning(f"[config] WAGO_PLC_HOSTS_FILE={hosts_file} not found — skipping")
+
     for key, val in os.environ.items():
         m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)
         if m:
@@ -417,106 +428,6 @@ def wago_catalog() -> str:
 async def list_plcs(ctx: Context) -> dict:
     """List all reachable WAGO PLCs. Use first to find a target IP."""
     return {"plcs": plc_manager.list_ips()}
-
-
-@mcp.tool()
-async def register_plc(
-    ctx: Context,
-    host: str,
-    username: str = "",
-    password: str = "",
-) -> dict:
-    """Register a new PLC at runtime without restarting the server.
-
-    Credentials are optional — falls back to DEFAULT_PLC_USERNAME / DEFAULT_PLC_PASSWORD.
-    Returns {status, ip, device_name, device_class, parameter_count, method_count} on success.
-    """
-    ip = host.strip()
-    if not ip:
-        return {"error": "host must not be empty"}
-    if plc_manager.get(ip):
-        return {"error": f"PLC {ip} is already registered"}
-
-    user = username.strip() or os.getenv("DEFAULT_PLC_USERNAME", "admin")
-    pwd  = password.strip() or (
-        _read_secret("plc_default_password") or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
-    )
-
-    try:
-        entry = await plc_manager.register(ip, user, pwd)
-    except Exception as e:
-        logger.error(f"[{ip}] register_plc failed: {e}")
-        _audit_log("register_plc", ip, {"user": user}, f"error: {e}")
-        return {"error": str(e)}
-
-    if entry is None:
-        _audit_log("register_plc", ip, {"user": user}, "unreachable")
-        return {"error": f"PLC {ip} unreachable or essential cache failed — check logs"}
-
-    _audit_log("register_plc", ip, {"user": user}, "ok")
-    return {
-        "status": "ok",
-        "ip": ip,
-        "device_name": entry.device_name,
-        "device_class": entry.device_class,
-        "parameter_count": len(entry.parameters),
-        "method_count": len(entry.methods),
-    }
-
-
-@mcp.tool()
-async def deregister_plc(
-    ctx: Context,
-    host: str,
-    confirm: bool = False,
-) -> dict:
-    """Remove a PLC from the live registry.
-
-    If the PLC has active watchlists, a confirmation_required response is returned
-    listing them. Call again with confirm=True to cancel all watchlists and remove
-    the PLC. If there are no active watchlists, confirm=False still asks once.
-    """
-    ip = host.strip()
-    plc = plc_manager.get(ip)
-    if not plc:
-        return {"error": f"PLC {ip} is not registered. Available: {plc_manager.list_ips()}"}
-
-    active = sorted(plc.active_watchlists)
-
-    if not confirm:
-        msg = f"PLC {ip} will be removed from the live registry."
-        if active:
-            msg += f" {len(active)} active watchlist(s) will be cancelled: {active}."
-        msg += f" Call deregister_plc(host='{ip}', confirm=True) to proceed."
-        return {"status": "confirmation_required", "active_watchlists": active, "message": msg}
-
-    # Graceful watchlist teardown before removing the registry entry
-    cancelled, teardown_errors = [], []
-    for wid in active:
-        try:
-            await plc.client.delete_monitoring_list(wid)
-            plc.active_watchlists.discard(wid)
-            cancelled.append(wid)
-            logger.info(f"[{ip}] watchlist {wid} cancelled during deregistration")
-        except Exception as e:
-            teardown_errors.append(wid)
-            logger.warning(f"[{ip}] could not cancel watchlist {wid} during deregistration: {e}")
-
-    removed = await plc_manager.deregister(ip)
-    if not removed:
-        return {"error": f"PLC {ip} was not registered (may have been removed concurrently)"}
-
-    _audit_log(
-        "deregister_plc", ip,
-        {"watchlists_cancelled": cancelled, "watchlists_teardown_errors": teardown_errors},
-        "ok",
-    )
-    result: dict = {"status": "ok", "ip": ip, "message": f"PLC {ip} removed from live registry"}
-    if cancelled:
-        result["watchlists_cancelled"] = cancelled
-    if teardown_errors:
-        result["watchlists_teardown_errors"] = teardown_errors
-    return result
 
 
 @mcp.tool()
@@ -865,7 +776,6 @@ async def create_watchlist(
             parameter_ids, timeout=timeout_seconds
         )
         parsed = parse_watchlist_response(body)
-        plc.active_watchlists.add(parsed["id"])
         logger.info(
             f"[{plc_ip}] created watchlist {parsed['id']} "
             f"with {len(parameter_ids)} param(s), timeout={timeout_seconds}s"
@@ -906,7 +816,6 @@ async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict
         return err
     try:
         await plc.client.delete_monitoring_list(watchlist_id)
-        plc.active_watchlists.discard(watchlist_id)
         logger.info(f"[{plc_ip}] deleted watchlist {watchlist_id}")
         return {"status": "ok"}
     except Exception as e:
@@ -920,9 +829,7 @@ def wago_assistant(query: str) -> list[base.Message]:
     instructions = [
         "You are an agent operating WAGO PLCs via the WDx REST API.",
         "",
-        "**Fleet management (runtime, no restart needed):**",
-        "- `register_plc(host, username='', password='')` — add a PLC to the live registry.",
-        "- `deregister_plc(host, confirm=False)` — remove a PLC (call twice: first to preview, then with confirm=True).",
+        "**Audit:**",
         "- `get_plc_audit_log(plc_ip='', action='', limit=50)` — query the tamper-evident audit chain.",
         "",
         "**Standard workflow:**",

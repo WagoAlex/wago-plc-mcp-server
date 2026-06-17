@@ -29,9 +29,6 @@ class PLCEntry:
     enum_cases: dict[str, list[dict]] = field(default_factory=dict) # enum_id → [{value, stringValue}]
     enum_name: dict[str, str] = field(default_factory=dict)         # enum_id → name
 
-    # Watchlists created via create_watchlist; cleared on delete or deregister
-    active_watchlists: set[str] = field(default_factory=set)
-
 
 def _extract_enum_id(pdef: dict) -> str | None:
     """Find the related enum-definition ID, robust to data/link forms."""
@@ -250,20 +247,6 @@ class PLCManager:
         ok = [ip for ip, success in results if success]
         failed = [ip for ip, success in results if not success]
         return ok, failed
-
-    async def deregister(self, ip: str) -> bool:
-        """Remove a PLC from the live registry and close its HTTP client.
-
-        Returns True if the PLC was registered and is now removed.
-        Returns False if the IP was not in the registry.
-        """
-        async with self._lock:
-            entry = self.plcs.pop(ip, None)
-        if entry is None:
-            return False
-        await entry.client.close()
-        logger.info(f"[{ip}] deregistered — HTTP client closed")
-        return True
 
     def get(self, ip: str) -> PLCEntry | None:
         return self.plcs.get(ip)
