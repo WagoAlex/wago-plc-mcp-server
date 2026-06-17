@@ -55,8 +55,9 @@ jobs:
           docker buildx create --use --name ci-builder
           docker buildx inspect --bootstrap
 
+      # Username is public (matches image wagoalex/wago-plc-mcp-server); only the token is secret.
       - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "wagoalex" --password-stdin
 
       # Installs syft to PATH so build.sh can call it directly
       - name: Install syft
