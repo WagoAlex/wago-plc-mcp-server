@@ -115,13 +115,9 @@ flowchart TB
         MCP --- Guard
     end
 
-    MCP -- "WDA Bearer token + TLS · parallel, semaphore-bounded" --> P1
-    MCP --> P2
-    MCP --> P3
-    MCP --> P4
-    MCP --> P5
-    MCP --> P6
-    MCP -. "…fans out to every registered PLC · tested with 16, no hard ceiling below 100+" .-> Pn
+    MCP --> FAN("WDA Bearer token + TLS<br/>parallel, semaphore-bounded<br/>fans out to every registered PLC<br/>tested with 16 · no hard ceiling below 100+")
+
+    FAN --> P1 & P2 & P3 & P4 & P5 & P6 & Pn
 
     subgraph Fleet["WAGO PLC fleet - each class can be 1 unit or 100s"]
         direction LR
