@@ -100,9 +100,9 @@ custom integration for every question in advance.
 }}}%%
 flowchart LR
     subgraph Clients["AI clients (any MCP client works)"]
-        CD["Claude Desktop<br/>(stdio, via wago_proxy.py)"]
-        CC["Claude Code<br/>(direct HTTP)"]
-        OC["OpenClaw<br/>(direct HTTP)"]
+        CD("Claude Desktop<br/>(stdio, via wago_proxy.py)")
+        CC("Claude Code<br/>(direct HTTP)")
+        OC("OpenClaw<br/>(direct HTTP)")
     end
 
     CD -- "Bearer token" --> MCP
@@ -110,8 +110,8 @@ flowchart LR
     OC -- "Bearer token" --> MCP
 
     subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
-        MCP["13 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · …"]
-        Guard["Bearer auth · rate limiting<br/>hash-chained audit log"]
+        MCP("13 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · …")
+        Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
         MCP --- Guard
     end
 
@@ -123,14 +123,18 @@ flowchart LR
     MCP --> P6
     MCP -. "…fans out to every registered PLC<br/>tested with 16, no hard ceiling below 100+" .-> Pn
 
-    subgraph Fleet["WAGO PLC fleet - each class below can be 1 unit or 100s"]
-        P1["CC100<br/>751-9301 · 751-940x"]
-        P2["PFC100 Gen 2<br/>750-811x"]
-        P3["PFC200 Gen 2<br/>750-8210 · 750-8211 · 750-8212 · 750-8217"]
-        P4["PFC300<br/>750-8302"]
-        P5["Edge Controller<br/>752-8303/8000-0002"]
-        P6["WP400<br/>762-34xx"]
-        Pn["TP600<br/>762-4/5/6xxx"]
+    subgraph Fleet["WAGO PLC fleet - each class can be 1 unit or 100s"]
+        subgraph Controllers["Controllers"]
+            P1("CC100<br/>751-9301 · 751-940x")
+            P2("PFC100 Gen 2<br/>750-811x")
+            P3("PFC200 Gen 2<br/>750-8210 · 750-8211<br/>750-8212 · 750-8217")
+            P4("PFC300<br/>750-8302")
+            P5("Edge Controller<br/>752-8303/8000-0002")
+        end
+        subgraph HMI["HMI Panels"]
+            P6("WP400<br/>762-34xx")
+            Pn("TP600<br/>762-4/5/6xxx")
+        end
     end
 ```
 
