@@ -164,12 +164,15 @@ caps it well below **100+**.
 
 | Device | Notes |
 |--------|-------|
+| PFC100 Gen 2 | |
 | PFC200 Gen 2 | |
 | PFC300 | |
 | CC100 | Slow ARM CPU - keep `WAGO_TIMEOUT_SECONDS` at default (45 s) |
 | Edge Controller | CODESYS runtime parameters visible via WDA |
+| WP400 | Panel PC - WDA available alongside local HMI runtime |
+| TP600 | Touch Panel - WDA available alongside local HMI runtime |
 
-Requires firmware **≥ 03.x** with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
+Requires firmware **build ≥ 28 (FW28)**  with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
 
 ---
 
@@ -743,7 +746,7 @@ Exit code `0` = chain intact. Exit code `1` = tampered or missing entries.
 ## Requirements
 
 - Docker 24+ with Compose v2
-- WAGO PLC with WDx/WDA REST API enabled (firmware ≥ 03.x)
+- WAGO PLC with WDx/WDA REST API enabled (firmware build ≥ 28 / FW28)
 - Network route from Docker host to PLC subnets
 
 For Claude Desktop proxy: Python 3.11+ and `fastmcp` on the client machine.
