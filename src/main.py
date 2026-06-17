@@ -239,10 +239,11 @@ def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
       4. Env var        DEFAULT_PLC_PASSWORD                              (shared default, dev fallback)
       5. Hardcoded      "wago"
 
-    Host formats:
-      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2   (shared credentials)
-      PLC_PASSWORDS_10_0_0_1=secret_a     (per-PLC env, also extends host list)
-    Both can be combined; per-PLC credentials override the shared default for matching IPs.
+    Host formats (all three can be combined; IPs are merged):
+      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2        (CSV, suitable for small fleets)
+      WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt  (one IP per line, # comments; large fleets)
+      PLC_PASSWORDS_10_0_0_1=secret_a          (per-PLC env, also extends host list)
+    Per-PLC credentials override the shared default for matching IPs.
     """
     user = os.getenv("DEFAULT_PLC_USERNAME", "admin")
     default_pwd = (
