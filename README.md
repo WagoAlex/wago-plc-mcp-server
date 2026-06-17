@@ -118,13 +118,19 @@ flowchart LR
     MCP -- "WDA Bearer token + TLS<br/>parallel, semaphore-bounded" --> P1
     MCP --> P2
     MCP --> P3
+    MCP --> P4
+    MCP --> P5
+    MCP --> P6
     MCP -. "…fans out to every registered PLC<br/>tested with 16, no hard ceiling below 100+" .-> Pn
 
     subgraph Fleet["WAGO PLC fleet - each class below can be 1 unit or 100s"]
-        P1["PFC200 ×1...100s<br/>e.g. 192.168.1.10-.59"]
-        P2["PFC300 ×1...100s<br/>e.g. 192.168.1.60-.69"]
-        P3["Edge Controller ×1...100s<br/>e.g. 192.168.1.70-.99"]
-        Pn["CC100 ×1...100s<br/>e.g. 192.168.1.100-.N"]
+        P1["CC100<br/>751-9301 · 751-940x"]
+        P2["PFC100 Gen 2<br/>750-811x"]
+        P3["PFC200 Gen 2<br/>750-8210 · 750-8211 · 750-8212 · 750-8217"]
+        P4["PFC300<br/>750-8302"]
+        P5["Edge Controller<br/>752-8303/8000-0002"]
+        P6["WP400<br/>762-34xx"]
+        Pn["TP600<br/>762-4/5/6xxx"]
     end
 ```
 
@@ -146,13 +152,13 @@ flowchart LR
    reconciles per-PLC values into the single fleet-wide answer you actually
    asked for, e.g. *"3 of 16 PLCs are on FW28 or older: .14, .19, .22."*
 
-The "fleet" in that walkthrough isn't one PFC200, one PFC300, one Edge
-Controller, and one CC100. It's whatever you actually have on the floor:
-50 PFC200s on a production line, 10 PFC300s in a packaging cell, 200 Edge
-Controllers across a multi-site rollout, or any mix of all four. The
-fan-out model treats every registered IP identically regardless of how
-many units share a device class, so the same single question scales from
-a single test rack to a plant-wide fleet without any code change.
+The "fleet" in that walkthrough isn't one of each device class. It's
+whatever you actually have on the floor: 50 PFC200s on a production line,
+10 PFC300s in a packaging cell, 200 Edge Controllers across a multi-site
+rollout, WP400 panels on machine fronts, TP600 HMIs on operator stations,
+or any mix. The fan-out model treats every registered IP identically
+regardless of device class, so the same single question scales from a
+single test rack to a plant-wide fleet without any code change.
 
 Demoed end to end with **16 PLCs** of mixed device class/firmware on a
 single rack; the parallel fan-out model has no architectural ceiling that
@@ -162,17 +168,17 @@ caps it well below **100+**.
 
 ## Supported Hardware
 
-| Device | Notes |
-|--------|-------|
-| PFC100 Gen 2 | |
-| PFC200 Gen 2 | |
-| PFC300 | |
-| CC100 | Slow ARM CPU - keep `WAGO_TIMEOUT_SECONDS` at default (45 s) |
-| Edge Controller | CODESYS runtime parameters visible via WDA |
-| WP400 | Panel PC - WDA available alongside local HMI runtime |
-| TP600 | Touch Panel - WDA available alongside local HMI runtime |
+| Device | Article Numbers | Notes |
+|--------|----------------|-------|
+| CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - keep `WAGO_TIMEOUT_SECONDS` at default (45 s) |
+| PFC100 Gen 2 | `750-8110` (ECO) · `750-8111` · `750-8112` (RS-232/485) · `750-8112/025-000` (XTR) | |
+| PFC200 Gen 2 | `750-8210` · `750-8211` (SFP) · `750-8212` (Serial) · `750-8216` (Telecontrol) · `750-8217` (4G) | |
+| PFC300 | `750-8302` | |
+| Edge Controller | `752-8303/8000-0002` | CODESYS runtime parameters visible via WDA |
+| WP400 | `762-34xx` series | Panel PC - WDA available alongside local HMI runtime |
+| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Touch Panel - WDA available alongside local HMI runtime |
 
-Requires firmware **build ≥ 28 (FW28)**  with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
+Requires firmware **build ≥ 28 (FW28)** with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
 
 ---
 
