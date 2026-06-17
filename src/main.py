@@ -520,6 +520,62 @@ async def deregister_plc(
 
 
 @mcp.tool()
+async def get_plc_audit_log(
+    ctx: Context,
+    plc_ip: str = "",
+    action: str = "",
+    limit: int = 50,
+) -> dict:
+    """Return recent audit log entries, newest first.
+
+    plc_ip: filter to a specific PLC IP (empty = all PLCs).
+    action: filter by action type — register_plc, deregister_plc, set_parameters,
+            invoke_method (empty = all actions).
+    limit: max entries to return (default 50, max 500).
+
+    Each entry contains: ts, action, plc, agent, result, prev (chain hash),
+    plus action-specific fields.
+    """
+    limit = min(max(1, limit), 500)
+    audit_path = Path(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+
+    if not audit_path.exists():
+        return {"entries": [], "total": 0, "note": "Audit log not yet created"}
+
+    try:
+        with audit_path.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            read_size = min(size, 65536)  # 64 KB tail — covers 200+ entries at typical sizes
+            f.seek(-read_size, 2)
+            tail = f.read().decode("utf-8", errors="replace")
+    except OSError as e:
+        return {"error": f"Could not read audit log: {e}"}
+
+    entries = []
+    for line in tail.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if plc_ip and entry.get("plc") != plc_ip:
+            continue
+        if action and entry.get("action") != action:
+            continue
+        entries.append(entry)
+
+    # Take the last `limit` chronological entries, return newest first
+    entries = entries[-limit:][::-1]
+    result: dict = {"entries": entries, "total": len(entries)}
+    if plc_ip or action:
+        result["filtered_by"] = {k: v for k, v in {"plc_ip": plc_ip, "action": action}.items() if v}
+    return result
+
+
+@mcp.tool()
 async def describe_plc(ctx: Context, plc_ip: str) -> dict:
     """Get capability summary for a PLC: counts + feature names. Cheap, cached."""
     plc, err = _require_plc(plc_ip)
@@ -867,6 +923,7 @@ def wago_assistant(query: str) -> list[base.Message]:
         "**Fleet management (runtime, no restart needed):**",
         "- `register_plc(host, username='', password='')` — add a PLC to the live registry.",
         "- `deregister_plc(host, confirm=False)` — remove a PLC (call twice: first to preview, then with confirm=True).",
+        "- `get_plc_audit_log(plc_ip='', action='', limit=50)` — query the tamper-evident audit chain.",
         "",
         "**Standard workflow:**",
         "1. `list_plcs()` to see available PLCs, or read resource `wago://catalog`.",
