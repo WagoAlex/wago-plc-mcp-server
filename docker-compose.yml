@@ -27,7 +27,7 @@ services:
     env_file:
       - .env
     environment:
-      AUDIT_LOG_FILE: /app/audit.log
+      AUDIT_LOG_FILE: /app/data/audit.log
     restart: unless-stopped
     secrets:
       - plc_default_password
