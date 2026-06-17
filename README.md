@@ -175,8 +175,8 @@ caps it well below **100+**.
 | PFC200 Gen 2 | `750-8210` · `750-8211` (SFP) · `750-8212` (Serial) · `750-8216` (Telecontrol) · `750-8217` (4G) | |
 | PFC300 | `750-8302` | |
 | Edge Controller | `752-8303/8000-0002` | Exposes CODESYS runtime state via WDA (`0-0-plcruntime-*` parameters) |
-| WP400 | `762-34xx` series | No I/O bus, no CODESYS runtime (189 WDA params vs ~398 on PFC200). Unique: display brightness/orientation (`0-0-display-*`), integrated browser startpage + reconnect (`0-0-integratedwebbrowser-*`), touch cleaning mode |
-| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Same WDA profile as WP400 — HMI-only parameter set, display and browser control, no I/O bus or CODESYS runtime |
+| WP400 | `762-34xx` series | Web panel only — 189 WDA params, no CODESYS, no BACnet, no I/O bus. HMI-unique: display brightness/orientation/screensaver (`0-0-display-*`), integrated browser startpage + reconnect (`0-0-integratedwebbrowser-*`), touch cleaning mode |
+| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Full PLC+HMI — 410 WDA params. Has CODESYS3 runtime (`0-0-codesys3-*`), BACnet, cloud connectivity, serial. Plus all WP400 display/browser params, front LED (`0-0-frontled-enabled`), acoustic feedback (`0-0-touchpanel-acousticfeedback-enabled`) |
 
 Requires firmware **build ≥ 28 (FW28)** with WDx/WDA REST API enabled. Tested up to **04.09.01 (FW31)**.
 
