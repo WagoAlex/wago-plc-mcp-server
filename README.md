@@ -13,6 +13,10 @@ Ask an AI assistant to read sensor values, change configuration, trigger firmwar
 
 ---
 
+**Quick navigation:** [What it does](#new-to-wago-mcp-or-wda-start-here) · [What to ask it](#what-can-i-ask-it) · [Connecting Clients](#connecting-clients) · [Quick Start](#quick-start) · [FAQ](#frequently-asked-questions) · [Deployment Paths](#deployment-paths) · [Tool Reference](#tool-reference) · [Configuration](#configuration-reference)
+
+---
+
 ## New to WAGO, MCP, or WDA? Start here
 
 You know PLCs - TIA Portal, Studio 5000, EcoStruxure, ladder/structured
@@ -274,6 +278,92 @@ screenshot.
 
 ---
 
+## Connecting Clients
+
+Once the server is running (see [Quick Start](#quick-start) below), connect your AI assistant client to it. The steps below apply to any deployment - Docker, Windows .exe, or uvx.
+
+### Claude Desktop
+
+1. Add the server entry to your Claude Desktop config file. The exact JSON snippet depends on your deployment path - see [Deployment Paths](#deployment-paths) for the config block that matches your setup.
+2. Fully quit Claude Desktop - not just close the window, but exit the application entirely.
+3. Relaunch Claude Desktop.
+
+You should see either a **hammer icon** in the toolbar showing 13 tools available, or the server listed under **Settings → Connectors** (labelled **Konnektoren** in some versions):
+
+![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
+
+**If the server does not appear:**
+- Check the server process is running: `docker ps | grep wmcp` (or verify your Windows .exe or uvx process)
+- Confirm the API key in your config file matches the key printed at server startup
+- Test that the server is reachable from your machine: `curl http://localhost:6042/health`
+
+### Claude Code (terminal / IDE extensions)
+
+Add `.mcp.json` to your project root:
+
+```json
+{
+  "mcpServers": {
+    "wago-plc": {
+      "type": "http",
+      "url": "http://<server-host>:6042/mcp",
+      "headers": { "Authorization": "Bearer <your-api-key>" }
+    }
+  }
+}
+```
+
+Run `claude mcp list` to confirm the server appears in the list.
+
+### Other clients (ChatGPT Desktop, n8n, OpenAI API)
+
+Any client that supports the MCP streamable-HTTP transport connects to `http://<host>:6042/mcp` with the header `Authorization: Bearer <key>`. For older clients that use the SSE transport, set `TRANSPORT=sse` in `.env` and point at `/sse` instead of `/mcp`.
+
+---
+
+## What can I ask it?
+
+Type your question or task in plain English. The AI assistant figures out which parameters to read or write and handles the WDA API calls - no parameter IDs or REST knowledge required on your end.
+
+### Fleet-wide checks
+
+| What you type | What happens |
+|---|---|
+| "Which PLCs are running firmware older than build 31?" | Reads the firmware version from every registered controller in parallel and lists the ones that are behind |
+| "Are NTP and Docker running on all Edge Controllers?" | Reads the service running-flags across the fleet and highlights any that are stopped |
+| "Show the diagnostic LED states on all PLCs" | Reads the SYS, RUN, and fieldbus LED text strings from every unit - useful when you cannot walk the floor |
+| "Is any controller showing a fault or error state?" | Cross-checks LED diagnostic strings and error parameters fleet-wide |
+
+### Single-controller diagnostics
+
+| What you type | What happens |
+|---|---|
+| "What firmware version is running on 192.168.1.14?" | Reads the firmware version parameter from that unit |
+| "List all network settings on Edge Controller .19" | Searches parameters by keyword and returns matching names with current values |
+| "Is the CODESYS program loaded and running on PFC300 .22?" | Reads the CODESYS runtime state parameter |
+| "What NTP server is configured on PLC .10?" | Reads the NTP client configuration parameters |
+
+### Configuration changes and remote actions
+
+| What you type | What happens |
+|---|---|
+| "Set the NTP server to 192.168.0.1 on all PLCs in building A" | Writes the NTP server address after you confirm; every write is recorded in the audit log with timestamp and your key |
+| "Trigger an NTP time sync on the three controllers that showed clock drift" | Invokes the NTP sync action only on the units that need it - checks status first, then acts |
+| "Enable SSH on controller .14 for remote maintenance access" | Finds the SSH enable parameter and writes it after your confirmation |
+| "Start a firmware update on PFC200 .11 and monitor the progress" | Invokes the firmware update method and polls the progress parameter until complete |
+
+### Ongoing monitoring
+
+| What you type | What happens |
+|---|---|
+| "Set up a health monitor for the packaging line PLCs" | Creates a server-side monitoring list on each PLC combining LED states, service running-flags, and cloud connection status - one HTTP request per poll cycle instead of one per parameter |
+| "Track the firmware update progress on all 12 PLCs" | Polls the update status and progress parameters across the fleet |
+
+> [!NOTE]
+> The assistant asks for your confirmation before writing any value to a controller. You stay in control of what gets changed and when.
+
+---
+
 ## Quick Start
 
 ### 1. Clone and configure
@@ -378,6 +468,71 @@ curl -X POST http://localhost:6042/mcp \
 # Health check (no token required)
 curl http://localhost:6042/health
 ```
+
+### 5. Install the WAGO skill (recommended)
+
+The bundled skill file gives the AI assistant detailed knowledge of WAGO-specific parameter names, safe-operation guidance, and tool behaviour. It is the difference between a generic AI response and one that correctly identifies the right WDA parameter for your question first time.
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r wago-plc-skill ~/.claude/skills/   # end-user skill for Claude Desktop and Claude Code
+```
+
+The assistant picks it up automatically the next session - no server restart needed. See [Install a project skill](#recommended-install-a-project-skill) for all three skill variants (end-user, autonomous agents, and server contributors).
+
+---
+
+## Frequently Asked Questions
+
+### Can the AI modify my control program or process I/O values?
+
+**No.** The WDA REST API - the interface this server uses - is the **system management layer** of the WAGO controller. It has no access to the CODESYS runtime, PLC variables, fieldbus I/O, or anything in your control program. Think of it as the *Online & Diagnostics* view in TIA Portal or the *Controller Properties* panel in Studio 5000 - not the *I/O monitor* or *Watch Table*.
+
+Field I/O still goes through OPC-UA, Modbus TCP, or WAGO I/O-Check as before. This server does not touch any of those paths.
+
+### What can it actually read and write on a controller?
+
+System-level configuration and diagnostic values exposed by WDA: firmware version, NTP server and sync settings, SSH enable/disable, network interface configuration, service running-flags, LED states, reboot control, and firmware update execution. A full parameter list per device class is in the `docs/` reference files.
+
+The assistant will not write a value without your explicit confirmation.
+
+### Does the server need internet access after the initial setup?
+
+No. The Docker image is pulled from Docker Hub once during setup. After that, all traffic is local: AI client → MCP server (port 6042) → PLCs (port 443 HTTPS). No cloud calls, no telemetry, no external connections. Suitable for air-gapped OT networks once the Docker image has been transferred to the host.
+
+### What if the AI writes a wrong value?
+
+Every write is recorded in a tamper-evident audit log: timestamp, parameter ID, the value written, and which API key made the change. Entries are hash-chained so deletions are detectable after the fact. See [Audit Log](#audit-log) for how to tail and verify the log.
+
+For most WDA parameters - NTP settings, SSH toggle, LED configuration - a wrong value is correctable by writing the correct value again. For potentially disruptive actions such as firmware update or reboot, the assistant asks for your explicit confirmation before executing.
+
+### Can multiple engineers share one server?
+
+Yes. Deploy one Docker container on a host reachable from the OT network. Each engineer connects their own Claude Desktop or Claude Code to `http://<server>:6042/mcp`. The server handles concurrent sessions. Use a shared API key or provision individual keys per engineer for per-person traceability in the audit log.
+
+### Our PLCs have different passwords. How do we configure that?
+
+Use per-PLC password overrides in `.env` alongside the fleet-wide default:
+
+```env
+DEFAULT_PLC_PASSWORD=wago             # applied to all PLCs unless overridden
+
+PLC_PASSWORDS_192_168_1_11=secret     # override for this unit (IP with underscores)
+PLC_PASSWORDS_192_168_1_15=other
+```
+
+### What firewall rules does IT need to open?
+
+| Direction | Source | Destination | Port | Protocol |
+|---|---|---|---|---|
+| Inbound to MCP server | Engineer workstations / AI client machines | MCP server host | 6042 | TCP |
+| Outbound from MCP server | MCP server host | WAGO PLC IPs | 443 | TCP (HTTPS) |
+
+The Docker container uses `network_mode: host`, so it reaches PLCs on routed subnets exactly the same way any management workstation running on that host would. No additional routing changes are needed beyond what already allows that host to reach the PLC subnets.
+
+### Which WAGO firmware version is required?
+
+Firmware build **≥ 28** (version string `04.xx.xx(28)` or later). Check the build number in the controller's web interface under *Device Information*, or ask the assistant: *"What firmware version is PLC 192.168.x.x running?"* Tested up to **04.09.01 (FW31)**.
 
 ---
 
