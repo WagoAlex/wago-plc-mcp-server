@@ -10,7 +10,7 @@ py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config",
 
 [project]
 name = "wago-plc-mcp-server"
-version = "2.1.0"
+version = "2.1.1"
 description = "MCP server for integrating WAGO PLCs with the WDx REST API"
 readme = "README.md"
 requires-python = ">=3.11"

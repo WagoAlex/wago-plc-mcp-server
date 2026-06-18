@@ -29,11 +29,11 @@ from enricher import enrich_parameter, enrich_method_definition, parse_watchlist
 
 load_dotenv()
 setup_logging(
-    log_file=os.getenv("LOG_FILE", "/app/mcp_server.log"),
+    log_file=os.getenv("LOG_FILE"),
     level=os.getenv("LOG_LEVEL", "INFO"),
 )
 setup_audit_logging(
-    audit_log_file=os.getenv("AUDIT_LOG_FILE", "/app/audit.log"),
+    audit_log_file=os.getenv("AUDIT_LOG_FILE"),
     syslog_host=os.getenv("SYSLOG_HOST") or None,
     syslog_port=int(os.getenv("SYSLOG_PORT", "514")),
     syslog_tcp=os.getenv("SYSLOG_TCP", "").lower() in {"1", "true"},

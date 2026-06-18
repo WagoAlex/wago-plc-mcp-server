@@ -21,10 +21,11 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") -> None:
+def setup_logging(log_file: str | None = None, level: str = "INFO") -> None:
     """Single logger, single format, no duplicates. AUDIT entries go to the audit log only.
 
     File budget: 10 MB × 3 rotated files = 30 MB max on-disk.
+    log_file=None → stderr only (uvx / stdio mode).
     """
     logger.remove()
 
@@ -38,17 +39,18 @@ def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") ->
     _not_audit = lambda r: r["level"].name != "AUDIT"
 
     logger.add(sys.stderr, format=fmt, level=level, colorize=True, enqueue=False, filter=_not_audit)
-    logger.add(
-        log_file,
-        format=fmt,
-        level=level,
-        rotation="10 MB",
-        retention=3,
-        enqueue=True,
-        backtrace=False,
-        diagnose=False,
-        filter=_not_audit,
-    )
+    if log_file:
+        logger.add(
+            log_file,
+            format=fmt,
+            level=level,
+            rotation="10 MB",
+            retention=3,
+            enqueue=True,
+            backtrace=False,
+            diagnose=False,
+            filter=_not_audit,
+        )
 
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
     for name in (
@@ -65,7 +67,7 @@ def setup_logging(log_file: str = "/app/mcp_server.log", level: str = "INFO") ->
 
 
 def setup_audit_logging(
-    audit_log_file: str = "/app/audit.log",
+    audit_log_file: str | None = None,
     syslog_host: str | None = None,
     syslog_port: int = 514,
     syslog_tcp: bool = False,
@@ -88,17 +90,18 @@ def setup_audit_logging(
     _audit_only = lambda r: r["level"].name == "AUDIT"
     local_retention = 2 if syslog_host else 5
 
-    logger.add(
-        audit_log_file,
-        level="AUDIT",
-        format="{message}\n",
-        filter=_audit_only,
-        rotation="10 MB",
-        retention=local_retention,
-        enqueue=True,
-        backtrace=False,
-        diagnose=False,
-    )
+    if audit_log_file:
+        logger.add(
+            audit_log_file,
+            level="AUDIT",
+            format="{message}\n",
+            filter=_audit_only,
+            rotation="10 MB",
+            retention=local_retention,
+            enqueue=True,
+            backtrace=False,
+            diagnose=False,
+        )
 
     if syslog_host:
         socktype = socket.SOCK_STREAM if syslog_tcp else socket.SOCK_DGRAM
