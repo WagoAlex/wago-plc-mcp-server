@@ -272,6 +272,32 @@ invokes the time-sync method on the specific units that need it.
 
 </details>
 
+<details>
+<summary><strong>Use case 4 - which PLCs are reachable and what firmware are they running?</strong></summary>
+
+Asks the agent to sweep the entire fleet, check reachability, and report
+firmware versions - all in one shot. The agent calls `list_plcs`, then
+`describe_plc` in parallel across every registered controller, and returns
+a clean table of what's alive, what model it is, and which firmware build it
+carries. No scripting, no SSH, no TFTP.
+
+![Use case 4 demo](docs/media/demo-use-case-4.gif)
+
+</details>
+
+<details>
+<summary><strong>Use case 5 - which devices still have the default NTP server configured?</strong></summary>
+
+Asks the agent to audit NTP configuration across the fleet and flag any
+controller still pointing at the factory-default time server. The agent
+reads the NTP parameter on every reachable PLC, compares it against the
+expected value, and lists the offenders - the kind of compliance sweep that
+would otherwise require manual access to each device.
+
+![Use case 5 demo](docs/media/demo-use-case-5.gif)
+
+</details>
+
 See [Connecting Clients](#connecting-clients) below for the setup shown in
 these recordings, including the config screenshot and connected-state
 screenshot.
