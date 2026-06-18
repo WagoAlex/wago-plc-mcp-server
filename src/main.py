@@ -890,6 +890,11 @@ async def main() -> None:
     tls_enabled = bool(tls_cert and tls_key)
     scheme = "https" if tls_enabled else "http"
 
+    if transport == "stdio":
+        logger.info("MCP server transport: stdio (uvx / Claude Desktop direct mode)")
+        mcp.run(transport="stdio")
+        return
+
     if transport == "sse":
         endpoint = f"{scheme}://{host}:{port}/sse"
         logger.info(f"MCP server listening on {endpoint} (SSE — legacy)")
@@ -926,6 +931,11 @@ async def main() -> None:
         await server.serve()
     finally:
         await plc_manager.close_all()
+
+
+def cli_main() -> None:
+    """Entry point for PyPI / uvx installation."""
+    asyncio.run(main())
 
 
 if __name__ == "__main__":

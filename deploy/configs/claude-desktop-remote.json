@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "wago-plc": {
+      "command": "uvx",
+      "args": ["wago-plc-mcp-proxy"],
+      "env": {
+        "WAGO_MCP_URL": "http://plc-gateway.plant.internal:6042/mcp",
+        "WAGO_MCP_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}

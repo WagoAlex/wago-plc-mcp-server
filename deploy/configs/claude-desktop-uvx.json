@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "wago-plc": {
+      "command": "uvx",
+      "args": ["wago-plc-mcp-server"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "WAGO_PLC_HOSTS": "192.168.1.10,192.168.1.11",
+        "DEFAULT_PLC_USERNAME": "admin",
+        "DEFAULT_PLC_PASSWORD": "wago",
+        "WAGO_TIMEOUT_SECONDS": "45",
+        "LOG_LEVEL": "WARNING"
+      }
+    }
+  }
+}

@@ -458,11 +458,34 @@ When TLS is active, update your client URLs from `http://` to `https://`.
 
 ---
 
-## Connecting Clients
+## Deployment Paths
 
-### Claude Code / direct HTTP (`.mcp.json`)
+Five ways to run and connect this server. Pick the one that fits your environment - they can coexist (e.g. Docker for the plant, uvx for your dev laptop).
 
-Add to your project's `.mcp.json`:
+| Path | Best for | Requires | Fleet size |
+|---|---|---|---|
+| [Docker](#docker-recommended-for-shared-fleets) | Plant server, shared multi-user fleet | Docker host on the OT network | Any |
+| [Windows .exe](#windows-exe-ot-engineer-laptop) | OT engineer laptop, air-gapped Windows | Nothing - zero dependencies | Small |
+| [uvx / PyPI](#uvx-pypi-developer-or-power-user) | Developer machine, any OS | `uv` installed | Small-medium |
+| [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed | Small |
+| [HTTP remote](#http-remote-chatgpt-api-n8n-openai) | ChatGPT, OpenAI API, n8n automation | Running server reachable over network | Any |
+
+Config file examples for every path: [`deploy/configs/`](deploy/configs/)
+
+---
+
+### Docker (recommended for shared fleets)
+
+One server, many clients. PLCs register once at startup and stay connected.
+
+```bash
+cp _env .env          # edit PLC IPs, password, API key
+docker compose up -d
+```
+
+Connect any client to `http://<host>:6042/mcp` with `Authorization: Bearer <key>`.
+
+**Claude Code / `.mcp.json`:**
 
 ```json
 {
@@ -470,50 +493,46 @@ Add to your project's `.mcp.json`:
     "wago-plc": {
       "type": "http",
       "url": "http://localhost:6042/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-api-key>"
-      }
+      "headers": { "Authorization": "Bearer <your-api-key>" }
     }
   }
 }
 ```
 
-### Claude Desktop (Windows)
+See [Quick Start](#quick-start) for the full Docker setup.
 
-Claude Desktop uses stdio transport and cannot connect directly to an HTTP MCP server. A lightweight proxy bridges the gap.
+---
 
-Install prerequisites on the Windows machine:
+### Windows .exe (OT engineer laptop)
 
-```powershell
-python -m pip install fastmcp httpx
+Self-contained bundle. No Python, no package manager, no internet after first build.
+
+**What to ship to the engineer:**
+```
+wago-mcp-server.exe   ← the MCP server (start this first)
+wago-proxy.exe        ← Claude Desktop bridge (auto-launched)
+.env                  ← pre-filled: PLC IPs, password, API key
+claude_desktop_config.json  ← pre-filled: path to proxy.exe + matching key
 ```
 
-Create `wago_proxy.py`:
+**Build the .exe files** (run once, on any Windows machine with Python 3.11+):
 
-```python
-import os
-from fastmcp import Client
-from fastmcp.server import create_proxy
-
-api_key = os.environ.get("WAGO_MCP_API_KEY", "")
-url = "http://<MCP_SERVER_IP>:6042/mcp"
-headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-
-client = Client(url)
-mcp = create_proxy(client, name="wago-plc")
-mcp.run(transport="stdio")
+```bat
+deploy\windows\build.bat
 ```
 
-Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+Output lands in `dist\windows\`. Run `deploy\windows\setup.bat` in that folder to configure `.env` and get the Claude Desktop JSON snippet.
+
+**`%APPDATA%\Claude\claude_desktop_config.json`** (→ [`deploy/configs/claude-desktop-windows-exe.json`](deploy/configs/claude-desktop-windows-exe.json)):
 
 ```json
 {
   "mcpServers": {
     "wago-plc": {
-      "command": "python",
-      "args": ["C:\\path\\to\\wago_proxy.py"],
+      "command": "C:\\wago-mcp\\wago-proxy.exe",
       "env": {
-        "WAGO_MCP_API_KEY": "<your-api-key>"
+        "WAGO_MCP_URL": "http://localhost:6042/mcp",
+        "WAGO_MCP_API_KEY": "your-api-key"
       }
     }
   }
@@ -531,23 +550,97 @@ panel "Konnektoren"):
 
 ![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
-### OpenClaw / other agents
+---
+
+### uvx / PyPI (developer or power user)
+
+Runs the full server locally in stdio mode - no Docker, no proxy, no persistent process. Starts fresh each Claude session (PLCs re-register on connect, adds a few seconds).
+
+**Requires:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — a single binary, no Python install needed.
+
+**`%APPDATA%\Claude\claude_desktop_config.json`** (→ [`deploy/configs/claude-desktop-uvx.json`](deploy/configs/claude-desktop-uvx.json)):
 
 ```json
 {
   "mcpServers": {
     "wago-plc": {
-      "type": "url",
-      "url": "http://<MCP_SERVER_IP>:6042/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-api-key>"
+      "command": "uvx",
+      "args": ["wago-plc-mcp-server"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "WAGO_PLC_HOSTS": "192.168.1.10,192.168.1.11",
+        "DEFAULT_PLC_USERNAME": "admin",
+        "DEFAULT_PLC_PASSWORD": "wago",
+        "WAGO_TIMEOUT_SECONDS": "45",
+        "LOG_LEVEL": "WARNING"
       }
     }
   }
 }
 ```
 
+For a large fleet use `WAGO_PLC_HOSTS_FILE` pointing to a text file instead of listing IPs inline. Prefer Docker for fleets > 20 PLCs to avoid per-session re-registration.
+
+---
+
+### IDE (Cursor, VS Code)
+
+Same as uvx above but using the IDE's MCP config file instead of Claude Desktop.
+
+**Cursor** — `.cursor/mcp.json` in the project root (→ [`deploy/configs/cursor-and-vscode.json`](deploy/configs/cursor-and-vscode.json)):
+
+```json
+{
+  "servers": {
+    "wago-plc": {
+      "command": "uvx",
+      "args": ["wago-plc-mcp-server"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "WAGO_PLC_HOSTS": "192.168.1.10",
+        "DEFAULT_PLC_USERNAME": "admin",
+        "DEFAULT_PLC_PASSWORD": "wago"
+      }
+    }
+  }
+}
+```
+
+**VS Code + Copilot** — `.vscode/mcp.json`, same structure as Cursor.
+
+---
+
+### HTTP remote (ChatGPT API, n8n, OpenAI)
+
+Platforms that speak MCP over HTTP connect directly to the running server - no proxy, no uvx. Requires the Docker or persistent server deployment.
+
+**ChatGPT Desktop** — Settings → MCP Servers → Add:
+
+```
+URL:    http://plc-gateway.plant.internal:6042/mcp
+Header: Authorization: Bearer <your-api-key>
+```
+
+**OpenAI Responses API** (see [`deploy/configs/chatgpt-openai.md`](deploy/configs/chatgpt-openai.md)):
+
+```python
+response = client.responses.create(
+    model="gpt-4o",
+    tools=[{
+        "type": "mcp",
+        "server_url": "http://plc-gateway.plant.internal:6042/mcp",
+        "server_label": "wago-plc",
+        "headers": {"Authorization": "Bearer <your-api-key>"}
+    }],
+    input="List all PLCs and their firmware versions."
+)
+```
+
+**n8n** — HTTP Request node or MCP node pointing at `http://<host>:6042/mcp`.
+
 For legacy SSE transport set `TRANSPORT=sse` in `.env` and point at `/sse` instead of `/mcp`.
+
+---
 
 ### Recommended: install a project skill
 
