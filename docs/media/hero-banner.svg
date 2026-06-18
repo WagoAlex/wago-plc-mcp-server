@@ -1,34 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="wago-plc-mcp-server — Bridge WAGO PLCs to AI agents">
-  <!-- Background -->
-  <rect x="0" y="0" width="1200" height="300" fill="#1F2837"/>
-  <!-- WAGO green top accent -->
-  <rect x="0" y="0" width="1200" height="6" fill="#6EC800"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" aria-label="wago-plc-mcp-server — Bridge WAGO PLCs to AI agents" data-type-key="hero-banner">
+  
+  <rect x="0" y="0" width="1200" height="300" fill="#1F2837" data-type-key="rect1"/>
+  
+  <rect x="0" y="0" width="1200" height="6" fill="#6EC800" data-type-key="rect2"/>
 
-  <!-- Connector trace between the two icons (subtle, circuit-style) -->
-  <line x1="180" y1="98" x2="1033" y2="98" stroke="#6EC800" stroke-width="1.5" stroke-dasharray="3 9" opacity="0.4"/>
-  <circle cx="475" cy="98" r="4" fill="#6EC800" opacity="0.6"/>
-  <circle cx="738" cy="98" r="4" fill="#6EC800" opacity="0.6"/>
+  
+  <line x1="180" y1="98" x2="1033" y2="98" stroke="#6EC800" stroke-width="1.5" stroke-dasharray="3 9" opacity="0.4" data-type-key="line1"/>
+  <circle cx="475" cy="98" r="4" fill="#6EC800" opacity="0.6" data-type-key="circle1"/>
+  <circle cx="738" cy="98" r="4" fill="#6EC800" opacity="0.6" data-type-key="circle2"/>
 
-  <!-- Left icon: AI assistant (WAGO icon library, recolored) -->
-  <g transform="translate(90,60) scale(3.2)" fill="#6EC800">
-    <path d="m19.98 7.04.79-1.84 1.83-.79-1.83-.79-.79-1.84-.79 1.84-1.84.79 1.84.79.79 1.84Zm.61 6.87V8.94h-1.5v4.31H4.88l.03-8.94h10.82v-1.5H3.41V13.9l-2.22 7.27h21.63l-2.23-7.26Zm-15.87.84h14.59l1.48 4.93H3.21l1.51-4.93Z"/>
-    <path d="M15.73 16.48H8.12v1.5h7.61v-1.5ZM12.496 5.852l-2.38 5.594 1.38.587 2.38-5.594-1.38-.587ZM8.34 6.51 5.91 8.94l2.44 2.44 1.06-1.06-1.38-1.38L9.4 7.57 8.34 6.51Zm7.32 4.87 2.43-2.43-2.44-2.44-1.06 1.06 1.38 1.38-1.37 1.37 1.06 1.06Z"/>
+  
+  <g transform="translate(90,60) scale(3.2)" fill="#6EC800" data-type-key="g1">
+    <path d="m19.98 7.04.79-1.84 1.83-.79-1.83-.79-.79-1.84-.79 1.84-1.84.79 1.84.79.79 1.84Zm.61 6.87V8.94h-1.5v4.31H4.88l.03-8.94h10.82v-1.5H3.41V13.9l-2.22 7.27h21.63l-2.23-7.26Zm-15.87.84h14.59l1.48 4.93H3.21l1.51-4.93Z" data-type-key="path1"/>
+    <path d="M15.73 16.48H8.12v1.5h7.61v-1.5ZM12.496 5.852l-2.38 5.594 1.38.587 2.38-5.594-1.38-.587ZM8.34 6.51 5.91 8.94l2.44 2.44 1.06-1.06-1.38-1.38L9.4 7.57 8.34 6.51Zm7.32 4.87 2.43-2.43-2.44-2.44-1.06 1.06 1.38 1.38-1.37 1.37 1.06 1.06Z" data-type-key="path2"/>
   </g>
-  <text x="128" y="152" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#A5A8AF">AI Assistant</text>
+  <text x="128" y="152" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#A5A8AF" data-type-key="text1">AI Assistant</text>
 
-  <!-- Right icon: chip/processor (WAGO icon library, recolored) -->
-  <g transform="translate(1033,60) scale(3.2)" fill="#6EC800">
-    <path d="M14.081 8.919H8.918v5.164h5.163V8.919Zm-1.5 3.664h-2.163v-2.164h2.163v2.164Z"/>
-    <path d="M21 10.419v-1.5h-3.304V5.304h-3.615V2h-1.5v3.304h-2.163V2h-1.5v3.304H5.303v3.615H2v1.5h3.303v2.164H2v1.5h3.303v3.615h3.615v3.303h1.5v-3.303h2.163v3.303h1.5v-3.303h3.615v-3.615H21v-1.5h-3.304v-2.164H21Zm-4.804 5.779H6.803V6.805h9.393v9.393Z"/>
+  
+  <g transform="translate(1033,60) scale(3.2)" fill="#6EC800" data-type-key="g2">
+    <path d="M14.081 8.919H8.918v5.164h5.163V8.919Zm-1.5 3.664h-2.163v-2.164h2.163v2.164Z" data-type-key="path3"/>
+    <path d="M21 10.419v-1.5h-3.304V5.304h-3.615V2h-1.5v3.304h-2.163V2h-1.5v3.304H5.303v3.615H2v1.5h3.303v2.164H2v1.5h3.303v3.615h3.615v3.303h1.5v-3.303h2.163v3.303h1.5v-3.303h3.615v-3.615H21v-1.5h-3.304v-2.164H21Zm-4.804 5.779H6.803V6.805h9.393v9.393Z" data-type-key="path4"/>
   </g>
-  <text x="1072" y="152" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#A5A8AF">WAGO PLC Fleet</text>
+  <text x="1072" y="152" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#A5A8AF" data-type-key="text2">WAGO PLC Fleet</text>
 
-  <!-- Title -->
-  <text x="600" y="172" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF">wago-plc-mcp-server</text>
+  
+  <text x="600" y="172" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF" data-type-key="text3">wago-plc-mcp-server</text>
 
-  <!-- Tagline -->
-  <text x="600" y="210" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#A5A8AF">Bridge WAGO PLCs to AI agents — read · write · monitor. No custom code.</text>
+  
+  <text x="600" y="210" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#A5A8AF" data-type-key="text4">Bridge WAGO PLCs to AI agents - read · write · monitor. No custom code.</text>
 
-  <!-- Caption row -->
-  <text x="600" y="252" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#616A73">MCP Server · Docker · MPL-2.0</text>
+  
+  <text x="600" y="252" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#616A73" data-type-key="text5">MCP Server · Docker · MPL-2.0</text>
 </svg>
