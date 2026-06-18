@@ -1,9 +1,12 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-sources = ["src"]
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools]
+py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config", "audit_verify", "mcp_keygen"]
 
 [project]
 name = "wago-plc-mcp-server"

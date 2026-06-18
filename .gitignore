@@ -70,3 +70,5 @@ docs/.obsidian/
 /integrations/
 
 claude_desktop_config.json
+.firecrawl/
+src/*.egg-info/
