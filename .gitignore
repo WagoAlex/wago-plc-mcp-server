@@ -66,6 +66,9 @@ docs/.obsidian/
 # graphify knowledge-graph cache — regenerated locally, not release content
 /graphify-out/
 
+# Source video recordings — GIFs are committed instead
+docs/media/*.mp4
+
 # Connector/integration sketches — local only until ready to publish
 /integrations/
 
