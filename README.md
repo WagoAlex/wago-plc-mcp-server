@@ -325,7 +325,17 @@ You should see either a **hammer icon** in the toolbar showing 13 tools availabl
 
 ### Claude Code (terminal / IDE extensions)
 
-Add `.mcp.json` to your project root:
+**Easiest - one command, no config file:**
+
+```bash
+# If the server is already running (Docker or persistent):
+claude mcp add --transport http --header "Authorization: Bearer <your-api-key>" wago-plc http://<server-host>:6042/mcp
+
+# If you want uvx to run it inline (no server needed):
+claude mcp add wago-plc -e TRANSPORT=stdio -e WAGO_PLC_HOSTS=192.168.1.10 -e DEFAULT_PLC_PASSWORD=wago -- uvx wago-plc-mcp-server
+```
+
+**Or add `.mcp.json` to your project root manually:**
 
 ```json
 {
