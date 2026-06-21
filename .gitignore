@@ -58,7 +58,6 @@ docs/*-todos.md
 docs/tier*
 docs/integrations-plan.md
 CLAUDE.md
-AGENTS.md
 
 # Obsidian vault config (editor artifact, not repo content)
 docs/.obsidian/

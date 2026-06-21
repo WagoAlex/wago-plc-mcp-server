@@ -13,7 +13,7 @@ Ask an AI assistant to read sensor values, change configuration, trigger firmwar
 
 ---
 
-**Quick navigation:** [What it does](#new-to-wago-mcp-or-wda-start-here) · [What to ask it](#what-can-i-ask-it) · [Connecting Clients](#connecting-clients) · [Quick Start](#quick-start) · [FAQ](#frequently-asked-questions) · [Deployment Paths](#deployment-paths) · [Tool Reference](#tool-reference) · [Configuration](#configuration-reference)
+**Quick navigation:** [What it does](#new-to-wago-mcp-or-wda-start-here) · [What to ask it](#what-can-i-ask-it) · [Connecting Clients](#connecting-clients) · [Quick Start](#quick-start) · [FAQ](#frequently-asked-questions) · [Deployment Paths](#deployment-paths) · [GitOps](#gitops-write-gate) · [Tool Reference](#tool-reference) · [Configuration](#configuration-reference)
 
 ---
 
@@ -860,6 +860,95 @@ cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server  # contributors
 
 The assistant picks up installed skills automatically next session - no
 restart of the MCP server required.
+
+---
+
+## GitOps Write-Gate
+
+For production environments where every PLC configuration change needs a
+human-reviewed audit trail before it reaches the hardware, the server ships
+a **GitOps mode** inspired by ArgoCD: agents propose changes as YAML files,
+a human reviews them in a PR, and `apply.py` reconciles the live PLC on
+merge.
+
+### How it works
+
+```
+Agent proposes a config change
+         │
+         ▼ (GITOPS_MODE=1)
+set_parameters / invoke_method returns YAML instead of writing
+         │
+         ▼
+Agent commits YAML to wago-plc-config repo and opens a PR
+         │
+         ▼
+Human reviews and approves the PR
+         │
+         ▼
+CI runs: python scripts/apply.py plcs/192.168.42.118.yaml --execute
+         │
+         ▼
+Live PLC updated - ops files self-delete on success
+```
+
+### Enable GitOps mode
+
+```env
+GITOPS_MODE=1   # intercept writes; return YAML fragments
+GITOPS_MODE=0   # default: write directly (still fully audit-logged)
+```
+
+### Config YAML schema
+
+Two file types live in the `wago-plc-config` repo:
+
+**`plcs/<ip>.yaml` — desired steady state**
+
+```yaml
+plc_ip: 192.168.42.118
+managed_parameters:
+  0-0-ntpclient-enabled: true
+  0-0-ntpclient-configuredtimeservers:
+    - 192.168.42.2
+  0-0-snmp-enable: true
+  0-0-snmp-communities-1-name: wago-lab
+  0-0-snmp-location: Lab-Rack-42
+```
+
+`apply.py` reads the live PLC, diffs it against this file, and patches only
+the parameters that have drifted. Idempotent and safe to run repeatedly.
+
+**`ops/<id>.yaml` — one-shot action**
+
+```yaml
+id: b7d3e1f9
+proposed_at: 2026-06-21T10:00:00+00:00
+proposed_by: agent-claude-code
+plc_ip: 192.168.42.118
+action: invoke_method
+method_id: 0-0-ntpclient-updatetime
+arguments: {}
+```
+
+On successful `--execute` the file is deleted automatically. Failures
+preserve the file so the PR stays open for investigation.
+
+### Apply drift manually
+
+```bash
+# Show what would change — no writes
+python scripts/apply.py plcs/192.168.42.118.yaml
+
+# Apply drift to live PLC
+python scripts/apply.py plcs/192.168.42.118.yaml --execute
+
+# Invoke a one-shot method
+python scripts/apply.py ops/b7d3e1f9.yaml --execute
+```
+
+For the full YAML schema, all supported subsystems, and parameter ID
+reference, see [`docs/gitops/README.md`](docs/gitops/README.md).
 
 ---
 
