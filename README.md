@@ -618,6 +618,9 @@ python scripts/apply.py ops/b7d3e1f9.yaml --execute
 Full parameter ID reference with YAML examples for every subsystem:
 [`docs/gitops/README.md`](docs/gitops/README.md)
 
+The config repo that receives these YAML fragments and runs `apply.py` via CI:
+[github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
+
 ### Safety gates - guarding against a rogue agent
 
 The risk with giving an AI agent write access to industrial controllers is not
@@ -636,7 +639,10 @@ in code and **cannot be overridden by the agent**:
 The intended path for any high-consequence action is therefore a **human-reviewed
 PR plus an audit-log entry** - not an autonomous tool call. A denial is the
 system working as designed. Full details and a dry-run walkthrough:
-[`docs/gitops/README.md` → Safety model](docs/gitops/README.md#safety-model--three-independent-gates).
+[`docs/gitops/README.md` → Safety model](docs/gitops/README.md#safety-model--three-independent-gates)
+
+Step-by-step guide for reviewers (GitHub UI and CLI):
+[github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
 
 ---
 
