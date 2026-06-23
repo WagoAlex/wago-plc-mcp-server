@@ -81,5 +81,8 @@ src/*.egg-info/
 # local dev compose override
 docker-compose.dev.yml
 
-# test suite kept local, out of repo
-/tests/
+# test suite kept local, out of repo — gitops unit tests are the exception
+/tests/*
+!/tests/__init__.py
+!/tests/test_gitops.py
+!/tests/test_apply.py
