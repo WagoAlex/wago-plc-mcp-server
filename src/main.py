@@ -3,7 +3,6 @@
 12 tools, compact responses, smart pre-validation.
 """
 import asyncio
-import hashlib
 import importlib.metadata
 import json
 import os
@@ -11,7 +10,6 @@ import re
 import secrets as _secrets
 import time
 from collections import deque
-from datetime import datetime, timezone
 from difflib import get_close_matches
 from pathlib import Path
 
@@ -24,6 +22,8 @@ from mcp.server.fastmcp.prompts import base
 from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
+from audit import GENESIS, build_entry, read_prev_hash
+from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
 
 # ───────────────────────── Bootstrap ─────────────────────────
 
@@ -84,52 +84,39 @@ FIND_LIMIT_MAX = 255
 FIND_LIMIT_DEFAULT = 20
 
 _AGENT_ID: str = "unknown"
-_AUDIT_PREV_HASH: str = "0" * 64  # genesis sentinel; seeded from last log line on startup
+_AUDIT_PREV_HASH: str = GENESIS  # seeded from last log line on startup
+_GITOPS_MODE: bool = os.getenv("GITOPS_MODE", "").lower() in {"1", "true"}
+
+# ───────────────────────── Safety gates ─────────────────────────
+# See safety.py + docs/gitops/README.md "Safety model". Read-only hosts merge the
+# WAGO_READONLY_HOSTS env with any `# readonly`-tagged lines in the fleet file.
+_ALLOWED_METHODS: frozenset[str] = parse_allowed_methods(os.getenv("WAGO_ALLOW_METHODS"))
+_READONLY_HOSTS: frozenset[str] = compute_readonly_hosts()
+
+# Make a deliberately-opened dangerous path loud at startup.
+for _m in _ALLOWED_METHODS:
+    if is_dangerous_method(_m):
+        logger.warning(f"[safety] WAGO_ALLOW_METHODS re-enables DANGEROUS method for live use: {_m}")
+if _READONLY_HOSTS:
+    logger.info(f"[safety] Read-only PLCs (writes/invokes refused): {sorted(_READONLY_HOSTS)}")
 
 
 # ───────────────────────── Helpers ─────────────────────────
 
 def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
     global _AUDIT_PREV_HASH
-    entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "action": action,
-        "plc": plc_ip,
-        "agent": _AGENT_ID,
-        "result": result,
-        "prev": _AUDIT_PREV_HASH,
-        **details,
-    }
-    line = json.dumps(entry, default=str)
-    _AUDIT_PREV_HASH = hashlib.sha256(line.encode()).hexdigest()
+    line, _AUDIT_PREV_HASH = build_entry(action, plc_ip, _AGENT_ID, result, _AUDIT_PREV_HASH, details)
     logger.log("AUDIT", line)
 
 
 def _seed_audit_hash(audit_log_path: str) -> None:
-    """Seed _AUDIT_PREV_HASH from the last entry of an existing audit log.
-
-    Reads only the tail of the file (4 KB) — safe on large logs.
-    On any error, leaves _AUDIT_PREV_HASH at genesis and logs a warning.
-    """
+    """Seed _AUDIT_PREV_HASH from the last entry of an existing audit log (see audit.read_prev_hash)."""
     global _AUDIT_PREV_HASH
-    try:
-        path = Path(audit_log_path)
-        if not path.exists():
-            return
-        with path.open("rb") as f:
-            f.seek(0, 2)
-            tail_size = min(f.tell(), 4096)
-            f.seek(-tail_size, 2)
-            tail = f.read().decode("utf-8", errors="replace")
-        lines = [ln.strip() for ln in tail.splitlines() if ln.strip()]
-        if not lines:
-            return
-        last_line = lines[-1]
-        json.loads(last_line)  # reject non-JSON (e.g. partial write at rotation boundary)
-        _AUDIT_PREV_HASH = hashlib.sha256(last_line.encode()).hexdigest()
+    _AUDIT_PREV_HASH = read_prev_hash(audit_log_path)
+    if _AUDIT_PREV_HASH != GENESIS:
         logger.info("[audit] Hash chain seeded from existing audit log")
-    except Exception as e:
-        logger.warning(f"[audit] Could not seed hash chain from {audit_log_path}: {e} — starting from genesis")
+    elif Path(audit_log_path).exists():
+        logger.warning(f"[audit] {audit_log_path} exists but yielded genesis — empty/corrupt/partial write; starting fresh")
 
 
 def _read_secret(name: str) -> str | None:
@@ -621,6 +608,10 @@ async def set_parameters(
     if err:
         return err
 
+    if plc_ip in _READONLY_HOSTS:
+        _audit_log("set_parameters", plc_ip, {"params": parameters}, "refused: read-only host")
+        return {"error": f"PLC {plc_ip} is read-only (WAGO_READONLY_HOSTS / fleet.txt '# readonly'); writes refused."}
+
     unknown = [p.get("id") for p in parameters if p.get("id") not in plc.parameters]
     if unknown:
         return {"error": f"Unknown parameter IDs: {unknown}"}
@@ -628,6 +619,10 @@ async def set_parameters(
     read_only = [p["id"] for p in parameters if p["id"] not in plc.param_writeable]
     if read_only:
         return {"error": f"Read-only parameter IDs (cannot be set): {read_only}"}
+
+    if _GITOPS_MODE:
+        from gitops import desired_state_fragment
+        return desired_state_fragment(plc_ip, parameters)
 
     try:
         result = await plc.client.set_parameters(parameters)
@@ -703,6 +698,29 @@ async def invoke_method(
         return err
     if method_id not in plc.methods:
         return {"error": f"Unknown method '{method_id}'"}
+
+    if plc_ip in _READONLY_HOSTS:
+        _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "refused: read-only host")
+        return {"error": f"PLC {plc_ip} is read-only (WAGO_READONLY_HOSTS / fleet.txt '# readonly'); method invocation refused."}
+
+    # Gate 1: a dangerous method (reboot/reset/firmware) is never executed
+    # autonomously. In GitOps mode it may be *proposed* for human PR approval;
+    # in live mode it is denied unless explicitly allowlisted.
+    dangerous = is_dangerous_method(method_id) and method_id not in _ALLOWED_METHODS
+
+    if _GITOPS_MODE:
+        from gitops import ops_fragment
+        if dangerous:
+            _audit_log("invoke_method.proposed", plc_ip,
+                       {"method": method_id, "args": arguments or {}, "danger": True}, "proposed-critical")
+        return ops_fragment(plc_ip, method_id, arguments, _AGENT_ID, dangerous=dangerous)
+
+    if dangerous:
+        _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "denied: dangerous method")
+        return {"error": (
+            f"Method '{method_id}' is denied by safety policy (dangerous; not in WAGO_ALLOW_METHODS). "
+            f"Use GitOps mode for a human-reviewed path, or add the exact method ID to WAGO_ALLOW_METHODS."
+        )}
 
     try:
         run = await plc.client.invoke_method(method_id, arguments, sync=wait)
@@ -855,6 +873,19 @@ def wago_assistant(query: str) -> list[base.Message]:
         "  Use this instead of looping get_parameter when querying the same parameter across multiple PLCs.",
         "",
         "**Error contract**: every tool returns `{'error': str}` on failure. On success, no `error` key.",
+        "",
+        "**GitOps mode** (when GITOPS_MODE=true on the server):",
+        "- `set_parameters` and `invoke_method` return `{status: 'proposed', config_file, desired_state_yaml/ops_yaml, next_step}`.",
+        "- Do NOT call WDA directly. Instead: commit the returned YAML to wago-plc-config/<config_file> and open a PR.",
+        "- Use the GitHub MCP tool to create/update the file and open the PR.",
+        "- For set_parameters: merge new keys into plcs/<ip>.yaml under `managed_parameters` (preserve existing keys).",
+        "- For invoke_method: create ops/<id>.yaml with the returned ops_yaml (one-shot, deleted after CI applies it).",
+        "",
+        "**Safety gates (cannot be bypassed by an agent):**",
+        "- Read-only PLCs (WAGO_READONLY_HOSTS / fleet '# readonly') refuse all writes/invokes in every mode.",
+        "- Dangerous methods (reboot/restart/factoryreset/firmware/format) are NEVER run autonomously.",
+        "  Live mode: denied unless allowlisted. GitOps mode: proposed with `requires_human: CRITICAL` —",
+        "  a human must set `approved_by` in the ops file; do NOT fill it yourself.",
     ]
     return [base.SystemMessage("\n".join(instructions)), base.UserMessage(query)]
 

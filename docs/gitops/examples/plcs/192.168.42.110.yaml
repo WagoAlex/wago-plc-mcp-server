@@ -1,0 +1,10 @@
+# Desired steady-state for one PLC. apply.py reads the live values, diffs against
+# this, and PATCHes only what has drifted. Rollback = git revert this change.
+#   Dry-run:  python scripts/apply.py docs/gitops/examples/plcs/192.168.42.110.yaml
+#   Apply:    python scripts/apply.py docs/gitops/examples/plcs/192.168.42.110.yaml --execute
+plc_ip: 192.168.42.110
+managed_parameters:
+  0-0-ntpclient-enabled: true
+  0-0-ntpclient-configuredtimeservers:
+    - 192.168.42.2
+  0-0-snmp-enable: false

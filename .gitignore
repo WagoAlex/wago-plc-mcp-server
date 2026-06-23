@@ -74,3 +74,6 @@ docs/media/*.mp4
 claude_desktop_config.json
 .firecrawl/
 src/*.egg-info/
+
+# serena MCP tool state
+.serena/

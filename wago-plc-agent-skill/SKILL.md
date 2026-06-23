@@ -108,6 +108,24 @@ across more than ~3 parameters.
   for a chat UI, since a blocked synchronous call can stall an entire
   orchestration step.
 
+## Safety gates you cannot bypass
+
+The server enforces guardrails in code — they are not suggestions:
+
+- **Read-only PLCs** reject `set_parameters` and `invoke_method` outright
+  (`{"error": "... read-only ..."}`). Do not retry; the host is deliberately
+  frozen. Surface it to the operator instead.
+- **Dangerous methods** (IDs containing `reboot`/`restart`/`factory`/`firmware`/
+  `format`) are **denied** in live mode unless the operator allowlisted that
+  exact ID. Do not try to work around a denial.
+- In **GitOps mode** a dangerous method returns `status: proposed` with
+  `requires_human: CRITICAL` and an empty `approved_by`. Commit the YAML and open
+  the PR, but **never fill `approved_by` yourself** — a human reviewer sets it.
+  `apply.py` refuses to run the op until then.
+
+This is the intended path for high-consequence actions: human-reviewed PR +
+audit log. A denial is the system working, not a bug to route around.
+
 ## Watchlist lifecycle
 
 ```

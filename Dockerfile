@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock* ./
 
 # Resolve + install production deps system-wide (single-process container, no venv needed)
-RUN uv lock && uv pip install --system --no-cache-dir -e .
+# src/ must exist for setuptools editable install; COPY src/ below fills in the real files
+RUN mkdir -p src && uv lock && uv pip install --system --no-cache-dir -e .
 
 # Copy the full application package
 COPY src/ ./src/

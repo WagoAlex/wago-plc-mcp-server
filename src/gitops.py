@@ -100,8 +100,15 @@ def desired_state_fragment(plc_ip: str, parameters: list[dict]) -> dict:
     }
 
 
-def ops_fragment(plc_ip: str, method_id: str, arguments: dict, agent_id: str) -> dict:
-    """Return the YAML the agent should commit to ops/<id>.yaml."""
+def ops_fragment(
+    plc_ip: str, method_id: str, arguments: dict, agent_id: str, dangerous: bool = False
+) -> dict:
+    """Return the YAML the agent should commit to ops/<id>.yaml.
+
+    dangerous=True (reboot/reset/firmware) adds a CRITICAL flag and an empty
+    `approved_by` field that a human MUST fill during PR review — apply.py refuses
+    to execute the op until it is set.
+    """
     op_id = uuid.uuid4().hex[:8]
     data = {
         "id": op_id,
@@ -112,7 +119,10 @@ def ops_fragment(plc_ip: str, method_id: str, arguments: dict, agent_id: str) ->
         "method_id": method_id,
         "arguments": arguments or {},
     }
-    return {
+    if dangerous:
+        data["requires_human"] = "CRITICAL"
+        data["approved_by"] = ""  # human fills this during PR review
+    out = {
         "status": "proposed",
         "config_file": f"ops/{op_id}.yaml",
         "ops_yaml": yaml.dump(data, sort_keys=False),
@@ -121,3 +131,10 @@ def ops_fragment(plc_ip: str, method_id: str, arguments: dict, agent_id: str) ->
             f"apply.py will invoke the method on merge and delete the file."
         ),
     }
+    if dangerous:
+        out["warning"] = (
+            "CRITICAL: dangerous method (reboot/reset/firmware). apply.py will REFUSE "
+            "to execute until a human sets `approved_by` in the ops file. Do not fill it "
+            "yourself — a human reviewer must approve the PR."
+        )
+    return out
