@@ -1,0 +1,14 @@
+# One-shot operation, NON-CRITICAL. ntpclient-updatetime is a safe method, so it
+# carries no requires_human / approved_by gate - apply.py runs it directly on merge.
+# Contrast with example-reboot.yaml (a dangerous method that apply.py refuses until
+# a human sets approved_by).
+#
+#   Dry-run (no change): python scripts/apply.py docs/gitops/examples/ops/example-ntp-sync.yaml
+#   Apply:               python scripts/apply.py docs/gitops/examples/ops/example-ntp-sync.yaml --execute
+id: example2
+proposed_at: 2026-06-23T10:00:00+00:00
+proposed_by: key-abc12345
+plc_ip: 192.168.42.110
+action: invoke_method
+method_id: 0-0-ntpclient-updatetime
+arguments: {}
