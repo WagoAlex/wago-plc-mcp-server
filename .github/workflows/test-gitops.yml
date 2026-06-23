@@ -1,0 +1,37 @@
+name: GitOps Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/gitops.py
+      - src/safety.py
+      - scripts/apply.py
+      - tests/**
+      - Dockerfile
+      - pyproject.toml
+  pull_request:
+    paths:
+      - src/gitops.py
+      - src/safety.py
+      - scripts/apply.py
+      - tests/**
+      - Dockerfile
+      - pyproject.toml
+
+jobs:
+  test:
+    name: Unit tests (no PLC)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev image
+        run: docker build --target dev -t wago-plc-mcp-server-dev .
+
+      - name: Run GitOps tests
+        run: |
+          docker run --rm wago-plc-mcp-server-dev \
+            pytest tests/ -v --tb=short \
+            -m "not live and not mutate and not soak"

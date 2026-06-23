@@ -31,5 +31,6 @@ FROM base AS dev
 # Install dev dependency group (pytest, respx, pytest-asyncio, pytest-cov, pyyaml, …)
 RUN uv pip install --system --no-cache-dir --group dev
 
-# Copy test suite into the image
+# Copy test suite and reconciler script into the image
 COPY tests/ ./tests/
+COPY scripts/ ./scripts/
