@@ -24,6 +24,18 @@ def _client():
     return WDAClient
 
 
+def _audit(action: str, plc_ip: str, result: str, **details) -> None:
+    """Append an audit record if AUDIT_LOG_FILE is set; always harmless if not."""
+    path = os.getenv("AUDIT_LOG_FILE", "").strip()
+    if not path:
+        return
+    from audit import append_audit  # noqa: PLC0415 — local import after sys.path patch
+    try:
+        append_audit(path, action, plc_ip, "apply.py", result, **details)
+    except Exception as e:  # never let logging failure abort a reconcile
+        print(f"[audit] WARNING: could not write audit record: {e}", file=sys.stderr)
+
+
 def _coerce(desired, current):
     """Cast desired value to the same type as the live PLC value before PATCH."""
     if isinstance(current, bool):
@@ -38,9 +50,16 @@ def _coerce(desired, current):
 
 async def apply_desired_state(data: dict, execute: bool) -> int:
     """Read current PLC state, diff against desired, apply only drift. Returns exit code."""
+    from safety import compute_readonly_hosts  # noqa: PLC0415 — local import after sys.path patch
+
     WDAClient = _client()
     plc_ip = data["plc_ip"]
     desired: dict = data["managed_parameters"]
+
+    if plc_ip in compute_readonly_hosts():
+        print(f"[{plc_ip}] REFUSED: read-only host (WAGO_READONLY_HOSTS / fleet '# readonly').", file=sys.stderr)
+        _audit("apply_desired_state", plc_ip, "refused: read-only host")
+        return 1
 
     client = WDAClient(
         plc_ip,
@@ -75,6 +94,7 @@ async def apply_desired_state(data: dict, execute: bool) -> int:
         patches = [{"id": k, "value": _coerce(v, current.get(k))} for k, (_, v) in drift.items()]
         await client.set_parameters(patches)
         print(f"[{plc_ip}] Applied {len(patches)} change(s).")
+        _audit("apply_desired_state", plc_ip, "ok", changed=[p["id"] for p in patches])
         return 0
     except Exception as e:
         print(f"[{plc_ip}] ERROR: {e}", file=sys.stderr)
@@ -85,10 +105,32 @@ async def apply_desired_state(data: dict, execute: bool) -> int:
 
 async def apply_ops(data: dict, path: Path, execute: bool) -> int:
     """Invoke a one-shot method and delete the ops file on success. Returns exit code."""
+    from safety import compute_readonly_hosts, is_dangerous_method  # noqa: PLC0415 — local import after sys.path patch
+
     WDAClient = _client()
     plc_ip = data["plc_ip"]
     method_id = data["method_id"]
     arguments = data.get("arguments") or {}
+    # approved_by: a human sets it during PR review. WAGO_APPROVED_BY lets the CI
+    # pipeline inject the merging reviewer's identity so it can't be forged in the
+    # agent-authored YAML. Either source counts; both empty = refused.
+    approved_by = os.getenv("WAGO_APPROVED_BY", "").strip() or str(data.get("approved_by", "")).strip()
+
+    if plc_ip in compute_readonly_hosts():
+        print(f"[{plc_ip}] REFUSED: read-only host (WAGO_READONLY_HOSTS / fleet '# readonly').", file=sys.stderr)
+        _audit("apply_ops", plc_ip, "refused: read-only host", method=method_id)
+        return 1
+
+    # Gate 3: a dangerous op must carry a human-set approved_by (filled during PR
+    # review). The agent's proposal never fills it, so an unreviewed reboot is refused.
+    if is_dangerous_method(method_id) and not approved_by:
+        print(
+            f"[{plc_ip}] REFUSED: '{method_id}' is a dangerous method with no `approved_by`. "
+            f"A human must set approved_by in the ops file before this can run.",
+            file=sys.stderr,
+        )
+        _audit("apply_ops", plc_ip, "refused: dangerous, no approved_by", method=method_id)
+        return 1
 
     print(f"[{plc_ip}] invoke_method: {method_id}  args={arguments}")
 
@@ -105,6 +147,7 @@ async def apply_ops(data: dict, path: Path, execute: bool) -> int:
     try:
         result = await client.invoke_method(method_id, arguments, sync=True)
         print(f"[{plc_ip}] {result}")
+        _audit("apply_ops", plc_ip, "ok", method=method_id, args=arguments, approved_by=approved_by)
         path.unlink()
         print(f"Deleted {path}")
         return 0

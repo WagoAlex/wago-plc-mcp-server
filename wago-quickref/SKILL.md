@@ -178,6 +178,25 @@ LOG_FILE=/app/mcp_server.log
 | `read_watchlist` | Read watchlist values (resets timeout) | Yes |
 | `delete_watchlist` | Free watchlist before timeout | Yes |
 
+### Safety gates (`src/safety.py`) — enforced before every write/invoke
+
+Three code-level gates defend against a rogue/hallucinating agent. None can be
+talked out of by the agent.
+
+1. **Dangerous-method denylist** — IDs whose segments start with `reboot`,
+   `restart`, `factory`, `firmware`, `format` (`is_dangerous_method`, ASCII-folded
+   + segment-matched, so `firmware-update` and zero-width tricks both match).
+   - Live mode: **denied** unless the exact ID is in `WAGO_ALLOW_METHODS`.
+   - GitOps mode: **proposed** with `requires_human: CRITICAL` + empty `approved_by`.
+2. **Per-PLC read-only** — `WAGO_READONLY_HOSTS` (CSV) or a `# readonly` tag in
+   `WAGO_PLC_HOSTS_FILE`. Listed PLCs reject `set_parameters` AND `invoke_method`
+   in every mode. Computed by `compute_readonly_hosts()`, shared with `apply.py`.
+3. **`apply.py` human-gate** — a dangerous op needs a non-empty `approved_by`
+   (from the YAML or `WAGO_APPROVED_BY` CI env) or it refuses; every executed
+   reconcile is appended to the audit chain (`src/audit.py`).
+
+See `docs/gitops/README.md` "Safety model" and `tests/test_safety.py`.
+
 ### `get_parameters_bulk` — fleet-wide parallel reads
 
 Reduces N tool calls to 1. Use whenever reading the same parameter from multiple PLCs.

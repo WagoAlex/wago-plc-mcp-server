@@ -83,6 +83,14 @@ You don't need to memorize parameter IDs — `find_parameters` and
 - Some actions take time (firmware updates, etc.). Use `invoke_method` with
   `wait=False` for those, then `get_method_run` to check progress instead of
   blocking the conversation.
+- The server has hard safety limits you can't override, and that's by design:
+  some PLCs are marked read-only and will refuse any change, and high-risk
+  actions like reboots or firmware updates are blocked unless an operator has
+  explicitly enabled them (or routed through a human-approved change process).
+  If you hit one of these, tell the user plainly that the action is gated for
+  safety and who can authorize it — don't try to find a way around it. On a
+  production line a badly-timed reboot can damage equipment or worse, so this
+  guardrail is intentional.
 
 ## Watchlists — efficient repeated checking
 

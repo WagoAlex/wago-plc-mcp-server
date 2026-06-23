@@ -571,6 +571,26 @@ python scripts/apply.py ops/b7d3e1f9.yaml --execute
 Full parameter ID reference with YAML examples for every subsystem:
 [`docs/gitops/README.md`](docs/gitops/README.md)
 
+### Safety gates — guarding against a rogue agent
+
+The risk with giving an AI agent write access to industrial controllers is not
+just "it might delete something" — it's that an agent can go off-script
+(hallucination, prompt injection, a bug) and take a high-consequence action you
+never wanted. On a production line, a config change with side effects or a
+badly-timed reboot can mean equipment damage or worse. These gates are enforced
+in code and **cannot be overridden by the agent**:
+
+| Gate | What it does | Configure |
+|------|--------------|-----------|
+| **Read-only PLCs** | Listed controllers reject *all* writes and method calls, in every mode | `WAGO_READONLY_HOSTS=ip,ip` or a `# readonly` tag per line in the fleet file |
+| **Dangerous-method denylist** | Reboot / restart / factory-reset / firmware / format are denied in live mode unless explicitly allowlisted | `WAGO_ALLOW_METHODS=<exact-method-id>` to re-enable one |
+| **Human approval for dangerous ops** | In GitOps mode these become a PR flagged `requires_human: CRITICAL`; `apply.py` refuses to run until a human sets `approved_by` | set `approved_by` during PR review, or inject `WAGO_APPROVED_BY` from CI |
+
+The intended path for any high-consequence action is therefore a **human-reviewed
+PR plus an audit-log entry** — not an autonomous tool call. A denial is the
+system working as designed. Full details and a dry-run walkthrough:
+[`docs/gitops/README.md` → Safety model](docs/gitops/README.md#safety-model--three-independent-gates).
+
 ---
 
 ## Security

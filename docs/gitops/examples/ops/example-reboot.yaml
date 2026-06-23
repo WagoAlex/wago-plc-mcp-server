@@ -1,0 +1,16 @@
+# One-shot operation proposed by an agent. A DANGEROUS method (reboot) carries
+# requires_human: CRITICAL and an empty approved_by. apply.py REFUSES to execute
+# until a human reviewer sets approved_by during PR review — the agent never fills it.
+#
+#   Refused (as committed by the agent):
+#     python scripts/apply.py docs/gitops/examples/ops/example-reboot.yaml --execute
+#   Allowed only after a human edits approved_by below to their name/identity.
+id: example1
+proposed_at: 2026-06-23T10:00:00+00:00
+proposed_by: key-abc12345
+plc_ip: 192.168.42.110
+action: invoke_method
+method_id: 0-0-device-reboot
+arguments: {}
+requires_human: CRITICAL
+approved_by: ""        # <-- a human sets this during PR review; apply.py refuses while empty

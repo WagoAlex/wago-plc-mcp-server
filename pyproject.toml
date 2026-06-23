@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 "" = "src"
 
 [tool.setuptools]
-py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config", "audit_verify", "mcp_keygen"]
+py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config", "audit_verify", "mcp_keygen", "gitops", "audit", "safety"]
 
 [project]
 name = "wago-plc-mcp-server"
-version = "2.1.1"
+version = "2.1.4"
 description = "MCP server for integrating WAGO PLCs with the WDx REST API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "loguru>=0.7.2",
     "uvicorn>=0.27.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

@@ -76,6 +76,25 @@ TRANSPORT=streamable-http
 # WAGO_TLS_CA=true
 # WAGO_TLS_CA=/run/secrets/wago_ca.pem
 
+# ── Safety gates (defense in depth vs. a rogue/hallucinating agent) ──
+# Read-only PLCs reject set_parameters AND invoke_method in EVERY mode (live or
+# GitOps). Use this to freeze production-critical units. Also settable per line in
+# WAGO_PLC_HOSTS_FILE via a "# readonly" comment: 192.168.42.118  # readonly line A
+# WAGO_READONLY_HOSTS=192.168.42.118,192.168.42.119
+#
+# Dangerous methods (reboot/restart/factoryreset/firmwareupdate/format) are denied
+# in live mode and flagged CRITICAL (human-approval required) in GitOps mode. To
+# re-enable a specific one for direct live use, list its EXACT method ID here:
+# WAGO_ALLOW_METHODS=0-0-some-safe-restart-method
+
+# ── GitOps write-gate ──
+# When true, set_parameters and invoke_method return a YAML fragment instead of
+# calling the PLC. The agent commits the YAML to wago-plc-config and opens a PR.
+# apply.py diffs current PLC state against desired and applies only drift.
+# Rollback = git revert. Drift check = python scripts/apply.py <file> (no --execute).
+# Requires a self-hosted CI runner with WDA network access (SASE-connected segment).
+# GITOPS_MODE=false
+
 # ── Optional tuning ──
 # Connection timeout per PLC HTTP request, in seconds (default 5)
 WAGO_TIMEOUT_SECONDS=15

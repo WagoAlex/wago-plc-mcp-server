@@ -382,3 +382,61 @@ Live PLC updated; ops files self-delete
 
 Set `GITOPS_MODE=0` (default) for direct writes — suitable for lab/dev
 environments where every write still goes to the tamper-evident audit log.
+
+---
+
+## Safety model — three independent gates
+
+The threat is not "an agent deletes a database." It is an agent that goes rogue
+(hallucination, prompt injection, a bug) and reboots or reconfigures a PLC at the
+wrong moment. In some production lines that means equipment damage or worse. These
+three gates are enforced in code (`src/safety.py`, `src/main.py`, `scripts/apply.py`)
+and **cannot be talked out of by the agent**.
+
+### Gate 1 — Dangerous-method denylist (default-deny)
+
+Methods whose ID contains `reboot`, `restart`, `factoryreset`, `firmwareupdate`,
+or `format` are treated as dangerous.
+
+| Mode | Behaviour |
+|---|---|
+| Live (`GITOPS_MODE=0`) | **Denied** unless the exact method ID is in `WAGO_ALLOW_METHODS`. |
+| GitOps (`GITOPS_MODE=1`) | **Proposed**, but the ops YAML is flagged `requires_human: CRITICAL` with an empty `approved_by`, and the proposal is audit-logged. |
+
+The list is deliberately tight (bare `reset` is excluded — it would catch benign
+parameters). Widen it in `src/safety.py` or grant a single method via
+`WAGO_ALLOW_METHODS`.
+
+### Gate 2 — Per-PLC read-only
+
+A PLC listed in `WAGO_READONLY_HOSTS` (CSV), or tagged `# readonly` on its line in
+`WAGO_PLC_HOSTS_FILE`, rejects **both** `set_parameters` and `invoke_method` in
+**every** mode. This is the hard "never touch this unit" switch for production.
+
+```env
+WAGO_READONLY_HOSTS=192.168.42.118,192.168.42.119
+```
+```text
+# fleet.txt
+192.168.42.118  # readonly prod line A
+```
+
+### Gate 3 — `apply.py` human-gate + audit
+
+A human-approved, logged path is the accepted route for dangerous actions, so
+`apply.py` does not block them — it enforces that a human approved them:
+
+- A dangerous op is **refused** unless its YAML carries a non-empty `approved_by`.
+  The agent's proposal never fills that field; a reviewer sets it during PR review.
+- Every executed reconcile (`apply_desired_state`, `apply_ops`) appends a record
+  to the tamper-evident audit chain when `AUDIT_LOG_FILE` is set.
+
+### Trying it out (dry-run, no PLC changes)
+
+```bash
+# Desired-state drift check — prints diff, applies nothing:
+python scripts/apply.py docs/gitops/examples/plcs/192.168.42.110.yaml
+
+# Dangerous op as the agent committed it — refused (approved_by empty):
+python scripts/apply.py docs/gitops/examples/ops/example-reboot.yaml --execute
+```
