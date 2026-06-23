@@ -77,3 +77,9 @@ src/*.egg-info/
 
 # serena MCP tool state
 .serena/
+
+# local dev compose override
+docker-compose.dev.yml
+
+# test suite kept local, out of repo
+/tests/
