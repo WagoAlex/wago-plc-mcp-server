@@ -306,6 +306,52 @@ Requires firmware **build ≥ 28 (FW28)**. Tested up to **04.09.01 (FW31)**.
 
 ---
 
+## How reads and writes work
+
+Every operation an agent can perform falls into exactly one of three classes.
+These are mutually exclusive and cover everything the server can do - there is
+no fourth kind of action.
+
+| Class | Tools | Changes the PLC? |
+|---|---|---|
+| **Read** | `list_plcs`, `describe_plc`, `find_parameters`, `get_parameter`, `get_parameters_bulk`, `find_methods`, `get_method`, `get_method_run`, `create_watchlist`, `read_watchlist`, `delete_watchlist`, `get_plc_audit_log` | No |
+| **Write a parameter** | `set_parameters` | Yes - changes a stored config value |
+| **Invoke a method** | `invoke_method` | Yes - triggers an action (NTP sync, reboot, firmware update, ...) |
+
+### Standard behavior (default config: live mode, no read-only hosts)
+
+- **Reads are always allowed.** They have no side effects and are never gated.
+- **Parameter writes are allowed when the parameter is writeable.** The server
+  pre-checks writeability from its cache and refuses values the firmware marks
+  read-only for that device/firmware, before any HTTP call reaches the PLC.
+- **Safe method calls are allowed.** Anything that is not on the dangerous list
+  below runs directly.
+- **Dangerous methods are denied.** Method IDs whose segments start with
+  `reboot`, `restart`, `factory`, `firmware`, or `format` are refused unless you
+  explicitly allowlist the exact ID.
+
+### When a write or method call is allowed
+
+The outcome is decided by three independent conditions. Read-only status takes
+precedence over everything else; otherwise the server mode decides.
+
+| Condition | Read | `set_parameters` | Safe `invoke_method` | Dangerous `invoke_method` |
+|---|---|---|---|---|
+| **Read-only PLC** (`WAGO_READONLY_HOSTS` or fleet `# readonly`) - any mode | Allowed | **Refused** | **Refused** | **Refused** |
+| **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Denied** unless ID in `WAGO_ALLOW_METHODS` |
+| **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a PR YAML fragment (no direct write) | Returns a PR YAML fragment | Returns a PR YAML flagged `requires_human: CRITICAL`; `apply.py` refuses to run it until a human sets `approved_by` |
+
+Read it top-down: if the PLC is read-only, stop there - nothing is written. If
+not, the active mode determines whether a write happens directly (live) or
+becomes a reviewed pull request (GitOps).
+
+Every write and every method call - allowed, refused, or denied - is recorded
+in the tamper-evident [audit log](#audit-log). For the rationale behind the
+dangerous-method and read-only gates, see
+[Safety gates](#safety-gates---guarding-against-a-rogue-agent).
+
+---
+
 ## Production deployment
 
 ### Deployment options
