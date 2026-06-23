@@ -434,9 +434,16 @@ A human-approved, logged path is the accepted route for dangerous actions, so
 ### Trying it out (dry-run, no PLC changes)
 
 ```bash
-# Desired-state drift check — prints diff, applies nothing:
+# NON-CRITICAL desired-state drift check - prints diff, applies nothing:
 python scripts/apply.py docs/gitops/examples/plcs/192.168.42.110.yaml
 
-# Dangerous op as the agent committed it — refused (approved_by empty):
+# NON-CRITICAL safe method (NTP sync) - ungated, runs directly on --execute:
+python scripts/apply.py docs/gitops/examples/ops/example-ntp-sync.yaml
+
+# CRITICAL op as the agent committed it - refused (approved_by empty):
 python scripts/apply.py docs/gitops/examples/ops/example-reboot.yaml --execute
 ```
+
+All four paths (non-critical config, non-critical method, critical-refused,
+critical-approved) are verified against a live PLC; the critical-approved path
+opens the gate only once a human sets `approved_by`.
