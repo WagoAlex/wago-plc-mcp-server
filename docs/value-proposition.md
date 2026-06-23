@@ -1,107 +1,75 @@
 # wago-plc-mcp-server - Value Proposition
 
-> Two-slide deck. Slide 1 = the problem and the solution. Slide 2 = how it
-> works and what it gives you. Speaker notes follow each slide.
-
 ---
 
-## Slide 1 - Your PLC fleet, in plain English
+## Slide 1
 
 ### Headline
+**Your PLC fleet has the answers. Getting them takes too long.**
 
-**Talk to your WAGO PLC fleet the way you talk to a colleague.**
-No scripts. No parameter IDs. No SSH sessions.
+### The problem
+Managing a WAGO PLC fleet today means knowing which parameter IDs to query,
+which firmware version to compare against, and which controller to SSH into
+first. That knowledge lives in a handful of engineers - and it takes time
+every single time.
 
-### The problem today
+- A firmware audit across 16 controllers: half a day
+- Spotting NTP drift before it causes a timestamp mismatch: only if someone
+  remembers to check
+- Documenting what changed and when: rarely happens
 
-- Configuring a fleet of PLCs means SSH sessions, browser tabs, and
-  hand-rolled scripts - one controller at a time
-- Checking firmware versions, NTP drift, or service states across 16 PLCs
-  takes a morning, not a minute
-- Every undocumented change is a future incident waiting to happen
-- Parameter IDs like `0-0-ntpclient-configuredtimeservers` are not
-  something engineers should have to memorize
+The data is there. The access is the bottleneck.
 
 ### The shift
+**wago-plc-mcp-server connects your AI assistant directly to your PLC fleet.**
 
-> An AI assistant connected to your PLC fleet via the Model Context Protocol
-> turns a morning of manual work into a single sentence.
+Ask in plain English. Get answers in seconds. Make changes with a confirmation,
+not a script.
 
-| You type | What happens |
-|---|---|
-| "Which PLCs are running firmware older than build 31?" | Reads every controller in parallel, lists the ones behind |
-| "Are NTP and Docker running on all Edge Controllers?" | Reads service flags across the fleet, highlights anything stopped |
-| "Set NTP to 192.168.42.2 on all PFC200s" | Writes after your confirmation - every change logged |
-| "Schedule a reboot of Edge Controller .120 for tonight" | Creates a human-approved GitOps PR - CI executes it on merge |
+> "Which PLCs are running firmware older than build 31?"
+> - Reads every controller in parallel. Returns the list in under a minute.
 
-### Speaker notes
+> "Are NTP and Docker running on all Edge Controllers?"
+> - Checks service flags across the fleet. Flags anything stopped.
 
-The core idea: MCP (Model Context Protocol) is an open standard that lets AI
-assistants call external tools. wago-plc-mcp-server implements that protocol
-for the WAGO WDA REST API - the same API the web UI uses. The AI assistant
-discovers your fleet, reads and writes parameters, invokes methods, and sets up
-server-side monitoring watchlists. The engineer talks; the server does the
-WDA plumbing.
+> "Set the NTP server to 192.168.42.2 on all PFC200s."
+> - Writes after your confirmation. Logs every change automatically.
 
 ---
 
-## Slide 2 - Production-ready, safe by design
+## Slide 2
 
 ### Headline
+**The AI proposes. You decide. The audit trail proves it.**
 
-**Every change is confirmed, logged, and reversible.**
-The AI proposes. The engineer decides. The audit trail proves it.
+### What changes for your team
 
-### Three operating modes
+| Before | After |
+|---|---|
+| SSH session per controller | One conversation covers the fleet |
+| Parameter IDs to memorize | Ask for what you want |
+| Changes tracked in someone's head | Every write in a tamper-evident log |
+| Config drift noticed after the fact | Desired state in Git - drift caught on every merge |
+| Dangerous ops gated by process | Dangerous ops blocked in code - no workaround |
 
-| Mode | What the AI can do | Use case |
-|---|---|---|
-| **Read-only** | Read anything, touch nothing | Fleet health checks, diagnostics, monitoring |
-| **Live write** | Read + write after confirmation, dangerous ops blocked | Day-to-day config, NTP sync, service toggles |
-| **GitOps** | Returns a PR-ready YAML instead of writing directly | Production environments - every change is a reviewed pull request |
+### Why it is safe for production
 
-### Safety - enforced in code, not policy
+The AI cannot write to a PLC without human confirmation. It cannot execute a
+reboot without a human setting an approval field in a reviewed pull request.
+Read-only controllers reject every write attempt regardless of what the AI
+requests. These are code-level constraints - not prompts, not policy.
 
-- **Read-only PLC flag** - mark any controller as untouchable; every write
-  attempt is refused regardless of what the AI requests
-- **Dangerous-method denylist** - reboot, factory reset, firmware update are
-  blocked unless explicitly allowlisted
-- **Human approval gate** - in GitOps mode, dangerous ops get flagged
-  `requires_human: CRITICAL`; `apply.py` refuses to execute until a human
-  sets `approved_by` during PR review
+In GitOps mode every configuration change becomes a pull request. CI runs a
+dry-run against the live PLC before anything is touched. The engineer reviews
+the diff, merges, and CI applies only what drifted. The Git history is the
+audit trail.
 
-### What you get
+### The bottom line
 
-- **Audit log** - tamper-evident, hash-chained record of every write and
-  method invocation; survives container restarts
-- **GitOps config repo** - desired state as YAML in Git; every change is a
-  PR with a dry-run CI check before anything touches hardware
-- **Watchlists** - server-side parameter groups polled in a single HTTP
-  request; build a fleet health dashboard without hammering the PLCs
-- **Fleet-aware** - 16 device classes supported; parallel registration;
-  CC100 / PFC100 G2 / PFC200 G2 / PFC300 / Edge Controller / WP400 / TP600
+A junior engineer with no WDA knowledge can audit, configure, and monitor a
+fleet of WAGO controllers on day one. A senior engineer gets back the hours
+they used to spend on routine checks. And production stays safe because the
+guardrails are in the server, not in the prompt.
 
-### Getting started
-
-```
-docker run -e WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11 \
-           -e DEFAULT_PLC_PASSWORD=wago \
-           -p 6042:6042 \
-           wagoalex/wago-plc-mcp-server:latest
-```
-
-Add to Claude Desktop or Claude Code in one line - see
+**Open source. Runs in Docker. Works with any MCP-compatible AI assistant.**
 [github.com/WagoAlex/wago-plc-mcp-server](https://github.com/WagoAlex/wago-plc-mcp-server)
-
-### Speaker notes
-
-The GitOps mode is the production story: `GITOPS_MODE=1` in the environment
-turns every `set_parameters` or `invoke_method` call into a YAML fragment the
-agent commits to a separate config repo (wago-plc-config). CI runs
-`apply.py --dry-run` on PR, `--execute` on merge. Dangerous ops carry an empty
-`approved_by` field that CI refuses to clear - a human fills it during PR
-review. The config repo is the single source of truth for what every PLC
-should look like; Git history is the audit trail.
-
-The safety gates are enforced at the tool boundary in code - not by prompting
-the AI to "be careful". An agent going off-script cannot bypass them.
