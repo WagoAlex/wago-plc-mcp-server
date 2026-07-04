@@ -15,7 +15,7 @@ GENESIS = "0" * 64
 
 # Parameter IDs / argument names whose VALUES must never land in the audit log
 # (the log is readable by every authenticated agent via get_plc_audit_log).
-# IDs stay visible — the trail still shows WHAT changed, just not the secret.
+# IDs stay visible - the trail still shows WHAT changed, just not the secret.
 _SENSITIVE = re.compile(
     r"password|passwd|secret|token|credential|communit|api-?key|private-?key|passphrase",
     re.IGNORECASE,
@@ -29,7 +29,7 @@ def redact_details(obj):
     Handles both shapes the writers produce:
       {"params": [{"id": "...-community...", "value": SECRET}, ...]}   (set_parameters)
       {"args": {"password": SECRET, ...}}                              (invoke_method)
-    Returns a new structure — never mutates the input.
+    Returns a new structure - never mutates the input.
     """
     if isinstance(obj, dict):
         # WDA parameter shape: sensitive name lives in the "id" VALUE
@@ -43,7 +43,7 @@ def redact_details(obj):
         return [redact_details(item) for item in obj]
     return obj
 
-# Volume-backed default — /app/data is the ./data bind mount, so the tamper-
+# Volume-backed default - /app/data is the ./data bind mount, so the tamper-
 # evident chain survives `docker rm -f wmcp`. Never default to /app/audit.log
 # (container layer, lost on removal).
 DEFAULT_AUDIT_LOG = "/app/data/audit.log"

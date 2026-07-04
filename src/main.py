@@ -89,7 +89,7 @@ def _seed_audit_hash(audit_log_path: str) -> None:
     global _AUDIT_PREV_HASH
     if not audit_log_path.startswith("/app/data/"):
         logger.warning(
-            f"[audit] AUDIT_LOG_FILE={audit_log_path} is not on the /app/data volume — "
+            f"[audit] AUDIT_LOG_FILE={audit_log_path} is not on the /app/data volume - "
             f"the tamper-evident chain will be LOST on container removal"
         )
     _AUDIT_PREV_HASH = read_prev_hash(audit_log_path)

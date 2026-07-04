@@ -1,6 +1,6 @@
 """Unit tests for WDAClient pagination and token refresh (src/wda_client.py).
 
-httpx is mocked with respx at the client boundary — no PLC required.
+httpx is mocked with respx at the client boundary - no PLC required.
 """
 import asyncio
 import json
@@ -18,7 +18,7 @@ JSON_API = {"Content-Type": "application/vnd.api+json"}
 
 def _client(page_limit=500) -> WDAClient:
     c = WDAClient(IP, "admin", "pw", timeout=5.0, page_limit=page_limit)
-    c._token = ""  # skip token acquisition — Basic Auth mode
+    c._token = ""  # skip token acquisition - Basic Auth mode
     return c
 
 
@@ -49,7 +49,7 @@ async def test_paginate_follows_links_next_despite_255_cap():
         items = await client.list_parameters()
     finally:
         await client.close()
-    assert len(items) == 398  # 255 + 143 — nothing silently dropped
+    assert len(items) == 398  # 255 + 143 - nothing silently dropped
 
 
 @respx.mock

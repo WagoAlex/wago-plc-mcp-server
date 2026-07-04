@@ -84,7 +84,7 @@ def print_key_banner(key: str) -> None:
     """Announce a newly generated key WITHOUT echoing it.
 
     stdout is persisted by Docker's json-file log driver, so anything printed
-    here is readable via `docker logs wmcp` for the container's lifetime —
+    here is readable via `docker logs wmcp` for the container's lifetime -
     only a fingerprint and the retrieval command are safe to show.
     """
     sep = "=" * 72
@@ -92,7 +92,7 @@ def print_key_banner(key: str) -> None:
 {sep}
   NEW MCP API KEY GENERATED  (fingerprint: {key[:8]}…)
 
-  Stored in ./data/mcp_api_key — retrieve it with:
+  Stored in ./data/mcp_api_key - retrieve it with:
     docker exec wmcp cat /app/data/mcp_api_key
 
   .mcp.json:
@@ -127,7 +127,7 @@ class AuthMiddleware:
 
         Cheap path: nothing to do below the cap. Above it, drop rate buckets whose
         newest entry is outside the window (their state is semantically empty) and,
-        if _failures alone exceeds the cap, clear it wholesale — losing failure
+        if _failures alone exceeds the cap, clear it wholesale - losing failure
         counters under active flooding only delays the ALERT log line, it never
         weakens auth itself.
         """

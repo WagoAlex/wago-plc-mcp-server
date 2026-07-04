@@ -39,7 +39,7 @@ async def _app(scope, receive, send):
     await send({"type": "http.response.body", "body": b"app"})
 
 
-async def _receive():  # pragma: no cover — never called by the middleware
+async def _receive():  # pragma: no cover - never called by the middleware
     return {"type": "http.request"}
 
 

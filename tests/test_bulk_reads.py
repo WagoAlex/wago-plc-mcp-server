@@ -1,4 +1,4 @@
-"""get_parameters_bulk concurrency bound (#19) — importing main boots the FastMCP
+"""get_parameters_bulk concurrency bound (#19) - importing main boots the FastMCP
 app (no server), so these run without a PLC or network."""
 import asyncio
 

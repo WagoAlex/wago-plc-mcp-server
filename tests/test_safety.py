@@ -47,7 +47,7 @@ def test_compute_readonly_hosts_merges_env_and_fleet_file(monkeypatch, tmp_path)
     fleet = tmp_path / "fleet.txt"
     fleet.write_text(
         "192.168.42.110\n"
-        "192.168.42.118  # readonly — production line 3\n"
+        "192.168.42.118  # readonly - production line 3\n"
         "# just a comment line\n"
     )
     monkeypatch.setenv("WAGO_READONLY_HOSTS", "10.0.0.9")
