@@ -20,7 +20,6 @@ wago_proxy.py
 
 # Logs
 *.log
-mcp_server.log
 
 # Docker
 docker-compose.override.yml
@@ -42,7 +41,6 @@ Thumbs.db
 # ── CRA / build artifacts ──
 # Ephemeral build-time SBOM at repo root (regenerated every build).
 # Leading slash keeps released SBOMs under sbom/ tracked.
-/sbom-*.json
 /sbom*.json
 /sbom/
 # Docker secrets (T2) — credentials must never be committed at rest
@@ -81,8 +79,7 @@ src/*.egg-info/
 # local dev compose override
 docker-compose.dev.yml
 
-# test suite kept local, out of repo — gitops unit tests are the exception
+# tests: root-level test modules are tracked; scratch subdirs stay local
 /tests/*
 !/tests/__init__.py
-!/tests/test_gitops.py
-!/tests/test_apply.py
+!/tests/test_*.py
