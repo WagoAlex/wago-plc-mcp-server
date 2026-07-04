@@ -22,6 +22,7 @@ MIN_KEY_LENGTH = 32  # 128-bit minimum (characters); auto-gen produces 64
 RATE_WINDOW = 60.0   # seconds
 RATE_LIMIT   = 60    # max requests per IP per window
 AUTH_ALERT   = 10    # failed auth attempts before ERROR alert
+MAX_TRACKED_IPS = 10_000  # cap on per-IP state entries (pre-auth memory DoS guard)
 
 try:
     APP_VERSION = importlib.metadata.version("wago-plc-mcp-server")
@@ -80,20 +81,27 @@ def resolve_api_key() -> tuple[str, bool]:
 
 
 def print_key_banner(key: str) -> None:
+    """Announce a newly generated key WITHOUT echoing it.
+
+    stdout is persisted by Docker's json-file log driver, so anything printed
+    here is readable via `docker logs wmcp` for the container's lifetime —
+    only a fingerprint and the retrieval command are safe to show.
+    """
     sep = "=" * 72
     print(f"""
 {sep}
-  MCP API KEY — COPY THIS NOW (shown once; stored in ./data/mcp_api_key)
+  NEW MCP API KEY GENERATED  (fingerprint: {key[:8]}…)
 
-  Bearer {key}
+  Stored in ./data/mcp_api_key — retrieve it with:
+    docker exec wmcp cat /app/data/mcp_api_key
 
   .mcp.json:
-    "headers": {{"Authorization": "Bearer {key}"}}
+    "headers": {{"Authorization": "Bearer <key>"}}
 
   Regenerate:  docker exec wmcp python src/mcp_keygen.py
 {sep}
 """, flush=True)
-    logger.info(f"[auth] New API key generated and persisted to {KEY_PATH}")
+    logger.info(f"[auth] New API key (fingerprint {key[:8]}) persisted to {KEY_PATH}")
 
 
 class AuthMiddleware:
@@ -114,6 +122,23 @@ class AuthMiddleware:
         self._rate: dict[str, deque] = {}
         self._failures: dict[str, int] = {}
 
+    def _evict_stale(self, now: float) -> None:
+        """Bound per-IP state so unauthenticated scanners can't grow memory forever.
+
+        Cheap path: nothing to do below the cap. Above it, drop rate buckets whose
+        newest entry is outside the window (their state is semantically empty) and,
+        if _failures alone exceeds the cap, clear it wholesale — losing failure
+        counters under active flooding only delays the ALERT log line, it never
+        weakens auth itself.
+        """
+        if len(self._rate) > MAX_TRACKED_IPS:
+            self._rate = {
+                ip: bucket for ip, bucket in self._rate.items()
+                if bucket and now - bucket[-1] <= RATE_WINDOW
+            }
+        if len(self._failures) > MAX_TRACKED_IPS:
+            self._failures.clear()
+
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
             await self._app(scope, receive, send)
@@ -130,6 +155,7 @@ class AuthMiddleware:
 
         # Rate limit
         now = time.monotonic()
+        self._evict_stale(now)
         bucket = self._rate.setdefault(ip, deque())
         while bucket and now - bucket[0] > RATE_WINDOW:
             bucket.popleft()
