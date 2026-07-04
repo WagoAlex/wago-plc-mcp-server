@@ -17,7 +17,7 @@ from mcp.server.fastmcp.prompts import base
 from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
-from audit import GENESIS, build_entry, read_prev_hash
+from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
 from config import parse_plcs_from_env, resolve_tls_verify
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
@@ -87,6 +87,11 @@ def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
 def _seed_audit_hash(audit_log_path: str) -> None:
     """Seed _AUDIT_PREV_HASH from the last entry of an existing audit log (see audit.read_prev_hash)."""
     global _AUDIT_PREV_HASH
+    if not audit_log_path.startswith("/app/data/"):
+        logger.warning(
+            f"[audit] AUDIT_LOG_FILE={audit_log_path} is not on the /app/data volume — "
+            f"the tamper-evident chain will be LOST on container removal"
+        )
     _AUDIT_PREV_HASH = read_prev_hash(audit_log_path)
     if _AUDIT_PREV_HASH != GENESIS:
         logger.info("[audit] Hash chain seeded from existing audit log")
@@ -178,7 +183,7 @@ async def get_plc_audit_log(
     plus action-specific fields.
     """
     limit = min(max(1, limit), 500)
-    audit_path = Path(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+    audit_path = Path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
     if not audit_path.exists():
         return {"entries": [], "total": 0, "note": "Audit log not yet created"}
@@ -257,7 +262,7 @@ async def find_parameters(
     user_settings_only: bool = False,
     limit: int = FIND_LIMIT_DEFAULT,
 ) -> dict:
-    """Search parameter IDs by substring/fuzzy match. Returns up to `limit` matches (default 20, max 100).
+    """Search parameter IDs by substring/fuzzy match. Returns up to `limit` matches (default 20, max 255).
 
     Set writeable_only=True to filter parameters that can be written.
     Set user_settings_only=True to filter user-configurable parameters.
@@ -314,9 +319,14 @@ async def get_parameters_bulk(
     requests: list of {"plc_ip": str, "parameter_id": str}
     Returns:  list of {"plc_ip": str, "parameter_id": str, "value": ..., ...} or {"error": ...}
 
+    Concurrency is bounded by WAGO_MAX_CONCURRENT_READS (default 10) so a large
+    request list cannot overload slow PLCs (CC100 web server is easily starved).
+
     Example — read firmware version from all PLCs:
     [{"plc_ip": "192.168.42.110", "parameter_id": "0-0-version-firmwareversion"}, ...]
     """
+    sem = asyncio.Semaphore(int(os.getenv("WAGO_MAX_CONCURRENT_READS", "10")))
+
     async def _fetch(req: dict) -> dict:
         ip = req.get("plc_ip", "")
         pid = req.get("parameter_id", "")
@@ -326,7 +336,8 @@ async def get_parameters_bulk(
         if pid not in plc.parameters:
             return {"plc_ip": ip, "parameter_id": pid, "error": f"Unknown parameter '{pid}'"}
         try:
-            attrs = await plc.client.get_parameter(pid)
+            async with sem:
+                attrs = await plc.client.get_parameter(pid)
             result = enrich_parameter(plc, pid, attrs)
             result["plc_ip"] = ip
             result["parameter_id"] = pid
@@ -439,7 +450,11 @@ async def invoke_method(
     if err:
         return err
     if method_id not in plc.methods:
-        return {"error": f"Unknown method '{method_id}'"}
+        matches = get_close_matches(method_id, plc.methods, n=3, cutoff=0.6)
+        return {
+            "error": f"Unknown method '{method_id}'"
+            + (f". Did you mean: {', '.join(matches)}?" if matches else "")
+        }
 
     if plc_ip in _READONLY_HOSTS:
         _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "refused: read-only host")
@@ -635,7 +650,7 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
-    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
     plcs = parse_plcs_from_env()
     logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")

@@ -7,16 +7,56 @@ with the AUDIT loguru sink (which emits raw ``{message}\\n``).
 """
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 GENESIS = "0" * 64
 
+# Parameter IDs / argument names whose VALUES must never land in the audit log
+# (the log is readable by every authenticated agent via get_plc_audit_log).
+# IDs stay visible — the trail still shows WHAT changed, just not the secret.
+_SENSITIVE = re.compile(
+    r"password|passwd|secret|token|credential|communit|api-?key|private-?key|passphrase",
+    re.IGNORECASE,
+)
+REDACTED = "<redacted>"
+
+
+def redact_details(obj):
+    """Recursively replace values of sensitive keys/parameter-IDs with REDACTED.
+
+    Handles both shapes the writers produce:
+      {"params": [{"id": "...-community...", "value": SECRET}, ...]}   (set_parameters)
+      {"args": {"password": SECRET, ...}}                              (invoke_method)
+    Returns a new structure — never mutates the input.
+    """
+    if isinstance(obj, dict):
+        # WDA parameter shape: sensitive name lives in the "id" VALUE
+        if "id" in obj and "value" in obj and _SENSITIVE.search(str(obj["id"])):
+            return {**obj, "value": REDACTED}
+        return {
+            k: (REDACTED if _SENSITIVE.search(str(k)) and not isinstance(v, (dict, list)) else redact_details(v))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [redact_details(item) for item in obj]
+    return obj
+
+# Volume-backed default — /app/data is the ./data bind mount, so the tamper-
+# evident chain survives `docker rm -f wmcp`. Never default to /app/audit.log
+# (container layer, lost on removal).
+DEFAULT_AUDIT_LOG = "/app/data/audit.log"
+
 
 def build_entry(
     action: str, plc_ip: str, agent: str, result: str, prev_hash: str, details: dict
 ) -> tuple[str, str]:
-    """Return (json_line, new_hash) for one audit record chained off prev_hash."""
+    """Return (json_line, new_hash) for one audit record chained off prev_hash.
+
+    Sensitive values in details are redacted BEFORE hashing, so the chain
+    stays verifiable over exactly what is stored.
+    """
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "action": action,
@@ -24,7 +64,7 @@ def build_entry(
         "agent": agent,
         "result": result,
         "prev": prev_hash,
-        **details,
+        **redact_details(details),
     }
     line = json.dumps(entry, default=str)
     return line, hashlib.sha256(line.encode()).hexdigest()
