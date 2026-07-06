@@ -89,11 +89,16 @@ TRANSPORT=streamable-http
 
 # ── GitOps write-gate ──
 # When true, set_parameters and invoke_method return a YAML fragment instead of
-# calling the PLC. The agent commits the YAML to wago-plc-config and opens a PR.
+# calling the PLC. The agent commits the YAML to the config repo and opens a PR.
 # apply.py diffs current PLC state against desired and applies only drift.
 # Rollback = git revert. Drift check = python scripts/apply.py <file> (no --execute).
 # Requires a self-hosted CI runner with WDA network access (SASE-connected segment).
 # GITOPS_MODE=false
+
+# Config repo name/path shown in the returned YAML's next_step instructions.
+# Set this if you fork or rename wago-plc-config - otherwise the agent will be
+# told to commit to a repo name that doesn't match yours.
+# WAGO_GITOPS_REPO=wago-plc-config
 
 # ── Optional tuning ──
 # Connection timeout per PLC HTTP request, in seconds (default 5)

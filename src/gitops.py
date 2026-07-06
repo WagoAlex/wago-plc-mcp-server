@@ -1,4 +1,5 @@
-"""Generate GitOps YAML fragments for the wago-plc-config repo.
+"""Generate GitOps YAML fragments for the config repo (default: wago-plc-config,
+overridable via WAGO_GITOPS_REPO - see src/main.py).
 
 set_parameters  → desired_state_fragment() → agent merges into plcs/<ip>.yaml
 invoke_method   → ops_fragment()           → agent commits to ops/<id>.yaml
@@ -84,8 +85,12 @@ def browser_params(startpage_mode: int = 0, startpage_favorite: int = 1) -> list
     ]
 
 
-def desired_state_fragment(plc_ip: str, parameters: list[dict]) -> dict:
-    """Return the YAML the agent should merge into plcs/<ip>.yaml."""
+def desired_state_fragment(plc_ip: str, parameters: list[dict], repo: str = "wago-plc-config") -> dict:
+    """Return the YAML the agent should merge into plcs/<ip>.yaml.
+
+    repo: the config repo name/path shown in `next_step`, configurable via
+    WAGO_GITOPS_REPO for deployments that fork or rename the default repo.
+    """
     managed = {p["id"]: p["value"] for p in parameters}
     data = {"plc_ip": plc_ip, "managed_parameters": managed}
     return {
@@ -93,7 +98,7 @@ def desired_state_fragment(plc_ip: str, parameters: list[dict]) -> dict:
         "config_file": f"plcs/{plc_ip}.yaml",
         "desired_state_yaml": yaml.dump(data, sort_keys=False),
         "next_step": (
-            f"Merge desired_state_yaml into wago-plc-config/plcs/{plc_ip}.yaml "
+            f"Merge desired_state_yaml into {repo}/plcs/{plc_ip}.yaml "
             f"(add/update keys under managed_parameters) and open a PR. "
             f"apply.py will read current PLC state, diff against desired, and apply only what changed."
         ),
@@ -101,13 +106,21 @@ def desired_state_fragment(plc_ip: str, parameters: list[dict]) -> dict:
 
 
 def ops_fragment(
-    plc_ip: str, method_id: str, arguments: dict, agent_id: str, dangerous: bool = False
+    plc_ip: str,
+    method_id: str,
+    arguments: dict,
+    agent_id: str,
+    dangerous: bool = False,
+    repo: str = "wago-plc-config",
 ) -> dict:
     """Return the YAML the agent should commit to ops/<id>.yaml.
 
     dangerous=True (reboot/reset/firmware) adds a CRITICAL flag and an empty
     `approved_by` field that a human MUST fill during PR review — apply.py refuses
     to execute the op until it is set.
+
+    repo: the config repo name/path shown in `next_step`, configurable via
+    WAGO_GITOPS_REPO for deployments that fork or rename the default repo.
     """
     op_id = uuid.uuid4().hex[:8]
     data = {
@@ -127,7 +140,7 @@ def ops_fragment(
         "config_file": f"ops/{op_id}.yaml",
         "ops_yaml": yaml.dump(data, sort_keys=False),
         "next_step": (
-            f"Commit ops_yaml to wago-plc-config/ops/{op_id}.yaml and open a PR. "
+            f"Commit ops_yaml to {repo}/ops/{op_id}.yaml and open a PR. "
             f"apply.py will invoke the method on merge and delete the file."
         ),
     }

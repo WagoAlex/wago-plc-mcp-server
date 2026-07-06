@@ -45,6 +45,17 @@ def test_desired_state_fragment_config_file_matches_ip():
     assert result["config_file"] == "plcs/10.0.0.1.yaml"
 
 
+def test_desired_state_fragment_default_repo_in_next_step():
+    result = desired_state_fragment("192.168.42.110", [{"id": "x", "value": 1}])
+    assert "wago-plc-config/plcs/192.168.42.110.yaml" in result["next_step"]
+
+
+def test_desired_state_fragment_custom_repo_in_next_step():
+    result = desired_state_fragment("192.168.42.110", [{"id": "x", "value": 1}], repo="acme/plc-fleet-config")
+    assert "acme/plc-fleet-config/plcs/192.168.42.110.yaml" in result["next_step"]
+    assert "wago-plc-config" not in result["next_step"]
+
+
 # ---------------------------------------------------------------------------
 # ops_fragment - non-critical (no dangerous flag)
 # ---------------------------------------------------------------------------
@@ -78,6 +89,12 @@ def test_ops_fragment_non_critical_yaml_content():
     assert data["proposed_by"] == "agent-1"
     assert data["action"] == "invoke_method"
     assert len(data["id"]) == 8  # uuid4 hex[:8]
+
+
+def test_ops_fragment_custom_repo_in_next_step():
+    result = ops_fragment("192.168.42.110", "0-0-ntpclient-updatetime", {}, "agent-test", repo="acme/plc-fleet-config")
+    assert "acme/plc-fleet-config/ops/" in result["next_step"]
+    assert "wago-plc-config" not in result["next_step"]
 
 
 # ---------------------------------------------------------------------------
