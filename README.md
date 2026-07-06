@@ -15,11 +15,78 @@
 
 | I am a... | I want to... | Start here |
 |-----------|-------------|------------|
-| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | [Quick Start](#quick-start) → [What can I ask it?](#what-can-i-ask-it) |
-| **Automation / OT engineer** | Understand what this does to my PLCs and whether it's safe | [What this does and doesn't do](#what-this-does-and-doesnt-do) |
-| **Software / DevOps engineer** | Deploy this in production with GitOps, TLS, and audit logging | [Production deployment](#production-deployment) → [GitOps write-gate](#gitops-write-gate) |
+| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) → [What can I ask it?](#what-can-i-ask-it) |
+| **Automation / OT engineer** | Understand what this does to my PLCs and whether it's safe | **Part 2** → [What this does and doesn't do](#what-this-does-and-doesnt-do) |
+| **Software / DevOps engineer** | Deploy this in production with GitOps, TLS, and audit logging | **Part 3** → [Production deployment](#production-deployment) → [GitOps write-gate](#gitops-write-gate) |
+
+Each part is self-contained top to bottom - a Claude Desktop user never needs
+to read the GitOps internals, and a DevOps engineer never needs the chat
+examples. [Reference](#frequently-asked-questions) at the end covers
+cross-cutting material (FAQ, raw curl access, CRA compliance) that applies
+regardless of persona.
 
 ---
+
+## Architecture
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor':'#1F2837',
+  'primaryTextColor':'#ffffff',
+  'primaryBorderColor':'#6EC800',
+  'lineColor':'#6EC800',
+  'secondaryColor':'#EFF0F1',
+  'secondaryTextColor':'#1F2837',
+  'secondaryBorderColor':'#A5A8AF',
+  'tertiaryColor':'#FFFFFF',
+  'tertiaryTextColor':'#1F2837',
+  'tertiaryBorderColor':'#DEDFE1',
+  'fontFamily':'Segoe UI, Helvetica, Arial, sans-serif',
+  'clusterBkg':'#EFF0F1',
+  'clusterBorder':'#A5A8AF',
+  'edgeLabelBackground':'#1F2837'
+}}}%%
+flowchart TB
+    subgraph Clients["AI clients (any MCP client works)"]
+        direction LR
+        CD("Claude Desktop<br/>(stdio, via wago_proxy.py)")
+        CC("Claude Code<br/>(direct HTTP)")
+        OC("OpenClaw<br/>(direct HTTP)")
+    end
+
+    CD & CC & OC -- "Bearer token" --> MCP
+
+    subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
+        direction LR
+        MCP("14 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
+        Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
+        MCP --- Guard
+    end
+
+    MCP --> FAN("WDA Bearer token + TLS<br/>parallel, semaphore-bounded<br/>fans out to every registered PLC")
+
+    FAN --> P1 & P2 & P3 & P4 & P5 & P6 & Pn
+
+    subgraph Fleet["WAGO PLC fleet"]
+        direction LR
+        P1("CC100")
+        P2("PFC100 Gen 2")
+        P3("PFC200 Gen 2")
+        P4("PFC300")
+        P5("Edge Controller")
+        P6("WP400")
+        Pn("TP600")
+    end
+```
+
+Demoed end to end with **16 PLCs** of mixed device class on a single rack.
+The parallel fan-out model has no architectural ceiling below **100+**.
+
+---
+
+# Part 1 - For Claude Desktop / Claude Code users
+
+Everything to get connected and start asking questions in plain English.
 
 ## Demo
 
@@ -251,6 +318,11 @@ with the REST plumbing for you.
 
 ---
 
+# Part 2 - For automation / OT engineers
+
+What this actually touches on your PLCs, in terms you already know, and
+exactly when a write or method call is allowed versus refused.
+
 ## What this does and doesn't do
 
 ### For automation and OT engineers
@@ -363,6 +435,11 @@ dangerous-method and read-only gates, see
 [Safety gates](#safety-gates---guarding-against-a-rogue-agent).
 
 ---
+
+# Part 3 - For software / DevOps engineers
+
+Deploying this in production, wiring up GitOps, securing the endpoint, and
+the full tool/config reference.
 
 ## Production deployment
 
@@ -900,6 +977,11 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 
 ---
 
+# Reference
+
+Cross-cutting material that isn't specific to any one persona - come back to
+these as needed.
+
 ## Frequently asked questions
 
 ### Can the AI modify my control program or process I/O values?
@@ -979,63 +1061,6 @@ echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
 ```
 
 `page[limit]` and `page[offset]` **must** be passed via `--data-urlencode` - embedding literal brackets in the URL string is silently ignored and causes an infinite page-0 loop.
-
----
-
-## Architecture
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {
-  'primaryColor':'#1F2837',
-  'primaryTextColor':'#ffffff',
-  'primaryBorderColor':'#6EC800',
-  'lineColor':'#6EC800',
-  'secondaryColor':'#EFF0F1',
-  'secondaryTextColor':'#1F2837',
-  'secondaryBorderColor':'#A5A8AF',
-  'tertiaryColor':'#FFFFFF',
-  'tertiaryTextColor':'#1F2837',
-  'tertiaryBorderColor':'#DEDFE1',
-  'fontFamily':'Segoe UI, Helvetica, Arial, sans-serif',
-  'clusterBkg':'#EFF0F1',
-  'clusterBorder':'#A5A8AF',
-  'edgeLabelBackground':'#1F2837'
-}}}%%
-flowchart TB
-    subgraph Clients["AI clients (any MCP client works)"]
-        direction LR
-        CD("Claude Desktop<br/>(stdio, via wago_proxy.py)")
-        CC("Claude Code<br/>(direct HTTP)")
-        OC("OpenClaw<br/>(direct HTTP)")
-    end
-
-    CD & CC & OC -- "Bearer token" --> MCP
-
-    subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
-        direction LR
-        MCP("14 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
-        Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
-        MCP --- Guard
-    end
-
-    MCP --> FAN("WDA Bearer token + TLS<br/>parallel, semaphore-bounded<br/>fans out to every registered PLC")
-
-    FAN --> P1 & P2 & P3 & P4 & P5 & P6 & Pn
-
-    subgraph Fleet["WAGO PLC fleet"]
-        direction LR
-        P1("CC100")
-        P2("PFC100 Gen 2")
-        P3("PFC200 Gen 2")
-        P4("PFC300")
-        P5("Edge Controller")
-        P6("WP400")
-        Pn("TP600")
-    end
-```
-
-Demoed end to end with **16 PLCs** of mixed device class on a single rack.
-The parallel fan-out model has no architectural ceiling below **100+**.
 
 ---
 
