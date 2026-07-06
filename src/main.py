@@ -61,6 +61,7 @@ FIND_LIMIT_DEFAULT = 20
 _AGENT_ID: str = "unknown"
 _AUDIT_PREV_HASH: str = GENESIS  # seeded from last log line on startup
 _GITOPS_MODE: bool = os.getenv("GITOPS_MODE", "").lower() in {"1", "true"}
+_GITOPS_REPO: str = os.getenv("WAGO_GITOPS_REPO", "wago-plc-config")
 
 # ───────────────────────── Safety gates ─────────────────────────
 # See safety.py + docs/gitops/README.md "Safety model". Read-only hosts merge the
@@ -375,7 +376,7 @@ async def set_parameters(
 
     if _GITOPS_MODE:
         from gitops import desired_state_fragment
-        return desired_state_fragment(plc_ip, parameters)
+        return desired_state_fragment(plc_ip, parameters, repo=_GITOPS_REPO)
 
     try:
         result = await plc.client.set_parameters(parameters)
@@ -470,7 +471,7 @@ async def invoke_method(
         if dangerous:
             _audit_log("invoke_method.proposed", plc_ip,
                        {"method": method_id, "args": arguments or {}, "danger": True}, "proposed-critical")
-        return ops_fragment(plc_ip, method_id, arguments, _AGENT_ID, dangerous=dangerous)
+        return ops_fragment(plc_ip, method_id, arguments, _AGENT_ID, dangerous=dangerous, repo=_GITOPS_REPO)
 
     if dangerous:
         _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "denied: dangerous method")
@@ -633,7 +634,7 @@ def wago_assistant(query: str) -> list[base.Message]:
         "",
         "**GitOps mode** (when GITOPS_MODE=true on the server):",
         "- `set_parameters` and `invoke_method` return `{status: 'proposed', config_file, desired_state_yaml/ops_yaml, next_step}`.",
-        "- Do NOT call WDA directly. Instead: commit the returned YAML to wago-plc-config/<config_file> and open a PR.",
+        f"- Do NOT call WDA directly. Instead: commit the returned YAML to {_GITOPS_REPO}/<config_file> and open a PR.",
         "- Use the GitHub MCP tool to create/update the file and open the PR.",
         "- For set_parameters: merge new keys into plcs/<ip>.yaml under `managed_parameters` (preserve existing keys).",
         "- For invoke_method: create ops/<id>.yaml with the returned ops_yaml (one-shot, deleted after CI applies it).",

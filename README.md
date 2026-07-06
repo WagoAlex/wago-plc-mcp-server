@@ -561,7 +561,18 @@ Live PLC updated - ops files self-delete on success
 ```env
 GITOPS_MODE=1   # intercept writes; return YAML fragments for PR
 GITOPS_MODE=0   # default: write directly (still fully audit-logged)
+
+# Only needed if your config repo isn't named/owned wago-plc-config -
+# every returned YAML fragment's next_step points the agent at this repo.
+WAGO_GITOPS_REPO=wago-plc-config
 ```
+
+> [!IMPORTANT]
+> Without `WAGO_GITOPS_REPO` set correctly, the agent has no other way to know
+> where to commit the YAML fragment - the repo name comes from this variable,
+> not from any auto-discovery. If you fork or rename the config repo, set this
+> or the returned `next_step` instructions will point at the wrong (or a
+> nonexistent) repo.
 
 ### Config YAML - two file types
 
@@ -829,6 +840,7 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `PLC_PASSWORDS_<ip_underscores>` | - | Per-PLC password override |
 | `MCP_API_KEY` | - | Bearer token for `/mcp`; auto-generated if absent |
 | `GITOPS_MODE` | `0` | `1` = intercept writes, return YAML fragments |
+| `WAGO_GITOPS_REPO` | `wago-plc-config` | Config repo name/path shown in the returned YAML's `next_step` - point this at a fork or a differently-named repo |
 | `WAGO_TLS_CA` | - | WDA TLS: `false` (off), `true` (system CA), or path |
 | `MCP_TLS_CERT` | - | Path to TLS cert for MCP endpoint |
 | `MCP_TLS_KEY` | - | Path to TLS private key for MCP endpoint |
