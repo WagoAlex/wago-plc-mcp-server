@@ -101,18 +101,21 @@ TRANSPORT=streamable-http
 # WAGO_GITOPS_REPO=wago-plc-config
 
 # ── Optional tuning ──
-# Connection timeout per PLC HTTP request, in seconds (default 5)
-WAGO_TIMEOUT_SECONDS=15
+# Connection timeout per PLC HTTP request, in seconds (default 45 - CC100's
+# slow ARM CPU needs the full 45; other device classes work fine with less).
+WAGO_TIMEOUT_SECONDS=45
 
 # Page size when walking large collections (default 500)
 WAGO_PAGE_LIMIT=500
 
 # Log level: DEBUG | INFO | WARNING | ERROR (default INFO)
 LOG_LEVEL=INFO
-# Semaphore in register_many — max 5 PLCs parallel 
+
+# Parallel PLC init limit during startup registration (default 5)
 WAGO_MAX_CONCURRENT_REGISTRATIONS=5
-# PLC Timeout
-WAGO_TIMEOUT_SECONDS=45
+
+# Parallel PLC request limit inside get_parameters_bulk (default 10)
+WAGO_MAX_CONCURRENT_READS=10
 
 # Log file path inside container (default /app/mcp_server.log)
 LOG_FILE=/app/mcp_server.log
