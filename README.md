@@ -148,6 +148,12 @@ On first boot the server generates an API key and announces its fingerprint
 docker exec wmcp cat /app/data/mcp_api_key
 ```
 
+> [!TIP]
+> Once you're past initial testing, provision the key as a Docker Secret
+> instead (see [API key management](#api-key-management)) - then retrieve it
+> with `cat secrets/mcp_api_key.txt` directly on the host, no `docker exec`
+> required.
+
 ```
 ════════════════════════════════════════════════════════════════════════
   NEW MCP API KEY GENERATED  (fingerprint: 7290f42b…)
@@ -685,8 +691,27 @@ The server resolves the MCP API key in priority order:
 3. **Persisted file** `./data/mcp_api_key` - auto-generated on first boot, survives container recreations
 4. **Auto-generate** - new key if none of the above exist
 
+> [!TIP]
+> Retrieving the key differs by source. With a Docker Secret (path 1), read
+> `secrets/mcp_api_key.txt` directly on the host - no `docker exec` needed, so
+> the key never crosses the container boundary or touches any container-side
+> log path:
+> ```bash
+> cat secrets/mcp_api_key.txt
+> ```
+> With the auto-generated key (path 3/4), it only exists inside the
+> container's `/app/data` volume:
+> ```bash
+> docker exec wmcp cat /app/data/mcp_api_key
+> ```
+> Prefer the Docker Secret path once you've moved past initial testing - it's
+> both more auditable (key lifecycle lives in a file you control, not a
+> volume the server writes to) and keeps the key out of any container-exec
+> trail entirely.
+
 ```bash
-# Regenerate
+# Regenerate (only affects the auto-generated/persisted key - has no effect
+# if a Docker Secret or MCP_API_KEY env var is set, since those outrank it)
 docker exec wmcp python src/mcp_keygen.py
 docker restart wmcp
 ```

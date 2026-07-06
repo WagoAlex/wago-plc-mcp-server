@@ -7,6 +7,7 @@ The new key is written to /app/data/mcp_api_key (requires ./data:/app/data volum
 Update .mcp.json and Claude Desktop config with the new Bearer token, then clients
 reconnect automatically on the next request (old sessions receive 401 immediately).
 """
+import sys
 import secrets
 from pathlib import Path
 
@@ -14,6 +15,11 @@ _KEY_PATH = Path("/app/data/mcp_api_key")
 
 
 def main() -> None:
+    if len(sys.argv) > 1:
+        print(f"mcp_keygen.py takes no arguments (got: {sys.argv[1:]}). "
+              "Run it bare - it always regenerates immediately, with no confirmation.")
+        raise SystemExit(1)
+
     key = secrets.token_hex(32)
     try:
         _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)

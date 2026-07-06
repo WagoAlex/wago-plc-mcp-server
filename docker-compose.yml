@@ -4,11 +4,9 @@
 secrets:
   plc_default_password:
     file: ./secrets/plc_default_password.txt
-  # T1: Bearer auth on /mcp. Create secrets/mcp_api_key.txt first:
-  #   echo "$(openssl rand -hex 32)" > secrets/mcp_api_key.txt && chmod 600 secrets/mcp_api_key.txt
-  # When the secret file exists, this takes priority over the auto-generated key.
-  # mcp_api_key:
-  #   file: ./secrets/mcp_api_key.txt
+  # T1: Bearer auth on /mcp. Takes priority over the auto-generated/persisted key.
+  mcp_api_key:
+    file: ./secrets/mcp_api_key.txt
   # Per-PLC passwords — add one entry per IP (use underscores in the secret name):
   # plc_password_192_168_2_17:
   #   file: ./secrets/plc_password_192_168_2_17.txt
@@ -31,7 +29,7 @@ services:
     restart: unless-stopped
     secrets:
       - plc_default_password
-      # - mcp_api_key  # uncomment once secrets/mcp_api_key.txt exists
+      - mcp_api_key
       # - plc_password_192_168_2_17
       # - plc_password_192_168_42_42
 
