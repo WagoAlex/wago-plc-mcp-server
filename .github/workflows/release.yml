@@ -82,7 +82,7 @@ jobs:
       # Upload SBOM to the GitHub Release as a downloadable asset.
       # The SBOM file at repo root is produced by build.sh (image-based, CycloneDX JSON).
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.ver.outputs.value }}
           name: v${{ steps.ver.outputs.value }}
