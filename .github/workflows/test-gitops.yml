@@ -1,20 +1,18 @@
-name: GitOps Tests
+name: Tests
 
 on:
   push:
     branches: [main]
     paths:
-      - src/gitops.py
-      - src/safety.py
-      - scripts/apply.py
+      - src/**
+      - scripts/**
       - tests/**
       - Dockerfile
       - pyproject.toml
   pull_request:
     paths:
-      - src/gitops.py
-      - src/safety.py
-      - scripts/apply.py
+      - src/**
+      - scripts/**
       - tests/**
       - Dockerfile
       - pyproject.toml
@@ -30,7 +28,7 @@ jobs:
       - name: Build dev image
         run: docker build --target dev -t wago-plc-mcp-server-dev .
 
-      - name: Run GitOps tests
+      - name: Run test suite
         run: |
           docker run --rm wago-plc-mcp-server-dev \
             pytest tests/ -v --tb=short \

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 "" = "src"
 
 [tool.setuptools]
-py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config", "audit_verify", "mcp_keygen", "gitops", "audit", "safety"]
+py-modules = ["main", "plc_manager", "enricher", "wda_client", "logging_config", "audit_verify", "mcp_keygen", "gitops", "audit", "safety", "auth", "config"]
 
 [project]
 name = "wago-plc-mcp-server"

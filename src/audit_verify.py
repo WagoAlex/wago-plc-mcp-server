@@ -2,8 +2,8 @@
 
 Usage:
     docker exec wmcp python src/audit_verify.py
-    docker exec wmcp python src/audit_verify.py --log /app/audit.log
-    docker exec wmcp python src/audit_verify.py --log /app/audit.log --seed <hex>
+    docker exec wmcp python src/audit_verify.py --log /app/data/audit.log
+    docker exec wmcp python src/audit_verify.py --log /app/data/audit.log --seed <hex>
 
 Exit codes: 0 = PASS, 1 = chain broken or file error.
 
@@ -73,7 +73,7 @@ def verify(log_path: str, seed: str = GENESIS) -> bool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Verify wago-plc audit log hash chain")
-    parser.add_argument("--log", default="/app/audit.log", help="Path to audit log file")
+    parser.add_argument("--log", default="/app/data/audit.log", help="Path to audit log file")
     parser.add_argument(
         "--seed",
         default=GENESIS,

@@ -3,13 +3,8 @@
 12 tools, compact responses, smart pre-validation.
 """
 import asyncio
-import importlib.metadata
 import json
 import os
-import re
-import secrets as _secrets
-import time
-from collections import deque
 from difflib import get_close_matches
 from pathlib import Path
 
@@ -22,7 +17,9 @@ from mcp.server.fastmcp.prompts import base
 from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
-from audit import GENESIS, build_entry, read_prev_hash
+from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, read_prev_hash
+from auth import AuthMiddleware, print_key_banner, resolve_api_key
+from config import parse_plcs_from_env, resolve_tls_verify
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
 
 # ───────────────────────── Bootstrap ─────────────────────────
@@ -39,33 +36,11 @@ setup_audit_logging(
     syslog_tcp=os.getenv("SYSLOG_TCP", "").lower() in {"1", "true"},
 )
 
-def _resolve_tls_verify() -> bool | str:
-    """Resolve WDA TLS verification from WAGO_TLS_CA env var.
-
-    Not set / 'false' / '0' → False  (verification disabled — warns at startup)
-    'true' / '1'            → True   (system trust store)
-    Any other value         → path to CA bundle (PEM file or directory)
-    Per-PLC override: Docker Secret plc_cert_<ip_underscored> (resolved in PLCManager.register)
-    """
-    val = os.getenv("WAGO_TLS_CA", "").strip()
-    if not val or val.lower() in {"false", "0"}:
-        logger.warning(
-            "[tls] WDA TLS verification DISABLED — connections to PLCs are not verified. "
-            "Set WAGO_TLS_CA=true (system CA) or WAGO_TLS_CA=/path/to/ca.pem to enable."
-        )
-        return False
-    if val.lower() in {"true", "1"}:
-        logger.info("[tls] WDA TLS verification enabled (system trust store)")
-        return True
-    logger.info(f"[tls] WDA TLS verification enabled (CA bundle: {val})")
-    return val
-
-
 plc_manager = PLCManager(
     timeout_seconds=float(os.getenv("WAGO_TIMEOUT_SECONDS", "45")),
     page_limit=int(os.getenv("WAGO_PAGE_LIMIT", "500")),
     max_concurrent_registrations=int(os.getenv("WAGO_MAX_CONCURRENT_REGISTRATIONS", "5")),
-    ssl_verify=_resolve_tls_verify(),
+    ssl_verify=resolve_tls_verify(),
 )
 
 mcp = FastMCP(
@@ -112,244 +87,16 @@ def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
 def _seed_audit_hash(audit_log_path: str) -> None:
     """Seed _AUDIT_PREV_HASH from the last entry of an existing audit log (see audit.read_prev_hash)."""
     global _AUDIT_PREV_HASH
+    if not audit_log_path.startswith("/app/data/"):
+        logger.warning(
+            f"[audit] AUDIT_LOG_FILE={audit_log_path} is not on the /app/data volume - "
+            f"the tamper-evident chain will be LOST on container removal"
+        )
     _AUDIT_PREV_HASH = read_prev_hash(audit_log_path)
     if _AUDIT_PREV_HASH != GENESIS:
         logger.info("[audit] Hash chain seeded from existing audit log")
     elif Path(audit_log_path).exists():
         logger.warning(f"[audit] {audit_log_path} exists but yielded genesis — empty/corrupt/partial write; starting fresh")
-
-
-def _read_secret(name: str) -> str | None:
-    """Read a Docker Secret from /run/secrets/. Returns None if absent or empty."""
-    try:
-        return Path(f"/run/secrets/{name}").read_text().strip() or None
-    except OSError:
-        return None
-
-
-def _load_per_plc_secrets() -> dict[str, str]:
-    """Scan /run/secrets/ for plc_password_<ip> files and return {ip: password}.
-
-    Secret name 'plc_password_10_0_0_1' maps to IP '10.0.0.1'.
-    """
-    secrets_dir = Path("/run/secrets")
-    result: dict[str, str] = {}
-    if not secrets_dir.is_dir():
-        return result
-    for f in secrets_dir.iterdir():
-        if f.name.startswith("plc_password_"):
-            ip = f.name.removeprefix("plc_password_").replace("_", ".")
-            pwd = f.read_text().strip()
-            if pwd:
-                result[ip] = pwd
-    return result
-
-
-_KEY_PATH = Path("/app/data/mcp_api_key")
-_MIN_KEY_LENGTH = 32  # 128-bit minimum (characters); auto-gen produces 64
-
-
-def _check_key_entropy(key: str, source: str) -> None:
-    """Abort startup if a supplied API key is shorter than the minimum length."""
-    if len(key) < _MIN_KEY_LENGTH:
-        logger.error(
-            f"[auth] API key from {source} is too short "
-            f"({len(key)} chars, minimum {_MIN_KEY_LENGTH}). "
-            f"Generate a strong key:  openssl rand -hex 32"
-        )
-        raise SystemExit(1)
-
-
-def _resolve_api_key() -> tuple[str, bool]:
-    """Resolve the MCP API key, auto-generating one if none is configured.
-
-    Priority:
-      1. Docker Secret  /run/secrets/mcp_api_key  (prod — highest trust)
-      2. Env var        MCP_API_KEY                (dev override)
-      3. Persisted file /app/data/mcp_api_key      (auto-generated, volume-backed)
-      4. Generate new → persist to /app/data/mcp_api_key
-
-    Supplied keys (paths 1-3) must be at least _MIN_KEY_LENGTH chars; shorter
-    keys abort startup with SystemExit(1).
-
-    Returns (api_key, is_newly_generated).
-    """
-    key = _read_secret("mcp_api_key")
-    if key:
-        _check_key_entropy(key, "Docker Secret mcp_api_key")
-        return key, False
-
-    key = os.getenv("MCP_API_KEY", "").strip()
-    if key:
-        _check_key_entropy(key, "env var MCP_API_KEY")
-        return key, False
-
-    if _KEY_PATH.exists():
-        key = _KEY_PATH.read_text().strip()
-        if key:
-            _check_key_entropy(key, f"persisted file {_KEY_PATH}")
-            return key, False
-
-    key = _secrets.token_hex(32)
-    try:
-        _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _KEY_PATH.write_text(key)
-    except OSError as e:
-        logger.warning(f"[auth] Could not persist generated key ({e}) — key resets on restart; mount ./data:/app/data")
-    return key, True
-
-
-def _print_key_banner(key: str) -> None:
-    sep = "=" * 72
-    print(f"""
-{sep}
-  MCP API KEY — COPY THIS NOW (shown once; stored in ./data/mcp_api_key)
-
-  Bearer {key}
-
-  .mcp.json:
-    "headers": {{"Authorization": "Bearer {key}"}}
-
-  Regenerate:  docker exec wmcp python src/mcp_keygen.py
-{sep}
-""", flush=True)
-    logger.info(f"[auth] New API key generated and persisted to {_KEY_PATH}")
-
-
-def _parse_plcs_from_env() -> list[tuple[str, str, str]]:
-    """Parse PLC list from environment + Docker Secrets, supporting three formats.
-
-    Password resolution order (highest priority first):
-      1. Docker Secret  /run/secrets/plc_password_<ip-with-underscores>  (per-PLC)
-      2. Env var        PLC_PASSWORDS_<ip-with-underscores>               (per-PLC, backward-compat)
-      3. Docker Secret  /run/secrets/plc_default_password                 (shared default)
-      4. Env var        DEFAULT_PLC_PASSWORD                              (shared default, dev fallback)
-      5. Hardcoded      "wago"
-
-    Host formats (all three can be combined; IPs are merged):
-      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2        (CSV, suitable for small fleets)
-      WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt  (one IP per line, # comments; large fleets)
-      PLC_PASSWORDS_10_0_0_1=secret_a          (per-PLC env, also extends host list)
-    Per-PLC credentials override the shared default for matching IPs.
-    """
-    user = os.getenv("DEFAULT_PLC_USERNAME", "admin")
-    default_pwd = (
-        _read_secret("plc_default_password")
-        or os.getenv("DEFAULT_PLC_PASSWORD", "wago")
-    )
-    if default_pwd in {"wago", "admin", "password", "123456", ""}:
-        logger.warning(
-            "[config] DEFAULT_PLC_PASSWORD is a known factory default — "
-            "set a strong password via Docker Secret (plc_default_password) or env var"
-        )
-    per_plc_secrets = _load_per_plc_secrets()
-    plcs: dict[str, tuple[str, str]] = {}
-
-    hosts_csv = os.getenv("WAGO_PLC_HOSTS", "").strip()
-    if hosts_csv:
-        for ip in (h.strip() for h in hosts_csv.split(",")):
-            if ip:
-                plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
-
-    hosts_file = os.getenv("WAGO_PLC_HOSTS_FILE", "").strip()
-    if hosts_file:
-        p = Path(hosts_file)
-        if p.exists():
-            for line in p.read_text().splitlines():
-                ip = line.split("#")[0].strip()
-                if ip:
-                    plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
-        else:
-            logger.warning(f"[config] WAGO_PLC_HOSTS_FILE={hosts_file} not found — skipping")
-
-    for key, val in os.environ.items():
-        m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)
-        if m:
-            ip = m.group(1).replace("_", ".")
-            plcs[ip] = (user, per_plc_secrets.get(ip) or val or default_pwd)
-
-    return [(ip, u, p) for ip, (u, p) in plcs.items()]
-
-
-_RATE_WINDOW = 60.0   # seconds
-_RATE_LIMIT   = 60    # max requests per IP per window
-_AUTH_ALERT   = 10    # failed auth attempts before ERROR alert
-
-try:
-    _APP_VERSION = importlib.metadata.version("wago-plc-mcp-server")
-except importlib.metadata.PackageNotFoundError:
-    _APP_VERSION = "unknown"
-
-
-class _AuthMiddleware:
-    """ASGI middleware: serves /health unauthenticated; enforces Bearer auth on all other paths.
-
-    Also applies per-IP rate limiting and alerts on repeated auth failures.
-    When api_key is empty, auth enforcement is disabled (dev mode) but /health still works.
-    """
-
-    _HEALTH    = json.dumps({"status": "ok", "version": _APP_VERSION}).encode()
-    _UNAUTH    = b'{"error":"Unauthorized"}'
-    _RATE_BODY = b'{"error":"Too Many Requests"}'
-
-    def __init__(self, app, api_key: str) -> None:
-        self._app = app
-        # None signals "auth disabled — pass all traffic through"
-        self._key: bytes | None = api_key.encode() if api_key else None
-        self._rate: dict[str, deque] = {}
-        self._failures: dict[str, int] = {}
-
-    async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http":
-            await self._app(scope, receive, send)
-            return
-
-        if scope.get("path") == "/health":
-            await send({"type": "http.response.start", "status": 200,
-                        "headers": [(b"content-type", b"application/json"),
-                                    (b"content-length", str(len(self._HEALTH)).encode())]})
-            await send({"type": "http.response.body", "body": self._HEALTH})
-            return
-
-        ip: str = (scope.get("client") or ("", 0))[0]
-
-        # Rate limit
-        now = time.monotonic()
-        bucket = self._rate.setdefault(ip, deque())
-        while bucket and now - bucket[0] > _RATE_WINDOW:
-            bucket.popleft()
-        if len(bucket) >= _RATE_LIMIT:
-            logger.warning(f"[auth] rate limit exceeded for {ip}")
-            await send({"type": "http.response.start", "status": 429,
-                        "headers": [(b"content-type", b"application/json"),
-                                    (b"content-length", str(len(self._RATE_BODY)).encode()),
-                                    (b"retry-after", b"60")]})
-            await send({"type": "http.response.body", "body": self._RATE_BODY})
-            return
-        bucket.append(now)
-
-        if self._key is not None:
-            headers = {k.lower(): v for k, v in scope.get("headers", [])}
-            auth = headers.get(b"authorization", b"").decode("latin-1")
-            token = auth[7:] if auth.startswith("Bearer ") else ""
-
-            if not _secrets.compare_digest(token.encode(), self._key):
-                self._failures[ip] = self._failures.get(ip, 0) + 1
-                count = self._failures[ip]
-                if count >= _AUTH_ALERT:
-                    logger.error(f"[auth] ALERT — {count} failed attempts from {ip}")
-                else:
-                    logger.warning(f"[auth] rejected {scope.get('method','?')} {scope.get('path','?')} from {ip}")
-                await send({"type": "http.response.start", "status": 401,
-                            "headers": [(b"content-type", b"application/json"),
-                                        (b"content-length", str(len(self._UNAUTH)).encode()),
-                                        (b"www-authenticate", b"Bearer")]})
-                await send({"type": "http.response.body", "body": self._UNAUTH})
-                return
-
-            self._failures.pop(ip, None)  # reset on successful auth
-
-        await self._app(scope, receive, send)
 
 
 def _require_plc(ip: str):
@@ -436,7 +183,7 @@ async def get_plc_audit_log(
     plus action-specific fields.
     """
     limit = min(max(1, limit), 500)
-    audit_path = Path(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+    audit_path = Path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
     if not audit_path.exists():
         return {"entries": [], "total": 0, "note": "Audit log not yet created"}
@@ -515,7 +262,7 @@ async def find_parameters(
     user_settings_only: bool = False,
     limit: int = FIND_LIMIT_DEFAULT,
 ) -> dict:
-    """Search parameter IDs by substring/fuzzy match. Returns up to `limit` matches (default 20, max 100).
+    """Search parameter IDs by substring/fuzzy match. Returns up to `limit` matches (default 20, max 255).
 
     Set writeable_only=True to filter parameters that can be written.
     Set user_settings_only=True to filter user-configurable parameters.
@@ -572,9 +319,14 @@ async def get_parameters_bulk(
     requests: list of {"plc_ip": str, "parameter_id": str}
     Returns:  list of {"plc_ip": str, "parameter_id": str, "value": ..., ...} or {"error": ...}
 
+    Concurrency is bounded by WAGO_MAX_CONCURRENT_READS (default 10) so a large
+    request list cannot overload slow PLCs (CC100 web server is easily starved).
+
     Example — read firmware version from all PLCs:
     [{"plc_ip": "192.168.42.110", "parameter_id": "0-0-version-firmwareversion"}, ...]
     """
+    sem = asyncio.Semaphore(int(os.getenv("WAGO_MAX_CONCURRENT_READS", "10")))
+
     async def _fetch(req: dict) -> dict:
         ip = req.get("plc_ip", "")
         pid = req.get("parameter_id", "")
@@ -584,7 +336,8 @@ async def get_parameters_bulk(
         if pid not in plc.parameters:
             return {"plc_ip": ip, "parameter_id": pid, "error": f"Unknown parameter '{pid}'"}
         try:
-            attrs = await plc.client.get_parameter(pid)
+            async with sem:
+                attrs = await plc.client.get_parameter(pid)
             result = enrich_parameter(plc, pid, attrs)
             result["plc_ip"] = ip
             result["parameter_id"] = pid
@@ -697,7 +450,11 @@ async def invoke_method(
     if err:
         return err
     if method_id not in plc.methods:
-        return {"error": f"Unknown method '{method_id}'"}
+        matches = get_close_matches(method_id, plc.methods, n=3, cutoff=0.6)
+        return {
+            "error": f"Unknown method '{method_id}'"
+            + (f". Did you mean: {', '.join(matches)}?" if matches else "")
+        }
 
     if plc_ip in _READONLY_HOSTS:
         _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "refused: read-only host")
@@ -893,9 +650,9 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
-    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", "/app/audit.log"))
+    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
-    plcs = _parse_plcs_from_env()
+    plcs = parse_plcs_from_env()
     logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")
 
     ok, failed = await plc_manager.register_many(plcs)
@@ -908,9 +665,9 @@ async def main() -> None:
     port = os.getenv("PORT", "6042")
     transport = os.getenv("TRANSPORT", "streamable-http").strip().lower()
 
-    api_key, is_new_key = _resolve_api_key()
+    api_key, is_new_key = resolve_api_key()
     if is_new_key:
-        _print_key_banner(api_key)
+        print_key_banner(api_key)
 
     global _AGENT_ID
     _AGENT_ID = "key-" + api_key[:8]
@@ -944,7 +701,7 @@ async def main() -> None:
             "Also update wago_proxy.py and .mcp.json URLs to https:// when enabling."
         )
 
-    app = _AuthMiddleware(base_app, api_key)
+    app = AuthMiddleware(base_app, api_key)
     if not is_new_key:
         logger.info("[auth] Bearer auth enabled — GET /health is exempt")
 

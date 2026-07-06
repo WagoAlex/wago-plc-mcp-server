@@ -75,11 +75,15 @@ class WDAClient:
         req_headers: dict = kwargs.pop("headers", {})
 
         if self._token:
+            stale_token = self._token
             req_headers["Authorization"] = f"Bearer {self._token}"
             r = await self.client.request(method, url, headers=req_headers, **kwargs)
             if r.status_code == 401:
                 async with self._lock:
-                    await self._acquire_token()
+                    # Double-checked refresh: if another coroutine already
+                    # replaced the token while we waited, skip re-auth.
+                    if self._token == stale_token:
+                        await self._acquire_token()
                 if self._token:
                     req_headers["Authorization"] = f"Bearer {self._token}"
                     r = await self.client.request(method, url, headers=req_headers, **kwargs)
@@ -117,7 +121,14 @@ class WDAClient:
             return {"ok": False, "reason": f"{type(e).__name__}: {msg}"}
 
     async def _paginate(self, path: str) -> list[dict]:
-        """Walk all pages via JSON:API links.next."""
+        """Walk all pages via JSON:API links.next.
+
+        links.next is the primary loop condition: WDA hard-caps pages at 255
+        entries regardless of the requested page[limit], so a shorter-than-
+        requested page does NOT imply the last page. An empty page with a
+        links.next still present is treated as a corrupt link and stops the
+        walk (guards against an infinite page-0 loop).
+        """
         items: list[dict] = []
         # Ensure unreadable parameters surface as error attributes rather than 500ing the page.
         if "/wda/parameters" in path and "parameter-errors-as-data-attributes" not in path:
@@ -131,8 +142,8 @@ class WDAClient:
             body = r.json()
             page_data = body.get("data", [])
             items.extend(page_data)
-            if len(page_data) < self.page_limit:
-                break  # shorter-than-full page → last page; guards against corrupt links.next
+            if not page_data:
+                break  # empty page → done (or corrupt links.next; either way stop)
             next_url = body.get("links", {}).get("next")
         return items
 

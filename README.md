@@ -141,16 +141,22 @@ docker compose up -d
 docker logs wmcp -f
 ```
 
-On first boot the server prints the auto-generated API key - **copy it now**:
+On first boot the server generates an API key and announces its fingerprint
+(the key itself is never written to container logs). Retrieve it with:
+
+```bash
+docker exec wmcp cat /app/data/mcp_api_key
+```
 
 ```
 ════════════════════════════════════════════════════════════════════════
-  MCP API KEY - COPY THIS NOW (shown once; stored in ./data/mcp_api_key)
+  NEW MCP API KEY GENERATED  (fingerprint: 7290f42b…)
 
-  Bearer 7290f42b…
+  Stored in ./data/mcp_api_key - retrieve it with:
+    docker exec wmcp cat /app/data/mcp_api_key
 
   .mcp.json:
-    "headers": {"Authorization": "Bearer 7290f42b…"}
+    "headers": {"Authorization": "Bearer <key>"}
 
   Regenerate:  docker exec wmcp python src/mcp_keygen.py
 ════════════════════════════════════════════════════════════════════════
