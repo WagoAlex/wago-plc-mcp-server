@@ -2,7 +2,7 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
-[![MCP Tools](https://img.shields.io/badge/MCP_tools-13-1F2837.svg)](#tool-reference)
+[![MCP Tools](https://img.shields.io/badge/MCP_tools-14-1F2837.svg)](#tool-reference)
 [![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#supported-hardware)
 
 # wago-plc-mcp-server
@@ -184,7 +184,7 @@ claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc 
   }
 }
 ```
-Fully quit and relaunch Claude Desktop. You should see a hammer icon with 13 tools:
+Fully quit and relaunch Claude Desktop. You should see a hammer icon with 14 tools:
 
 ![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
@@ -263,7 +263,7 @@ your control program's I/O data.
 **What MCP is:** A standard protocol that lets an AI assistant call a fixed
 set of defined tools against a system, instead of you writing custom
 integration code for every request. This server turns the WDA REST API into
-13 tools an AI assistant can call directly.
+14 tools an AI assistant can call directly.
 
 | Term | Plain meaning | Closest thing you already know |
 |---|---|---|
@@ -556,6 +556,17 @@ CI runs: python scripts/apply.py plcs/192.168.1.10.yaml --execute
 Live PLC updated - ops files self-delete on success
 ```
 
+The CI step is a GitHub Actions workflow living in the config repo, not here -
+it decides dry-run vs. execute purely from the triggering event, never from a
+flag you set: a pull request always dry-runs (prints drift, touches nothing),
+and only a push to `main` (i.e. a merge) executes. It runs on a **self-hosted
+runner** because GitHub-hosted runners have no route to the PLC subnet, and it
+borrows `scripts/apply.py` from this repo via sparse-checkout on every run - a
+fix here is picked up there without a version bump. Full mechanics (trigger
+table, checkout steps, secrets, why `contents: write` is needed for the
+ops-file-cleanup commit): [wago-plc-config README - How the GitHub Actions
+workflow works](https://github.com/WagoAlex/wago-plc-config#how-the-github-actions-workflow-works).
+
 ### Enable
 
 ```env
@@ -754,6 +765,7 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 |------|-------------|
 | `list_plcs` | List all registered PLC IPs |
 | `describe_plc(plc_ip)` | Capability counts + feature names + `device_class`, `expected_parameter_count`, `parameter_count_ok` |
+| `get_plc_audit_log(plc_ip, action, limit)` | Read recent tamper-evident audit log entries; filter by PLC and/or action, newest first (max 500) |
 
 ### Parameters
 
@@ -843,6 +855,7 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `WAGO_TIMEOUT_SECONDS` | `45` | Per-PLC HTTP timeout (CC100 needs 45+) |
 | `WAGO_PAGE_LIMIT` | `500` | WDA pagination page size |
 | `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Parallel PLC init limit |
+| `WAGO_MAX_CONCURRENT_READS` | `10` | Parallel PLC request limit inside `get_parameters_bulk` |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 | `LOG_FILE` | `/app/mcp_server.log` | Debug log path inside container |
 
@@ -961,7 +974,7 @@ flowchart TB
 
     subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
         direction LR
-        MCP("13 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · …")
+        MCP("14 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
         Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
         MCP --- Guard
     end
