@@ -200,10 +200,17 @@ def start(c, file_id):
         sys.exit(1)
 
 
+STATUS_UNCONFIRMED = 4  # RAUC install done, device rebooted into new slot,
+                        # self-test passed. Progress plateaus at ~93% here
+                        # PERMANENTLY - it never reaches 100 on its own.
+                        # Finish() is what's needed to move past this, on
+                        # every real device tested (WP400, two PFC200s).
+
+
 def wait_for_completion(c):
     show("==> Waiting for install + auto-reboot (connection may drop briefly - this is normal)")
     deadline = time.time() + POLL_TIMEOUT
-    last_progress = None
+    last_seen = None
     while time.time() < deadline:
         time.sleep(POLL_INTERVAL)
         try:
@@ -212,12 +219,13 @@ def wait_for_completion(c):
         except (httpx.RequestError, httpx.HTTPStatusError, KeyError, json.JSONDecodeError):
             show("    [device unreachable - likely mid-reboot]")
             continue
-        if progress != last_progress:
+        seen = (status_val, progress)
+        if seen != last_seen:
             show(f"    fwstatus: {status_name} ({status_val})  progress: {progress}%")
-            last_progress = progress
-        if progress == 100:
+            last_seen = seen
+        if progress == 100 or status_val == STATUS_UNCONFIRMED:
             return
-    show("FATAL: timed out waiting for progress=100")
+    show("FATAL: timed out waiting for the install to reach a finishable state")
     sys.exit(1)
 
 
