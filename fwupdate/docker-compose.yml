@@ -1,0 +1,16 @@
+services:
+  fwupdate:
+    build: .
+    container_name: wago-fwupdate
+    network_mode: host
+    environment:
+      PLC_IP: ${PLC_IP}
+      PLC_USERNAME: ${PLC_USERNAME:-admin}
+      PLC_PASSWORD: ${PLC_PASSWORD}
+      WUP_PATH: /firmware/update.wup
+      CHUNK_SIZE: ${CHUNK_SIZE:-4000000}
+      POLL_INTERVAL: ${POLL_INTERVAL:-6}
+      POLL_TIMEOUT: ${POLL_TIMEOUT:-900}
+      DRY_RUN: ${DRY_RUN:-false}
+    volumes:
+      - ${WUP_FILE_PATH}:/firmware/update.wup:ro

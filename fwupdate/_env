@@ -1,0 +1,12 @@
+# Copy to .env and fill in. .env is gitignored at the project root.
+PLC_IP=192.168.2.217
+PLC_USERNAME=admin
+PLC_PASSWORD=changeme
+
+# Host path to the .wup firmware file - mounted read-only into the container.
+WUP_FILE_PATH=/home/wago/Documents/mcp/fw/PFC-G2-Linux-red-autoupdate_update_V040950_31_r1263689c9b.wup
+
+# Optional overrides
+CHUNK_SIZE=4000000
+POLL_INTERVAL=6
+POLL_TIMEOUT=900

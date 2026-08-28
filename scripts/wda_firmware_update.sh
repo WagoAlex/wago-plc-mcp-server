@@ -42,8 +42,10 @@ api() { # api METHOD PATH [DATA]
   fi
 }
 
-run_method() { # run_method method-id json-inargs-or-empty
-  local id="$1" args="${2:-{}}"
+run_method() { # run_method method-id [json-inargs]
+  local id="$1"
+  local args="${2:-}"
+  [[ -z "$args" ]] && args="{}"
   api POST "/wda/methods/$id/runs?result-behavior=sync" \
     "{\"data\":{\"type\":\"runs\",\"attributes\":{\"inArgs\":$args}}}"
 }
