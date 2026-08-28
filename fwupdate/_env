@@ -3,8 +3,20 @@ PLC_IP=192.168.2.217
 PLC_USERNAME=admin
 PLC_PASSWORD=changeme
 
-# Host path to the .wup firmware file - mounted read-only into the container.
-WUP_FILE_PATH=/home/wago/Documents/mcp/fw/PFC-G2-Linux-red-autoupdate_update_V040950_31_r1263689c9b.wup
+# Host directory holding .wup firmware bundles - mounted read-only into the
+# container. The device's order number and current firmware version are
+# read live and matched against every bundle's own package-info.xml to pick
+# the right one automatically. See catalog.py.
+FIRMWARE_HOST_DIR=/home/wago/Documents/mcp/fw
+
+# Optional: exact target firmware revision, e.g. "4.9.1". Leave unset to
+# auto-pick the highest-revision compatible bundle available ("latest").
+#TARGET_VERSION=4.9.1
+
+# Optional: bypass catalog resolution entirely and use exactly this bundle
+# (a path *inside the container*, under /firmware/). Leave unset for
+# catalog mode (recommended).
+#WUP_PATH=/firmware/PFC-G2-Linux_update_V040901_31_r9d0900aaed.wup
 
 # Optional overrides
 CHUNK_SIZE=4000000

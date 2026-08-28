@@ -8,16 +8,34 @@ See ../docs/wda-firmware-update.md for the full write-up of why each step
 exists (Activate must precede Start, /tmp/fwupdate permission requirement,
 the .raucb-not-.wup payload, the ~4MB chunk ceiling).
 
+Two modes, chosen automatically:
+
+  Catalog mode (default): mount a directory of .wup bundles at FIRMWARE_DIR.
+  The script reads the device's own Identity/OrderNumber and current
+  firmware version, builds a catalog from every package-info.xml in that
+  directory (see catalog.py / build_catalog.py), and picks the correct
+  bundle for the device - the highest-revision compatible one, or an exact
+  match if TARGET_VERSION is given. Refuses to run if no bundle matches the
+  device's order number, if it's already at the target version, or if the
+  current version falls outside the chosen bundle's own declared
+  upgrade/downgrade range.
+
+  Manual mode: set WUP_PATH to a specific file (inside the container) to
+  bypass catalog resolution entirely and use exactly that bundle, no
+  questions asked - the original single-file behavior.
+
 Env vars:
     PLC_IP          required
     PLC_USERNAME    default "admin"
     PLC_PASSWORD    required
-    WUP_PATH        default "/firmware/update.wup" - path *inside the container*;
-                     map the real file there via the compose volume mount
-                     (see WUP_FILE_PATH in docker-compose.yml, a host path).
+    FIRMWARE_DIR    default "/firmware" - directory of .wup bundles (catalog mode)
+    TARGET_VERSION  optional, e.g. "4.9.1" - exact revision to require;
+                     unset means "pick the latest compatible bundle available"
+    WUP_PATH        optional - an exact bundle path inside the container;
+                     setting this skips catalog resolution entirely (manual mode)
     CHUNK_SIZE      default 4000000 (~4MB, the verified safe ceiling)
     POLL_INTERVAL   default 6 (seconds between status polls)
-    POLL_TIMEOUT    default 900 (seconds to wait for progress=100 before giving up)
+    POLL_TIMEOUT    default 900 (seconds to wait for a finishable state before giving up)
 """
 import json
 import os
@@ -27,6 +45,8 @@ import zipfile
 from pathlib import Path
 
 import httpx
+
+from catalog import build_catalog, resolve_bundle
 
 STATUS_NAMES = {
     0: "Inactive",
@@ -53,7 +73,9 @@ def env(name, default=None, required=False):
 PLC_IP = env("PLC_IP", required=True)
 USERNAME = env("PLC_USERNAME", "admin")
 PASSWORD = env("PLC_PASSWORD", required=True)
-WUP_PATH = env("WUP_PATH", "/firmware/update.wup")
+FIRMWARE_DIR = env("FIRMWARE_DIR", "/firmware")
+TARGET_VERSION = env("TARGET_VERSION")
+WUP_PATH = env("WUP_PATH")  # manual override; unset => catalog mode
 CHUNK_SIZE = int(env("CHUNK_SIZE", "4000000"))
 POLL_INTERVAL = int(env("POLL_INTERVAL", "6"))
 POLL_TIMEOUT = int(env("POLL_TIMEOUT", "900"))
@@ -108,6 +130,43 @@ def get_status(c):
 def get_progress(c):
     r = c.get(f"{BASE}/wda/parameters/0-0-firmwareupdate-progress")
     return r.json()["data"]["attributes"]["value"]
+
+
+def get_identity(c):
+    order = c.get(f"{BASE}/wda/parameters/0-0-identity-ordernumber").json()["data"]["attributes"]["value"]
+    version = c.get(f"{BASE}/wda/parameters/0-0-version-firmwareversion").json()["data"]["attributes"]["value"]
+    return order, version
+
+
+def resolve_wup_path(c):
+    """Catalog mode: identify the device, build the catalog from
+    FIRMWARE_DIR, and pick the correct bundle. Returns a Path."""
+    order_number, current_version = get_identity(c)
+    show(f"==> Device identity: order={order_number}  current firmware={current_version}")
+
+    firmware_dir = Path(FIRMWARE_DIR)
+    if not firmware_dir.is_dir():
+        show(f"FATAL: FIRMWARE_DIR {firmware_dir} is not a directory (check the volume mount)")
+        sys.exit(1)
+
+    show(f"==> Building catalog from {firmware_dir}")
+    catalog = build_catalog(firmware_dir)
+    if not catalog["bundles"]:
+        show(f"FATAL: no .wup files found in {firmware_dir}")
+        sys.exit(1)
+    show(f"    {len(catalog['bundles'])} bundle(s) found")
+
+    try:
+        bundle, direction = resolve_bundle(catalog, order_number, current_version, TARGET_VERSION)
+    except ValueError as e:
+        show(f"FATAL: {e}")
+        sys.exit(1)
+
+    show(
+        f"==> Resolved: {bundle['wup_file']} "
+        f"({direction} {current_version} -> {bundle['revision']}, build {bundle['release_index']})"
+    )
+    return firmware_dir / bundle["wup_file"]
 
 
 def extract_raucb(wup_path):
@@ -255,20 +314,24 @@ def clear(c):
 
 def main():
     show(f"WDA firmware update -> {PLC_IP}")
-    show(f"Source .wup: {WUP_PATH}")
     if DRY_RUN:
         show("==> DRY_RUN=true: will upload the image and verify it, then stop BEFORE Start.")
         show("    No firmware will actually be flashed. Unset DRY_RUN to run for real.")
 
-    if not Path(WUP_PATH).is_file():
-        show(f"FATAL: {WUP_PATH} not found (check the WUP_FILE_PATH volume mount)")
-        sys.exit(1)
-
-    show("==> Extracting .raucb bundle")
-    raucb_path = extract_raucb(WUP_PATH)
-    show(f"    {raucb_path.name} ({raucb_path.stat().st_size} bytes)")
-
     with client() as c:
+        if WUP_PATH:
+            show(f"==> Manual mode: WUP_PATH={WUP_PATH} (catalog resolution skipped)")
+            wup_path = Path(WUP_PATH)
+            if not wup_path.is_file():
+                show(f"FATAL: {wup_path} not found (check the volume mount)")
+                sys.exit(1)
+        else:
+            wup_path = resolve_wup_path(c)
+
+        show("==> Extracting .raucb bundle")
+        raucb_path = extract_raucb(wup_path)
+        show(f"    {raucb_path.name} ({raucb_path.stat().st_size} bytes)")
+
         activate(c)
         file_id = get_upload_id(c, raucb_path.name)
         show(f"    file_id={file_id}")
