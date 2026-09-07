@@ -87,6 +87,20 @@ else
   SBOM_FILE=""
 fi
 
+# ── fwupdate image + its own SBOM ────────────────────────────────────────────
+# The firmware updater ships as a separate image with a separate dependency set
+# (git, boto3, pyyaml) — one SBOM cannot cover both, and CRA Art. 13(3) wants
+# one per product with digital elements.
+FW_IMAGE="${REPO}-fwupdate:${VERSION}"
+echo "▶ building ${FW_IMAGE}"
+# shellcheck disable=SC2086
+docker build ${NO_CACHE} -t "${FW_IMAGE}" -t "${REPO}-fwupdate:latest" fwupdate/
+if command -v syft &>/dev/null; then
+  echo "▶ generating fwupdate SBOM → sbom/sbom-fwupdate-${VERSION}.json"
+  mkdir -p sbom
+  syft "${FW_IMAGE}" -o cyclonedx-json="sbom/sbom-fwupdate-${VERSION}.json"
+fi
+
 # ── docker push ───────────────────────────────────────────────────────────────
 if $DO_PUSH; then
   echo "▶ pushing ${IMAGE}"

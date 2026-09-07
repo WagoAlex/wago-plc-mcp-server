@@ -757,6 +757,131 @@ Step-by-step guide for reviewers (GitHub UI and CLI):
 
 ---
 
+## Firmware updates
+
+Firmware is the one change on a controller that a follow-up commit cannot undo.
+This project therefore treats it differently from every other write.
+
+### The agent cannot flash a controller
+
+`invoke_method` refuses every `firmware*` method in live mode, on every device,
+and the refusal is recorded in the audit log. This is not configuration you are
+expected to relax:
+
+```
+> Update the firmware on 192.168.42.121
+
+Method '0-0-firmwareupdate-activate' is denied by safety policy
+(dangerous; not in WAGO_ALLOW_METHODS).
+```
+
+Firmware updates are performed by a **separate tool** in this repository,
+[`fwupdate/`](fwupdate/README.md), which a person runs during a maintenance
+window. It speaks the same WDA REST API, but it is not reachable by the agent
+and it will not start without a human approval committed to git.
+
+### What authorizes a flash
+
+A YAML file in your config repository - not a command-line flag, not an
+environment variable:
+
+```yaml
+# firmware-policy.yaml
+approvals:
+  # Merging the pull request is the approval.
+  192.168.42.110: "4.9.1"     # CC100     0751-9401
+
+  # Or require a named reviewer as well, the same gate the ops/ files use.
+  192.168.42.119:             # PFC300    0750-8302
+    version: "4.9.1"
+    requires_human: CRITICAL
+    approved_by: "A. Engineer"
+```
+
+The tool refuses to flash unless **all** of the following are true. Each
+refusal names its reason and exits before the device is touched:
+
+| Check | Why it exists |
+|---|---|
+| The policy file is tracked by git | An untracked file is nobody's decision |
+| The working tree matches the commit | A local edit must not authorize anything |
+| The device is listed with the **exact** revision the bundle declares | Catches a stale approval, and picks the right bundle (see below) |
+| `approved_by` is set, if the entry requires it | An unapproved PR stays safe to open |
+| `HEAD` is signed, if `FW_REQUIRE_SIGNED_COMMIT=true` | Optional, for regulated environments |
+
+### Why the revision must be exact
+
+A PFC200 G2 order number (`0750-8212`) appears in the article list of both the
+standard `4.9.1` firmware and the `red-autoupdate` `4.9.50` redundancy
+firmware, with byte-identical article lists. "Install the latest" would quietly
+put redundancy firmware on a standard controller. The approved revision in your
+policy file decides instead - and if two bundles still match, the tool refuses
+and lists them rather than guessing.
+
+Bundle selection is otherwise automatic: the tool reads the device's own order
+number and firmware version over REST, then reads each `.wup`'s own
+`package-info.xml`. Nothing is inferred from filenames, and the device's
+current version is validated against that bundle's declared upgrade/downgrade
+range before anything is written.
+
+### Setting it up
+
+```bash
+# 1. Approve the devices, in your config repo, via pull request
+#    (see the wago-plc-config README for the review workflow)
+
+# 2. On a host with a route to the PLC subnets:
+cd fwupdate
+cp _env .env          # PLC credentials, FIRMWARE_SOURCE, POLICY_HOST_DIR
+
+# 3. Rehearse. This uploads and verifies the image, then cancels.
+#    Start is never called, so nothing is flashed.
+DRY_RUN=true docker compose up --build
+
+# 4. Only after a clean rehearsal, run it for real
+docker compose run --rm fleet        # every approved device, one at a time
+```
+
+Firmware bundles come from wherever your organization already keeps them:
+a local directory, a mounted SMB/NFS share, an S3 bucket (or MinIO/Ceph), a
+single HTTPS link - including a Teams/SharePoint "anyone with the link" URL
+with `?download=1` - or an HTTPS JSON manifest for a full multi-device set.
+Downloads are cached, checksum-verified where the manifest provides one, and
+never mistaken for complete if interrupted.
+
+### Afterwards
+
+Every run appends to the **same tamper-evident audit chain** as
+`set_parameters` and `invoke_method` - authorization, refusals, success,
+device-reported failure, timeout, and an abort mid-flash. The authorizing
+commit and reviewer are part of the record:
+
+```bash
+docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
+# [PASS] Chain intact - 13 entries verified
+
+git show 18d2cbf        # who approved it, and when
+```
+
+### Before your first production window
+
+- [ ] Rehearse with `DRY_RUN=true` on **every** device class you have not
+      flashed before, not just one
+- [ ] Confirm `/tmp/fwupdate` exists on each device as `root:admin` mode `0770`
+      (a one-time SSH step; `Activate` fails without it)
+- [ ] Plan for a slow reboot: a CC100 took **10 minutes** to come back, a WP400
+      about one. A device that has gone quiet is usually still writing flash
+- [ ] Update devices **sequentially** (the default). Parallel works, but a
+      device-specific stall is far harder to attribute when several are down
+- [ ] Know that progress plateaus at ~93% and never reaches 100 - `status`
+      reaching `Unconfirmed` is the real completion signal
+
+Full reference, including the `errorcause` table for diagnosing a failed
+install: [`fwupdate/README.md`](fwupdate/README.md) and
+[`docs/wda-firmware-update.md`](docs/wda-firmware-update.md).
+
+---
+
 ## Security
 
 ### API key management
