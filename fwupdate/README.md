@@ -93,9 +93,17 @@ from the most authenticated source available:
 
 | Precedence | Source | Where it comes from |
 |---|---|---|
-| 1 | `WAGO_APPROVED_BY` | The authenticated actor. CI sets it from `github.actor`, so it cannot be forged in the YAML |
-| 2 | Commit author | Whoever committed the approval, as git recorded it |
-| 3 | The value in the file | A typed name - the weakest of the three, and only used if the first two are unavailable |
+| 1 | **PR review** | The reviewers who approved the pull request, read from the GitHub review API on merge. Cited as `WAGO_APPROVAL_REF`, e.g. `wago-plc-config#4 opened by alice, approved by bob, merged by bob` |
+| 2 | `WAGO_APPROVED_BY` | The authenticated actor, when there was no review approval - a direct push, or a PR merged without one |
+| 3 | Commit author | Fallback for a hand-run update outside CI |
+| 4 | The value in the file | A typed name - weakest, used only if none of the above are available |
+
+**The pull request is the approval, not the commit.** A commit author is
+usually whoever *proposed* the change, and a squash or merge commit is authored
+by GitHub itself, so citing a commit is weakest exactly where it matters most.
+The PR carries the reviewer, the timestamp and a number you can point at
+afterwards. The commit-author fallback exists for running the updater by hand,
+where there is no PR to read.
 
 **Self-approval is allowed** - one engineer maintaining a rack should not need
 a second account - but it is recorded as such, so a later review can tell a

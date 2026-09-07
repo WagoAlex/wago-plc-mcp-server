@@ -180,10 +180,18 @@ def resolve_approver(repo: Path, rel: Path, declared: str) -> tuple[str, str]:
     """
     env_actor = os.environ.get("WAGO_APPROVED_BY", "").strip()
     if env_actor:
-        return env_actor, "authenticated actor (WAGO_APPROVED_BY)"
+        # WAGO_APPROVAL_REF names the pull request the approval came from, e.g.
+        # "wago-plc-config#4 approved by alice, merged by bob". Set by CI, which
+        # reads it from the GitHub review API - that is the event where a human
+        # actually approved something, as opposed to authoring a commit.
+        ref = os.environ.get("WAGO_APPROVAL_REF", "").strip()
+        return env_actor, f"PR review ({ref})" if ref else "authenticated actor (WAGO_APPROVED_BY)"
 
     author = _git(repo, "log", "-1", "--format=%an <%ae>", "--", str(rel))
     if author:
+        # Fallback for a hand-run update outside CI. Weaker on purpose: the
+        # author of a commit is usually the person proposing the change, and a
+        # squash or merge commit attributes it to the platform anyway.
         return author, "commit author"
 
     if declared:

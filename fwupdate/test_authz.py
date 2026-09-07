@@ -250,3 +250,29 @@ def test_uncommitted_edit_detected_in_a_subdirectory(repo):
     p.write_text(p.read_text().replace('approved_by: ""', 'approved_by: "self"'))
     with pytest.raises(authz.NotAuthorized, match="uncommitted"):
         authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+
+
+def test_pr_review_outranks_and_names_the_pull_request(repo, monkeypatch):
+    """The approval event is the PR review, not the commit. A merge or squash
+    commit is authored by the platform, so the commit author is the wrong
+    anchor exactly where it matters."""
+    monkeypatch.setenv("WAGO_APPROVED_BY", "alice")
+    monkeypatch.setenv("WAGO_APPROVAL_REF", "wago-plc-config#4 approved by alice, merged by bob")
+    p = write_ops(repo, approved_by='""')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+
+    _, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert "alice" in approved_by
+    assert "PR review" in approved_by and "#4" in approved_by
+    assert "self-approved" not in approved_by, "an external reviewer is not self-approval"
+
+
+def test_without_a_pr_ref_the_actor_is_still_used(repo, monkeypatch):
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ci-actor")
+    monkeypatch.delenv("WAGO_APPROVAL_REF", raising=False)
+    p = write_ops(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    _, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert "ci-actor" in approved_by and "authenticated actor" in approved_by

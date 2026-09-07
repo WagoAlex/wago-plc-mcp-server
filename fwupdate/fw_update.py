@@ -298,7 +298,8 @@ def check_authorization(revision):
              "Allowed, and recorded as such in the audit log.")
     show(f"==> Authorized by commit {sha[:12]} ({source_file}){signoff}: {PLC_IP} -> {revision}")
     audit_record("authorized", revision=revision, commit=sha, approved_by=approved_by or None,
-                 self_approved=self_approved, authorization_file=source_file)
+                 self_approved=self_approved, authorization_file=source_file,
+                 approval_ref=os.environ.get("WAGO_APPROVAL_REF", "").strip() or None)
     return sha
 
 
