@@ -45,3 +45,47 @@ expect_error("outside this bundle's upgrade range", catalog={"bundles": [STD]},
              device_order_number="0750-8212", current_version="2.9.0", allow_reflash=True)
 
 print("catalog resolution: all checks passed")
+
+# Minimum-build floors: a per-hardware constraint the bundle's own version
+# range does not express.
+from catalog import check_minimum_build, minimum_build_for  # noqa: E402
+
+assert minimum_build_for("0750-8302") == 30, "PFC300 needs build 30"
+assert minimum_build_for("0751-9401") == 28
+assert minimum_build_for("0750-8212/0025-0000") == 28, "variant suffix must not defeat the lookup"
+assert check_minimum_build("0750-8302", "31") == 31
+assert check_minimum_build("0751-9401", 28) == 28, "exactly at the floor is allowed"
+
+expect_error_msg = None
+try:
+    check_minimum_build("0750-8302", "28")
+except ValueError as e:
+    expect_error_msg = str(e)
+assert expect_error_msg and "below the minimum 30" in expect_error_msg, expect_error_msg
+
+try:
+    check_minimum_build("0751-9401", "27")
+except ValueError as e:
+    assert "below the minimum 28" in str(e)
+else:
+    raise AssertionError("build 27 must be refused")
+
+try:
+    check_minimum_build("0751-9401", None)
+except ValueError as e:
+    assert "cannot read the device's firmware build" in str(e)
+else:
+    raise AssertionError("an unreadable build must be refused, not assumed good")
+
+# The modem variant gets a useful hint instead of a bare "set TARGET_VERSION".
+MODEM_STD = {**STD, "article_numbers": ["0750-8212", "0750-8217"]}
+MODEM_CAT = {"bundles": [MODEM_STD, {**MODEM_STD, "wup_file": "PFC-G2-red-autoupdate.wup",
+                                     "revision": "4.9.50"}]}
+try:
+    resolve_bundle(MODEM_CAT, "0750-8217", "04.08.09")
+except ValueError as e:
+    assert "modem variant" in str(e) and "4.9.50" in str(e), str(e)
+else:
+    raise AssertionError("0750-8217 matches two bundles and must refuse")
+
+print("minimum-build and modem-variant checks: all passed")
