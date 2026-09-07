@@ -1,18 +1,53 @@
 services:
   fwupdate:
-    build: .
+    build:
+      context: ..
+      dockerfile: fwupdate/Dockerfile
     container_name: wago-fwupdate
     network_mode: host
     environment:
       PLC_IP: ${PLC_IP}
       PLC_USERNAME: ${PLC_USERNAME:-admin}
       PLC_PASSWORD: ${PLC_PASSWORD}
-      FIRMWARE_DIR: /firmware
+      # Where bundles come from: a mounted directory, file://, s3:// or https://
+      FIRMWARE_SOURCE: ${FIRMWARE_SOURCE:-/firmware}
+      FIRMWARE_CACHE: /firmware-cache
+      FIRMWARE_SOURCE_TOKEN: ${FIRMWARE_SOURCE_TOKEN:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      # Git-gated authorization
+      AUDIT_LOG_FILE: ${AUDIT_LOG_FILE:-/app/data/audit.log}
+      FW_POLICY_FILE: ${FW_POLICY_FILE:-/policy/firmware-policy.yaml}
+      FW_AUTHZ: ${FW_AUTHZ:-on}
+      FW_REQUIRE_SIGNED_COMMIT: ${FW_REQUIRE_SIGNED_COMMIT:-false}
       TARGET_VERSION: ${TARGET_VERSION:-}
       WUP_PATH: ${WUP_PATH:-}
       CHUNK_SIZE: ${CHUNK_SIZE:-4000000}
       POLL_INTERVAL: ${POLL_INTERVAL:-6}
       POLL_TIMEOUT: ${POLL_TIMEOUT:-900}
+      HTTP_TIMEOUT: ${HTTP_TIMEOUT:-45}
+      FW_ALLOW_REFLASH: ${FW_ALLOW_REFLASH:-false}
+      WAGO_APPROVED_BY: ${WAGO_APPROVED_BY:-}
       DRY_RUN: ${DRY_RUN:-false}
     volumes:
-      - ${FIRMWARE_HOST_DIR}:/firmware:ro
+      - ${FIRMWARE_HOST_DIR:-/dev/null}:/firmware:ro
+      - fwcache:/firmware-cache
+      # Same ./data volume the MCP server writes its audit chain to, so a
+      # firmware flash lands in the same tamper-evident log as everything else.
+      - ../data:/app/data
+      # The policy repo checkout - .git must come along, that is what proves
+      # the approval is committed.
+      - ${POLICY_HOST_DIR:-.}:/policy:ro
+
+  # Same image, fleet entrypoint: every device the policy approves, sequentially.
+  fleet:
+    extends: fwupdate
+    container_name: wago-fwupdate-fleet
+    entrypoint: ["python", "fleet.py"]
+    environment:
+      PLC_IP: ""
+
+volumes:
+  fwcache:

@@ -82,6 +82,102 @@ The OpenAPI method listing order and a naive reading of the reference doc both s
   (paramd logs to syslog but nothing subscribes to that facility at a visible level by
   default). If you hit this, the `/tmp/fwupdate` precondition above is the fix.
 
+## The WDA parameters behind the update
+
+Six parameters back the whole flow. Identical `id`, `path`, and `dataType` on all
+six device classes (CC100, PFC200 G2, PFC300, Edge Controller, TP600, WP400 — checked
+against every FW31 cassette in `docs/*-fw31-parameters-raw.json`). All are **read-only**;
+nothing about an update is driven by writing a parameter — every state change goes
+through a `0-0-firmwareupdate-*` method. The parameters are purely observation.
+
+| Parameter ID | Path | Type | Used by `fwupdate/` | Meaning |
+|---|---|---|---|---|
+| `0-0-firmwareupdate-status` | `FirmwareUpdate/Status` | `enum_member` (`FWUStatus`) | yes — the completion signal | Update state machine position |
+| `0-0-firmwareupdate-progress` | `FirmwareUpdate/Progress` | `uint8` | yes — display only | 0–100, **plateaus at ~93 and never reaches 100** |
+| `0-0-firmwareupdate-errorcause` | `FirmwareUpdate/ErrorCause` | `enum_member` (`FWUErrorCauses`) | yes — on failure | Why the update failed |
+| `0-0-firmwareupdate-revertable` | `FirmwareUpdate/Revertable` | `boolean` | yes — on failure | Whether the previous slot can still be rolled back to |
+| `0-0-firmwareupdate-debuginfo` | `FirmwareUpdate/DebugInfo` | `string` | yes — on failure | Free-text diagnostic, `""` when idle |
+| `0-0-firmwareimage-bootmedium` | `FirmwareImage/BootMedium` | `enum_member` | **no** | `0` InternalMemory, `1` MemoryCard |
+
+Plus `0-0-version-firmwareversion` (`string`, e.g. `04.09.01`) and
+`0-0-identity-ordernumber`, which catalog mode reads to pick a bundle.
+
+### Enum members (live from a TP600, WDA 1.5.2)
+
+Fetched from the device itself, not from documentation — the enum is one hop past the
+parameter definition:
+```bash
+curl -sk -L -u admin:$PASS -H "Accept: application/vnd.api+json" \
+  "https://$PLC/wda/parameter-definitions/0-0-firmwareupdate-status/enum"
+```
+Note the `-L`: `/wda/parameters/{id}/definition` answers `301` to
+`/wda/parameter-definitions/{id}`, and without `-L` curl prints nothing at all.
+
+**`FWUStatus`** — matches `STATUS_NAMES` in `fwupdate/fw_update.py` exactly:
+
+| Value | Name | | Value | Name |
+|---|---|---|---|---|
+| 0 | Inactive | | 5 | Confirmed |
+| 1 | Init | | 6 | Revert |
+| 2 | Prepared | | 7 | **Error** |
+| 3 | Started | | 8 | Finished |
+| 4 | **Unconfirmed** ← call `Finish` here | | 9 | NotAvailable |
+
+**`FWUErrorCauses`** — grouped by phase, which is what makes a failure diagnosable:
+
+| Value | Name | | Value | Name |
+|---|---|---|---|---|
+| 0 | NoError | | 403 | SaveModifiedSettingsFailed |
+| 100 | InternalError | | 500 | SettingsRestoreFailed |
+| 101 | AbortByUser | | 600 | UpdateFailed |
+| 102 | AbortInitializationFailed | | 601 | SignatureTooNew |
+| 103 | AbortCheckSystemFailed | | 602 | SignatureTooOld |
+| 200 | SignatureInvalid | | 603 | PartitionError |
+| 300 | NotEnoughResources | | 604 | ErrorRevertNotSupported |
+| 301 | StopRuntimeFailed | | 700 | BootloaderUpdateFailed |
+| 400 | SettingsBackupFailed | | 800 | RestartFailed |
+| 401 | FirmwareBackupFailed | | 900 | SelftestFailed |
+| 402 | UserBackupFailed | | 1000 | ConfirmationTimeout |
+
+The hundreds digit is the phase: 1xx abort/init, 2xx signature, 3xx resources/runtime,
+4xx backup, 5xx restore, 6xx the RAUC install itself, 7xx bootloader, 8xx restart,
+9xx self-test, 1000 the confirmation window expiring.
+
+Both drivers bail immediately on `status=7 (Error)` or `6 (Revert)` and print the
+resolved `errorcause` name, `debuginfo`, `revertable`, and the last 15 update-log
+entries — rather than polling out the full `POLL_TIMEOUT` and reporting a bare
+timeout. `ERROR_CAUSES` in `fwupdate/fw_update.py` is this table, verbatim.
+
+### Method-run error objects
+
+A failed method run returns **HTTP 200** with `executionStatus: "error"` — check the
+body, never the status code. Verified live (harmless probe: `GetCustomValue` on a
+key that doesn't exist):
+
+```json
+{"data":{"attributes":{
+  "executionStatus":"error",
+  "code":"26",
+  "domainSpecificStatusCode":"95",
+  "title":"Failed to complete method run",
+  "detail":"A domain specific error occurred on method run with ID \"1\". Associated
+            method with ID \"0-0-firmwareupdate-getcustomvalue\" could not be
+            invoked. (Could Not Invoke Method)"}}}
+```
+
+Two separate code spaces, and this matters:
+- **`code`** — the generic WDA status code (`26` = Could Not Invoke Method). Nearly
+  every firmware-update failure surfaces as this same `26`; it says almost nothing.
+- **`domainSpecificStatusCode`** — the firmware-update-specific code. `95` = update not
+  activated; `90` = already active. **This is the field to branch on.** It is a
+  *string*, and it is absent on successful runs.
+- **`detail`** does *not* embed the domain code, contrary to what the earlier trace in
+  this document suggested (`(95, state "inactive")`). Don't parse it.
+
+The `FWUErrorCauses` list above and `domainSpecificStatusCode` are unrelated
+namespaces — the former describes an install that started and failed, the latter a
+method call that was rejected before anything started.
+
 ## Escape hatches
 
 | Method | Purpose |

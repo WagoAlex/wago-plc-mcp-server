@@ -13,12 +13,11 @@ Two modes, chosen automatically:
   Catalog mode (default): mount a directory of .wup bundles at FIRMWARE_DIR.
   The script reads the device's own Identity/OrderNumber and current
   firmware version, builds a catalog from every package-info.xml in that
-  directory (see catalog.py / build_catalog.py), and picks the correct
-  bundle for the device - the highest-revision compatible one, or an exact
-  match if TARGET_VERSION is given. Refuses to run if no bundle matches the
-  device's order number, if it's already at the target version, or if the
-  current version falls outside the chosen bundle's own declared
-  upgrade/downgrade range.
+  directory (see catalog.py / build_catalog.py), and picks the bundle whose
+  ArticleList lists the device's order number. Refuses to run if no bundle
+  matches, if several match and TARGET_VERSION wasn't given, if the device
+  is already at the target version, or if the current version falls outside
+  the chosen bundle's own declared upgrade/downgrade range.
 
   Manual mode: set WUP_PATH to a specific file (inside the container) to
   bypass catalog resolution entirely and use exactly that bundle, no
@@ -30,12 +29,16 @@ Env vars:
     PLC_PASSWORD    required
     FIRMWARE_DIR    default "/firmware" - directory of .wup bundles (catalog mode)
     TARGET_VERSION  optional, e.g. "4.9.1" - exact revision to require;
-                     unset means "pick the latest compatible bundle available"
+                     required when several bundles list the device's order number
     WUP_PATH        optional - an exact bundle path inside the container;
                      setting this skips catalog resolution entirely (manual mode)
     CHUNK_SIZE      default 4000000 (~4MB, the verified safe ceiling)
     POLL_INTERVAL   default 6 (seconds between status polls)
+    AUDIT_LOG_FILE  path to the tamper-evident audit chain shared with the MCP
+                     server and scripts/apply.py; unset disables audit writes
     POLL_TIMEOUT    default 900 (seconds to wait for a finishable state before giving up)
+    HTTP_TIMEOUT    default 45 (seconds per HTTP request; the CC100 is the slow
+                     one on this fleet and needs 45+, everything else is fine at ~15)
 """
 import json
 import os
@@ -46,7 +49,11 @@ from pathlib import Path
 
 import httpx
 
-from catalog import build_catalog, resolve_bundle
+import audit  # the MCP server's own hash chain - one implementation, not a copy
+
+import authz
+import source
+from catalog import build_catalog, read_bundle_metadata, resolve_bundle
 
 STATUS_NAMES = {
     0: "Inactive",
@@ -62,6 +69,35 @@ STATUS_NAMES = {
 }
 
 
+# FWUErrorCauses, read live from a TP600 (WDA 1.5.2) via
+# /wda/parameter-definitions/0-0-firmwareupdate-errorcause/enum.
+# The hundreds digit is the phase that failed.
+ERROR_CAUSES = {
+    0: "NoError",
+    100: "InternalError",
+    101: "AbortByUser",
+    102: "AbortInitializationFailed",
+    103: "AbortCheckSystemFailed",
+    200: "SignatureInvalid",
+    300: "NotEnoughResources",
+    301: "StopRuntimeFailed",
+    400: "SettingsBackupFailed",
+    401: "FirmwareBackupFailed",
+    402: "UserBackupFailed",
+    403: "SaveModifiedSettingsFailed",
+    500: "SettingsRestoreFailed",
+    600: "UpdateFailed",
+    601: "SignatureTooNew",
+    602: "SignatureTooOld",
+    603: "PartitionError",
+    604: "ErrorRevertNotSupported",
+    700: "BootloaderUpdateFailed",
+    800: "RestartFailed",
+    900: "SelftestFailed",
+    1000: "ConfirmationTimeout",
+}
+
+
 def env(name, default=None, required=False):
     val = os.environ.get(name, default)
     if required and not val:
@@ -73,14 +109,33 @@ def env(name, default=None, required=False):
 PLC_IP = env("PLC_IP", required=True)
 USERNAME = env("PLC_USERNAME", "admin")
 PASSWORD = env("PLC_PASSWORD", required=True)
-FIRMWARE_DIR = env("FIRMWARE_DIR", "/firmware")
+FIRMWARE_SOURCE = env("FIRMWARE_SOURCE", env("FIRMWARE_DIR", "/firmware"))
+FIRMWARE_CACHE = env("FIRMWARE_CACHE", "/firmware-cache")
+FW_POLICY_FILE = env("FW_POLICY_FILE", "/policy/firmware-policy.yaml")
+FW_AUTHZ = env("FW_AUTHZ", "on").lower() not in ("off", "0", "false", "no")
+FW_ALLOW_REFLASH = env("FW_ALLOW_REFLASH", "false").lower() in ("1", "true", "yes")
 TARGET_VERSION = env("TARGET_VERSION")
 WUP_PATH = env("WUP_PATH")  # manual override; unset => catalog mode
 CHUNK_SIZE = int(env("CHUNK_SIZE", "4000000"))
 POLL_INTERVAL = int(env("POLL_INTERVAL", "6"))
 POLL_TIMEOUT = int(env("POLL_TIMEOUT", "900"))
+# 45s, not 30: the CC100 answers WDA far slower than the rest of the fleet and
+# times out at 30 under load (mid-install especially). Raising the floor costs
+# nothing on fast devices - it is a ceiling, not a delay.
+HTTP_TIMEOUT = float(env("HTTP_TIMEOUT", "45"))
+AUDIT_LOG_FILE = env("AUDIT_LOG_FILE", "/app/data/audit.log")
 DRY_RUN = env("DRY_RUN", "false").lower() in ("1", "true", "yes")
 BOUNDARY = "wdafwupdateboundary"
+
+# Failed method runs carry a structured `domainSpecificStatusCode` (a string)
+# alongside the generic WDA `code` - verified live on a TP600, WDA 1.5.2:
+#   {"code":"26","domainSpecificStatusCode":"95","detail":"...could not be
+#    invoked. (Could Not Invoke Method)","executionStatus":"error"}
+# 95 = firmware update not activated. 90 = already active (documented in the
+# original trace, not yet re-observed live - if Activate ever FATALs on a
+# device that is genuinely already in update mode, check the printed
+# domainSpecificStatusCode against this constant first).
+FWU_ALREADY_ACTIVE = "90"
 
 BASE = f"https://{PLC_IP}"
 
@@ -89,8 +144,21 @@ def show(msg):
     print(msg, flush=True)
 
 
+def audit_record(result, **details):
+    """Append one record to the shared tamper-evident chain. A firmware flash is
+    the highest-consequence thing this fleet can do, so every outcome lands here
+    - refusals included, since "who tried and was denied" is the half that
+    matters after an incident. Never let a logging failure abort or mask a run."""
+    if not AUDIT_LOG_FILE:
+        return
+    try:
+        audit.append_audit(AUDIT_LOG_FILE, "firmware_update", PLC_IP, "fwupdate", result, **details)
+    except Exception as e:
+        print(f"[audit] WARNING: could not write audit record: {e}", file=sys.stderr)
+
+
 def client():
-    return httpx.Client(auth=(USERNAME, PASSWORD), verify=False, timeout=30.0)
+    return httpx.Client(auth=(USERNAME, PASSWORD), verify=False, timeout=HTTP_TIMEOUT)
 
 
 def run_method(c, method_id, in_args=None):
@@ -122,20 +190,37 @@ def get_log_tail(c, count=10):
 
 
 def get_status(c):
-    r = c.get(f"{BASE}/wda/parameters/0-0-firmwareupdate-status")
-    val = r.json()["data"]["attributes"]["value"]
+    val = get_param(c, "0-0-firmwareupdate-status")
     return val, STATUS_NAMES.get(val, f"Unknown({val})")
 
 
 def get_progress(c):
-    r = c.get(f"{BASE}/wda/parameters/0-0-firmwareupdate-progress")
-    return r.json()["data"]["attributes"]["value"]
+    return get_param(c, "0-0-firmwareupdate-progress")
+
+
+def get_param(c, param_id):
+    return c.get(f"{BASE}/wda/parameters/{param_id}").json()["data"]["attributes"]["value"]
+
+
+def show_failure_diagnostics(c):
+    """Print why the device stopped. The REST error bodies say nothing useful;
+    errorcause/debuginfo and the update log are where the real reason lives."""
+    try:
+        cause = get_param(c, "0-0-firmwareupdate-errorcause")
+        show(f"    errorcause: {ERROR_CAUSES.get(cause, 'Unknown')} ({cause})")
+        debug = get_param(c, "0-0-firmwareupdate-debuginfo")
+        if debug:
+            show(f"    debuginfo: {debug}")
+        show(f"    revertable: {get_param(c, '0-0-firmwareupdate-revertable')}")
+    except (httpx.RequestError, httpx.HTTPStatusError, KeyError, json.JSONDecodeError) as e:
+        show(f"    (could not read diagnostic parameters: {e})")
+    show("    Recent log:")
+    for line in get_log_tail(c, 15):
+        show(f"    {line}")
 
 
 def get_identity(c):
-    order = c.get(f"{BASE}/wda/parameters/0-0-identity-ordernumber").json()["data"]["attributes"]["value"]
-    version = c.get(f"{BASE}/wda/parameters/0-0-version-firmwareversion").json()["data"]["attributes"]["value"]
-    return order, version
+    return get_param(c, "0-0-identity-ordernumber"), get_param(c, "0-0-version-firmwareversion")
 
 
 def resolve_wup_path(c):
@@ -144,9 +229,11 @@ def resolve_wup_path(c):
     order_number, current_version = get_identity(c)
     show(f"==> Device identity: order={order_number}  current firmware={current_version}")
 
-    firmware_dir = Path(FIRMWARE_DIR)
-    if not firmware_dir.is_dir():
-        show(f"FATAL: FIRMWARE_DIR {firmware_dir} is not a directory (check the volume mount)")
+    show(f"==> Firmware source: {FIRMWARE_SOURCE}")
+    try:
+        firmware_dir = source.fetch(FIRMWARE_SOURCE, FIRMWARE_CACHE)
+    except Exception as e:
+        show(f"FATAL: cannot resolve FIRMWARE_SOURCE {FIRMWARE_SOURCE!r}: {e}")
         sys.exit(1)
 
     show(f"==> Building catalog from {firmware_dir}")
@@ -157,7 +244,9 @@ def resolve_wup_path(c):
     show(f"    {len(catalog['bundles'])} bundle(s) found")
 
     try:
-        bundle, direction = resolve_bundle(catalog, order_number, current_version, TARGET_VERSION)
+        bundle, direction = resolve_bundle(
+            catalog, order_number, current_version, TARGET_VERSION, allow_reflash=FW_ALLOW_REFLASH
+        )
     except ValueError as e:
         show(f"FATAL: {e}")
         sys.exit(1)
@@ -166,7 +255,32 @@ def resolve_wup_path(c):
         f"==> Resolved: {bundle['wup_file']} "
         f"({direction} {current_version} -> {bundle['revision']}, build {bundle['release_index']})"
     )
-    return firmware_dir / bundle["wup_file"]
+    return firmware_dir / bundle["wup_file"], bundle["revision"]
+
+
+def check_authorization(revision):
+    """Refuse to flash unless a git-committed policy approves this exact
+    (device, revision) pair. Returns the authorizing commit sha, or None when
+    the gate is deliberately disabled."""
+    if DRY_RUN:
+        show("==> Authorization: skipped (DRY_RUN never calls Start, so nothing can be flashed)")
+        return None
+    if not FW_AUTHZ:
+        show("==> Authorization: DISABLED via FW_AUTHZ=off - this flash is not git-authorized")
+        audit_record("proceeding without git authorization", revision=revision, fw_authz="off")
+        return None
+    try:
+        policy, commit = authz.load_policy(FW_POLICY_FILE)
+        sha, approved_by = authz.authorize(policy, commit, PLC_IP, revision)
+    except authz.NotAuthorized as e:
+        show(f"FATAL: refused - {e}")
+        audit_record(f"refused: {e}", revision=revision, policy_file=FW_POLICY_FILE)
+        sys.exit(1)
+    signoff = f", signed off by {approved_by}" if approved_by else ""
+    show(f"==> Authorized by commit {sha[:12]} ({FW_POLICY_FILE}){signoff}: {PLC_IP} -> {revision}")
+    audit_record("authorized", revision=revision, commit=sha, approved_by=approved_by or None,
+                 policy_file=FW_POLICY_FILE)
+    return sha
 
 
 def extract_raucb(wup_path):
@@ -225,11 +339,12 @@ def activate(c):
     if method_ok(resp):
         show("    activated")
         return
-    detail = resp.get("data", {}).get("attributes", {}).get("detail", "")
-    if "90" in str(resp):  # already active
+    attrs = resp.get("data", {}).get("attributes", {})
+    detail = str(attrs.get("detail", ""))
+    if str(attrs.get("domainSpecificStatusCode", "")) == FWU_ALREADY_ACTIVE:
         show(f"    already active, continuing ({detail})")
         return
-    show(f"FATAL: activate failed: {json.dumps(resp)}")
+    show(f"FATAL: activate failed (domain code {attrs.get('domainSpecificStatusCode')}): {json.dumps(resp)}")
     show("Recent log:")
     for line in get_log_tail(c):
         show(f"    {line}")
@@ -259,6 +374,8 @@ def start(c, file_id):
         sys.exit(1)
 
 
+STATUS_REVERT = 6       # Rolling back to the previous slot - the install failed.
+STATUS_ERROR = 7        # Terminal failure; errorcause says why.
 STATUS_UNCONFIRMED = 4  # RAUC install done, device rebooted into new slot,
                         # self-test passed. Progress plateaus at ~93% here
                         # PERMANENTLY - it never reaches 100 on its own.
@@ -284,7 +401,17 @@ def wait_for_completion(c):
             last_seen = seen
         if progress == 100 or status_val == STATUS_UNCONFIRMED:
             return
+        if status_val in (STATUS_ERROR, STATUS_REVERT):
+            show(f"FATAL: update failed - device reports {status_name} ({status_val})")
+            cause = get_param(c, "0-0-firmwareupdate-errorcause")
+            show_failure_diagnostics(c)
+            audit_record(f"failed: device reports {status_name}", status=status_name,
+                         errorcause=f"{ERROR_CAUSES.get(cause, 'Unknown')} ({cause})", progress=progress)
+            sys.exit(1)
     show("FATAL: timed out waiting for the install to reach a finishable state")
+    show_failure_diagnostics(c)
+    audit_record("failed: timed out waiting for a finishable state", poll_timeout=POLL_TIMEOUT,
+                 last_seen=str(last_seen))
     sys.exit(1)
 
 
@@ -325,8 +452,13 @@ def main():
             if not wup_path.is_file():
                 show(f"FATAL: {wup_path} not found (check the volume mount)")
                 sys.exit(1)
+            revision = read_bundle_metadata(wup_path)["revision"]
+            bundle_file = wup_path.name
         else:
-            wup_path = resolve_wup_path(c)
+            wup_path, revision = resolve_wup_path(c)
+            bundle_file = wup_path.name
+
+        check_authorization(revision)
 
         show("==> Extracting .raucb bundle")
         raucb_path = extract_raucb(wup_path)
@@ -343,6 +475,7 @@ def main():
             clear(c)  # retries internally; cancel leaves a transitional "revert"
                       # state that briefly rejects Clear, same as after Finish
             show("==> Dry run complete. Upload pipeline verified; Start was never called.")
+            audit_record("dry run ok (not flashed)", revision=revision, bundle=bundle_file)
             return
 
         start(c, file_id)
@@ -351,9 +484,20 @@ def main():
         clear(c)
 
         status_val, status_name = get_status(c)
-        fw_version = c.get(f"{BASE}/wda/parameters/0-0-version-firmwareversion").json()["data"]["attributes"]["value"]
+        fw_version = get_param(c, "0-0-version-firmwareversion")
         show(f"==> Done. fwstatus: {status_name} ({status_val})  firmware version: {fw_version}")
+        audit_record("ok", revision=revision, bundle=bundle_file, firmware_version=fw_version,
+                     status=status_name)
 
 
 if __name__ == "__main__":
-    main()
+    # A flash that dies mid-run must still leave a trail - an update that was
+    # started and never finished is exactly the state an incident review needs
+    # to see, and it is the one a happy-path-only logger loses.
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as e:  # KeyboardInterrupt included: an aborted flash is a finding
+        audit_record(f"aborted: {type(e).__name__}: {e}")
+        raise

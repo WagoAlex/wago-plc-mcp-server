@@ -17,7 +17,9 @@
 #      the app, that returns 413 before the app ever sees the body).
 #   4. FirmwareUpdate/Start with the uploaded file_id. RAUC writes the new
 #      image to the inactive slot; the device then reboots into it on its own.
-#   5. Poll status/progress until the device comes back and progress hits 100.
+#   5. Poll until the device comes back and reports status=4 (Unconfirmed).
+#      Progress plateaus at ~93% permanently and never reaches 100 on its own -
+#      status=Unconfirmed is the real "install done, ready to Finish" signal.
 #   6. FirmwareUpdate/Finish, then FirmwareUpdate/Clear.
 #
 # No explicit Reboot/BeginReboot call is used or needed - the slot switch
@@ -48,6 +50,12 @@ run_method() { # run_method method-id [json-inargs]
   [[ -z "$args" ]] && args="{}"
   api POST "/wda/methods/$id/runs?result-behavior=sync" \
     "{\"data\":{\"type\":\"runs\",\"attributes\":{\"inArgs\":$args}}}"
+}
+
+param() { # param <parameter-id> -> value, or "?" if unreachable
+  curl -sk --max-time 5 -u "$USER:$PASS" "https://$PLC/wda/parameters/$1" 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["attributes"]["value"])' 2>/dev/null \
+    || echo "?"
 }
 
 log_tail() {
@@ -137,12 +145,21 @@ fi
 echo "==> Waiting for install + auto-reboot (device drops off network mid-way - this is normal)"
 for i in $(seq 1 120); do
   sleep 5
-  status_json=$(curl -sk --max-time 5 -u "$USER:$PASS" "https://$PLC/wda/parameters/0-0-firmwareupdate-status" 2>/dev/null || true)
-  progress_json=$(curl -sk --max-time 5 -u "$USER:$PASS" "https://$PLC/wda/parameters/0-0-firmwareupdate-progress" 2>/dev/null || true)
-  status=$(echo "$status_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["attributes"]["value"])' 2>/dev/null || echo "?")
-  progress=$(echo "$progress_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["attributes"]["value"])' 2>/dev/null || echo "?")
+  status=$(param 0-0-firmwareupdate-status)
+  progress=$(param 0-0-firmwareupdate-progress)
   echo "    [$i] status=$status progress=$progress"
-  if [[ "$progress" == "100" ]]; then
+  # 7 = Error, 6 = Revert (rolling back). Both are terminal - don't keep polling.
+  # See docs/wda-firmware-update.md for the FWUErrorCauses table.
+  if [[ "$status" == "7" || "$status" == "6" ]]; then
+    echo "Update failed: status=$status errorcause=$(param 0-0-firmwareupdate-errorcause)"
+    echo "  debuginfo: $(param 0-0-firmwareupdate-debuginfo)"
+    echo "  revertable: $(param 0-0-firmwareupdate-revertable)"
+    log_tail
+    exit 1
+  fi
+  # 4 = Unconfirmed: RAUC install done, booted into the new slot, self-test
+  # passed. Progress stalls at ~93% forever, so don't wait on it.
+  if [[ "$status" == "4" || "$progress" == "100" ]]; then
     break
   fi
 done

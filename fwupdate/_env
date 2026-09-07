@@ -3,22 +3,67 @@ PLC_IP=192.168.2.217
 PLC_USERNAME=admin
 PLC_PASSWORD=changeme
 
-# Host directory holding .wup firmware bundles - mounted read-only into the
-# container. The device's order number and current firmware version are
-# read live and matched against every bundle's own package-info.xml to pick
-# the right one automatically. See catalog.py.
+# --- Where firmware bundles come from -------------------------------------
+# Everything downstream only ever sees a directory of .wup files, so the
+# source is swappable. Pick one:
+#
+#   /firmware                       the mounted directory below (default)
+#   file:///mnt/fwshare             an SMB/NFS share the HOST has mounted
+#   s3://my-bucket/firmware/        S3, or MinIO/Ceph via AWS_ENDPOINT_URL
+#   https://host/fw/X.wup           one bundle - this is what a Teams /
+#                                   SharePoint share link is, with ?download=1
+#   https://host/fw/index.json      a manifest of bundles (see README)
+FIRMWARE_SOURCE=/firmware
+
+# Host directory mounted read-only at /firmware. Used by the default source.
 FIRMWARE_HOST_DIR=/home/wago/Documents/mcp/fw
 
-# Optional: exact target firmware revision, e.g. "4.9.1". Leave unset to
-# auto-pick the highest-revision compatible bundle available ("latest").
+# Bearer token for an HTTPS source behind auth (SharePoint, Artifactory, ...)
+#FIRMWARE_SOURCE_TOKEN=
+
+# S3 credentials (only for s3:// sources)
+#AWS_ACCESS_KEY_ID=
+#AWS_SECRET_ACCESS_KEY=
+#AWS_DEFAULT_REGION=eu-central-1
+#AWS_ENDPOINT_URL=https://minio.example.local
+
+# --- Git-gated authorization ----------------------------------------------
+# Nothing is flashed unless a COMMITTED policy file approves this exact
+# device + revision. POLICY_HOST_DIR is the host path of the git checkout
+# holding it - the .git directory must come along, that is what proves the
+# approval is committed. See firmware-policy.example.yaml.
+POLICY_HOST_DIR=/home/wago/Documents/mcp/wago-plc-config
+FW_POLICY_FILE=/policy/firmware-policy.yaml
+
+# Also require a valid signature on HEAD
+#FW_REQUIRE_SIGNED_COMMIT=true
+
+# Disable the git gate entirely for one-off manual work. Prints a loud
+# notice; any run using this is by definition not git-authorized.
+#FW_AUTHZ=off
+
+# --- Bundle selection -----------------------------------------------------
+# Optional: exact target firmware revision, e.g. "4.9.1". Leave unset when
+# exactly one bundle in the source lists the device's order number;
+# required when several do (the container refuses to guess and lists them).
 #TARGET_VERSION=4.9.1
 
 # Optional: bypass catalog resolution entirely and use exactly this bundle
 # (a path *inside the container*, under /firmware/). Leave unset for
-# catalog mode (recommended).
+# catalog mode (recommended). Still subject to the git gate.
 #WUP_PATH=/firmware/PFC-G2-Linux_update_V040901_31_r9d0900aaed.wup
 
 # Optional overrides
 CHUNK_SIZE=4000000
 POLL_INTERVAL=6
 POLL_TIMEOUT=900
+
+# Seconds per HTTP request. The CC100 answers WDA far slower than the rest of
+# the fleet and times out at 30, especially mid-install. This is a ceiling,
+# not a delay - raising it costs nothing on fast devices.
+HTTP_TIMEOUT=45
+
+# Write the version a device already runs. Normally refused as pointless;
+# needed to re-seat a slot or to prove the pipeline on an already-current
+# fleet. Still range-checked against the bundle's own declared range.
+#FW_ALLOW_REFLASH=true

@@ -757,6 +757,56 @@ Step-by-step guide for reviewers (GitHub UI and CLI):
 
 ---
 
+## Firmware updates
+
+Firmware is the one change on a controller that a follow-up commit cannot undo.
+This project therefore splits it across three places, each owning one question:
+
+| Question | Where it is answered |
+|---|---|
+| Can the agent do it? | Here - no, and the section below explains why |
+| Who approves it, and how is that reviewed? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
+| How do I run it, and what if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
+| What do the REST calls actually do? | [`docs/wda-firmware-update.md`](docs/wda-firmware-update.md) |
+
+### The agent cannot flash a controller
+
+`invoke_method` refuses every `firmware*` method in live mode, on every device,
+and records the refusal in the audit log. This is not configuration you are
+expected to relax:
+
+```
+> Update the firmware on 192.168.42.121
+
+Method '0-0-firmwareupdate-activate' is denied by safety policy
+(dangerous; not in WAGO_ALLOW_METHODS).
+```
+
+Firmware updates are performed by a separate tool in this repository,
+[`fwupdate/`](fwupdate/README.md), which a person runs during a maintenance
+window. It is not reachable by the agent, and it refuses to start unless an
+approval for that exact device and revision is committed to your config
+repository. The same "a human commits, the machine applies" shape as the
+GitOps write-gate above - with the human step made mandatory rather than
+optional.
+
+### It shares this server's audit chain
+
+A firmware run is not a side channel. Authorization, every refusal, success,
+device-reported failure, timeout, and an abort mid-flash are appended to the
+**same tamper-evident hash chain** as `set_parameters` and `invoke_method`, by
+the same `src/audit.py`, on the same volume. The authorizing commit and
+reviewer are part of the record:
+
+```bash
+docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
+# [PASS] Chain intact - 13 entries verified
+
+git show 18d2cbf        # who approved it, and when
+```
+
+---
+
 ## Security
 
 ### API key management
