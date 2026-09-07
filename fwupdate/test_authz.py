@@ -134,7 +134,7 @@ def test_mapping_entry_without_version_refused(repo):
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "broken")
     policy, _ = authz.load_policy(p)
-    with pytest.raises(authz.NotAuthorized, match="no 'version:'"):
+    with pytest.raises(authz.NotAuthorized, match="neither 'allowed:' nor 'version:'"):
         authz.approved_hosts(policy)
 
 
@@ -276,3 +276,60 @@ def test_without_a_pr_ref_the_actor_is_still_used(repo, monkeypatch):
     git(repo, "commit", "-qm", "propose")
     _, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
     assert "ci-actor" in approved_by and "authenticated actor" in approved_by
+
+
+# --- allowed version lists, newest is the default ---------------------------
+
+def test_allowed_list_permits_every_listed_revision(repo):
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1", "4.9.50"]\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+
+    assert authz.allowed_versions_for(policy, "10.0.0.1") == ["4.9.1", "4.9.50"]
+    for v in ("4.9.1", "4.9.50"):
+        authz.authorize(policy, commit, "10.0.0.1", v)
+
+
+def test_default_is_the_newest_allowed(repo):
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1", "4.9.50", "4.8.9"]\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, _ = authz.load_policy(p)
+    assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.50"}, "newest wins, not last-listed"
+
+
+def test_an_explicit_default_overrides_newest(repo):
+    """A device held back on purpose: newest allowed, but not the default."""
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1", "4.9.50"]\n    default: "4.9.1"\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, _ = authz.load_policy(p)
+    assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.1"}
+
+
+def test_a_default_outside_the_allowed_list_is_refused(repo):
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1"]\n    default: "4.9.50"\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "broken")
+    policy, _ = authz.load_policy(p)
+    with pytest.raises(authz.NotAuthorized, match="not in its allowed list"):
+        authz.approved_hosts(policy)
+
+
+def test_a_revision_outside_the_allowed_list_is_refused(repo):
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1"]\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+    with pytest.raises(authz.NotAuthorized, match="approved for firmware 4.9.1"):
+        authz.authorize(policy, commit, "10.0.0.1", "4.9.50")
+
+
+def test_bare_revision_still_works(repo):
+    p = write_policy(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+    assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.1"}
+    authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
