@@ -17,7 +17,7 @@ from mcp.server.fastmcp.prompts import base
 from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
-from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, read_prev_hash
+from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
 from config import parse_plcs_from_env, resolve_tls_verify
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
@@ -83,6 +83,7 @@ def _audit_log(action: str, plc_ip: str, details: dict, result: str) -> None:
     global _AUDIT_PREV_HASH
     line, _AUDIT_PREV_HASH = build_entry(action, plc_ip, _AGENT_ID, result, _AUDIT_PREV_HASH, details)
     logger.log("AUDIT", line)
+    forward_to_syslog(line)  # second copy, on a host the operator does not control from here
 
 
 def _seed_audit_hash(audit_log_path: str) -> None:

@@ -22,6 +22,6 @@ ENTRYPOINT ["python", "fw_update.py"]
 
 FROM base AS dev
 RUN pip install --no-cache-dir pytest==8.*
-COPY fwupdate/test_catalog.py fwupdate/test_poll.py fwupdate/test_source.py \
+COPY fwupdate/test_catalog.py fwupdate/test_poll.py fwupdate/test_source.py fwupdate/test_fw_update_gate.py \
      fwupdate/test_authz.py fwupdate/test_audit_chain.py .
 ENTRYPOINT []

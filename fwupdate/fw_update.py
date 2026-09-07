@@ -49,7 +49,11 @@ from pathlib import Path
 
 import httpx
 
-import audit  # the MCP server's own hash chain - one implementation, not a copy
+try:
+    import audit  # the MCP server's own hash chain - one implementation, not a copy
+except ModuleNotFoundError:  # running from a checkout rather than the container image
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+    import audit
 
 import authz
 import source
@@ -112,6 +116,9 @@ PASSWORD = env("PLC_PASSWORD", required=True)
 FIRMWARE_SOURCE = env("FIRMWARE_SOURCE", env("FIRMWARE_DIR", "/firmware"))
 FIRMWARE_CACHE = env("FIRMWARE_CACHE", "/firmware-cache")
 FW_POLICY_FILE = env("FW_POLICY_FILE", "/policy/firmware-policy.yaml")
+# One-shot ops file (the reboot-style path). When set it replaces the fleet
+# policy as the authorization: one file, one device, one revision.
+FW_OPS_FILE = env("FW_OPS_FILE")
 FW_AUTHZ = env("FW_AUTHZ", "on").lower() not in ("off", "0", "false", "no")
 FW_ALLOW_REFLASH = env("FW_ALLOW_REFLASH", "false").lower() in ("1", "true", "yes")
 TARGET_VERSION = env("TARGET_VERSION")
@@ -269,17 +276,30 @@ def check_authorization(revision):
         show("==> Authorization: DISABLED via FW_AUTHZ=off - this flash is not git-authorized")
         audit_record("proceeding without git authorization", revision=revision, fw_authz="off")
         return None
+    # FW_OPS_FILE, when set, REPLACES the fleet policy - it is the reboot-style
+    # one-shot path. Falling back to the policy here would silently widen the
+    # authorization from "this one operation" to "any standing fleet approval",
+    # which is exactly the bug this comment exists to prevent recurring.
+    source_file = FW_OPS_FILE or FW_POLICY_FILE
     try:
-        policy, commit = authz.load_policy(FW_POLICY_FILE)
-        sha, approved_by = authz.authorize(policy, commit, PLC_IP, revision)
+        if FW_OPS_FILE:
+            sha, approved_by = authz.load_ops_authorization(FW_OPS_FILE, PLC_IP, revision)
+        else:
+            policy, commit = authz.load_policy(FW_POLICY_FILE)
+            sha, approved_by = authz.authorize(policy, commit, PLC_IP, revision)
     except authz.NotAuthorized as e:
         show(f"FATAL: refused - {e}")
-        audit_record(f"refused: {e}", revision=revision, policy_file=FW_POLICY_FILE)
+        audit_record(f"refused: {e}", revision=revision, authorization_file=source_file)
         sys.exit(1)
+    self_approved = "self-approved" in approved_by
     signoff = f", signed off by {approved_by}" if approved_by else ""
-    show(f"==> Authorized by commit {sha[:12]} ({FW_POLICY_FILE}){signoff}: {PLC_IP} -> {revision}")
+    if self_approved:
+        show("==> NOTE: proposer and approver are the same person (self-approved). "
+             "Allowed, and recorded as such in the audit log.")
+    show(f"==> Authorized by commit {sha[:12]} ({source_file}){signoff}: {PLC_IP} -> {revision}")
     audit_record("authorized", revision=revision, commit=sha, approved_by=approved_by or None,
-                 policy_file=FW_POLICY_FILE)
+                 self_approved=self_approved, authorization_file=source_file,
+                 approval_ref=os.environ.get("WAGO_APPROVAL_REF", "").strip() or None)
     return sha
 
 

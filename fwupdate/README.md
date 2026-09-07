@@ -81,9 +81,44 @@ flashed it refuses unless all of these hold:
    file locally authorizes nothing
 3. the device's IP is listed with the **exact revision** the resolved bundle
    declares
-4. `approved_by` is filled, if the entry requires a named reviewer
-5. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
+4. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
    signature**
+5. optionally (`FW_REQUIRE_SEPARATE_APPROVER=true`) the approver is not also
+   the proposer
+
+### Nobody types their own name
+
+`approved_by` is never something you have to fill in by hand. The approver is
+resolved from the most authenticated source available:
+
+| Precedence | Source | Available when |
+|---|---|---|
+| 1 | **PR review** | CI read the pull request's review approvals on merge. Passed as `WAGO_APPROVED_BY` plus a citable `WAGO_APPROVAL_REF` |
+| 2 | Authenticated actor | A PR merged without a review approval, or a direct push - `WAGO_APPROVED_BY` alone |
+| 3 | Commit author | Running the updater by hand, outside CI |
+| 4 | The value in the file | Nothing above was available. Weakest: a typed name proves nothing |
+
+Self-approval is **allowed and recorded**, not refused - one engineer
+maintaining a rack should not need a second account:
+
+```
+==> NOTE: proposer and approver are the same person (self-approved).
+    Allowed, and recorded as such in the audit log.
+==> Authorized by commit 3968873334d8 (/policy/ops/fw-pfc300-119.yaml),
+    signed off by A. Engineer <a@example.com> [commit author, self-approved]:
+    192.168.42.119 -> 4.9.1
+```
+
+`FW_REQUIRE_SEPARATE_APPROVER=true` refuses it instead, for anything under a
+change-control requirement.
+
+What auto-fill costs, stated plainly: a file with an empty `approved_by` no
+longer refuses on its own, because committing and merging it **is** the
+approval. Whether a second person was involved is decided by your config
+repository's branch-protection settings, not by this tool - the tool records
+the truth either way. Setting that up, and who counts as an approver in each
+merge case, is documented where approvals are written:
+[wago-plc-config → Who counts as the approver](https://github.com/WagoAlex/wago-plc-config#who-counts-as-the-approver).
 
 On success it prints the authorizing commit, and the reviewer when the entry
 carries one:
@@ -137,7 +172,18 @@ denied" is the half that matters after an incident:
 ```json
 {"ts": "2026-09-07T12:45:37Z", "action": "firmware_update", "plc": "192.168.42.111",
  "agent": "fwupdate", "result": "refused: 192.168.42.111 is not listed in the firmware policy",
- "prev": "7c49824b5eca...", "revision": "4.9.1", "policy_file": "/policy/firmware-policy.yaml"}
+ "prev": "7c49824b5eca...", "revision": "4.9.1",
+ "authorization_file": "/policy/firmware-policy.yaml"}
+```
+
+An authorized run additionally carries who approved it and how that was
+established:
+
+```json
+{"result": "authorized", "revision": "4.9.1", "commit": "3968873334d8...",
+ "approved_by": "bob [PR review (WagoAlex/wago-plc-config#4 opened by alice, approved by bob, merged by bob)]",
+ "self_approved": false,
+ "approval_ref": "WagoAlex/wago-plc-config#4 opened by alice, approved by bob, merged by bob"}
 ```
 
 Commands for reading and verifying that trail are under
@@ -329,6 +375,8 @@ FATAL: update failed - device reports Error (7)
 | `FW_POLICY_FILE` | no | `/policy/firmware-policy.yaml` | Git-committed approvals file |
 | `FW_AUTHZ` | no | `on` | `off` disables the git gate entirely (loudly) |
 | `FW_REQUIRE_SIGNED_COMMIT` | no | `false` | Also require a valid signature on `HEAD` |
+| `FW_REQUIRE_SEPARATE_APPROVER` | no | `false` | Refuse self-approval instead of logging it |
+| `WAGO_APPROVED_BY` | no | auto | The authenticated actor; falls back to the commit author |
 | `TARGET_VERSION` | no | unset = require a single match | Exact bundle revision to require, e.g. `4.9.1`. Needed whenever more than one bundle in the directory lists the device's order number |
 | `WUP_PATH` | no | unset = catalog mode | Container-internal path to an exact bundle; setting this skips catalog resolution |
 | `CHUNK_SIZE` | no | `4000000` | Bytes/chunk. ~4 MB is the verified safe ceiling - larger trips a `lighttpd` request-size cap independent of the app |

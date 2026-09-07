@@ -765,8 +765,9 @@ This project therefore splits it across three places, each owning one question:
 | Question | Where it is answered |
 |---|---|
 | Can the agent do it? | Here - no, and the section below explains why |
-| Who approves it, and how is that reviewed? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
-| How do I run it, and what if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
+| Who approves it, who counts as an approver, and how do I require two people? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
+| How do I run it, how does the tool resolve the approver, what if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
+| What does the audit chain contain and how do I verify it? | Here, below |
 | What do the REST calls actually do? | [`docs/wda-firmware-update.md`](docs/wda-firmware-update.md) |
 
 ### The agent cannot flash a controller
@@ -795,8 +796,11 @@ optional.
 A firmware run is not a side channel. Authorization, every refusal, success,
 device-reported failure, timeout, and an abort mid-flash are appended to the
 **same tamper-evident hash chain** as `set_parameters` and `invoke_method`, by
-the same `src/audit.py`, on the same volume. The authorizing commit and
-reviewer are part of the record:
+the same `src/audit.py`, on the same volume.
+
+Each record names who approved the change and how that was established - the
+pull request and its reviewers where there was one, and whether it was
+self-approved. Nobody types their own name into a file:
 
 ```bash
 docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log

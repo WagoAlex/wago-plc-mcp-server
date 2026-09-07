@@ -38,6 +38,12 @@ FW_POLICY_FILE=/policy/firmware-policy.yaml
 # Also require a valid signature on HEAD
 #FW_REQUIRE_SIGNED_COMMIT=true
 
+# Who approved this. Leave unset and it is resolved automatically from the
+# commit author; CI sets it from the authenticated actor. Self-approval is
+# allowed and logged as such - set the flag below to refuse it instead.
+#WAGO_APPROVED_BY=
+#FW_REQUIRE_SEPARATE_APPROVER=true
+
 # Disable the git gate entirely for one-off manual work. Prints a loud
 # notice; any run using this is by definition not git-authorized.
 #FW_AUTHZ=off
