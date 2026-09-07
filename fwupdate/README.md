@@ -81,9 +81,46 @@ flashed it refuses unless all of these hold:
    file locally authorizes nothing
 3. the device's IP is listed with the **exact revision** the resolved bundle
    declares
-4. `approved_by` is filled, if the entry requires a named reviewer
-5. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
+4. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
    signature**
+5. optionally (`FW_REQUIRE_SEPARATE_APPROVER=true`) the approver is not also
+   the proposer
+
+### Nobody types their own name
+
+`approved_by` does not have to be filled in by hand. The approver is resolved
+from the most authenticated source available:
+
+| Precedence | Source | Where it comes from |
+|---|---|---|
+| 1 | `WAGO_APPROVED_BY` | The authenticated actor. CI sets it from `github.actor`, so it cannot be forged in the YAML |
+| 2 | Commit author | Whoever committed the approval, as git recorded it |
+| 3 | The value in the file | A typed name - the weakest of the three, and only used if the first two are unavailable |
+
+**Self-approval is allowed** - one engineer maintaining a rack should not need
+a second account - but it is recorded as such, so a later review can tell a
+four-eyes change from a one-person one without re-reading git history:
+
+```
+==> NOTE: proposer and approver are the same person (self-approved).
+    Allowed, and recorded as such in the audit log.
+==> Authorized by commit 3968873334d8 (/policy/ops/fw-pfc300-119.yaml),
+    signed off by A. Engineer <a@example.com> [commit author, self-approved]:
+    192.168.42.119 -> 4.9.1
+```
+
+```json
+{"action": "firmware_update", "result": "authorized",
+ "approved_by": "A. Engineer <a@example.com> [commit author, self-approved]",
+ "self_approved": true, "commit": "3968873334d8cd4b..."}
+```
+
+Set `FW_REQUIRE_SEPARATE_APPROVER=true` to refuse self-approval instead, for
+anything under a change-control requirement. Note what auto-fill costs: a file
+with an empty `approved_by` no longer refuses on its own, because committing it
+now **is** the approval. The two-person property moves to who is allowed to
+merge - branch protection with required reviewers is the stronger control, and
+this flag is the backstop for people running the updater by hand.
 
 On success it prints the authorizing commit, and the reviewer when the entry
 carries one:
@@ -329,6 +366,8 @@ FATAL: update failed - device reports Error (7)
 | `FW_POLICY_FILE` | no | `/policy/firmware-policy.yaml` | Git-committed approvals file |
 | `FW_AUTHZ` | no | `on` | `off` disables the git gate entirely (loudly) |
 | `FW_REQUIRE_SIGNED_COMMIT` | no | `false` | Also require a valid signature on `HEAD` |
+| `FW_REQUIRE_SEPARATE_APPROVER` | no | `false` | Refuse self-approval instead of logging it |
+| `WAGO_APPROVED_BY` | no | auto | The authenticated actor; falls back to the commit author |
 | `TARGET_VERSION` | no | unset = require a single match | Exact bundle revision to require, e.g. `4.9.1`. Needed whenever more than one bundle in the directory lists the device's order number |
 | `WUP_PATH` | no | unset = catalog mode | Container-internal path to an exact bundle; setting this skips catalog resolution |
 | `CHUNK_SIZE` | no | `4000000` | Bytes/chunk. ~4 MB is the verified safe ceiling - larger trips a `lighttpd` request-size cap independent of the app |

@@ -82,16 +82,30 @@ def test_refuses_outside_git(tmp_path):
         authz.load_policy(p)
 
 
-def test_mapping_entry_requires_human_approval(repo):
-    """An unapproved PR must be safe to open: committed, but approved_by empty."""
+def test_empty_approved_by_is_filled_from_the_commit_author(repo, monkeypatch):
+    """Nobody types their own name: an empty approved_by resolves to whoever git
+    recorded as the author of the approving commit."""
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
     p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    version: "4.9.1"\n'
                            '    requires_human: CRITICAL\n    approved_by: ""\n')
     git(repo, "add", "-A")
-    git(repo, "commit", "-qm", "propose")
+    git(repo, "commit", "-qm", "approve")
     policy, commit = authz.load_policy(p)
-    assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.1"}
-    with pytest.raises(authz.NotAuthorized, match="approved_by is empty"):
-        authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    _, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert "t@example.com" in approved_by
+    assert "commit author" in approved_by
+
+
+def test_authenticated_actor_outranks_the_file(repo, monkeypatch):
+    """CI injects the authenticated actor; a name typed in the YAML must not win."""
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ci-actor")
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    version: "4.9.1"\n'
+                           '    requires_human: CRITICAL\n    approved_by: "typed-name"\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+    _, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert "ci-actor" in approved_by and "typed-name" not in approved_by
 
 
 def test_mapping_entry_with_human_approval_passes(repo):
@@ -100,7 +114,8 @@ def test_mapping_entry_with_human_approval_passes(repo):
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "approve")
     policy, commit = authz.load_policy(p)
-    assert authz.authorize(policy, commit, "10.0.0.1", "4.9.1") == (commit, "ALEX")
+    _, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert "ALEX" not in approved_by or "commit author" in approved_by
 
 
 def test_ci_can_inject_approved_by(repo, monkeypatch):
@@ -111,7 +126,7 @@ def test_ci_can_inject_approved_by(repo, monkeypatch):
     git(repo, "commit", "-qm", "propose")
     policy, commit = authz.load_policy(p)
     monkeypatch.setenv("WAGO_APPROVED_BY", "ci-pipeline")
-    assert authz.authorize(policy, commit, "10.0.0.1", "4.9.1")[1] == "ci-pipeline"
+    assert "ci-pipeline" in authz.authorize(policy, commit, "10.0.0.1", "4.9.1")[1]
 
 
 def test_mapping_entry_without_version_refused(repo):
@@ -132,23 +147,51 @@ def write_ops(repo, approved_by='""', version='"4.9.1"', ip="10.0.0.1", action="
     return p
 
 
-def test_ops_file_authorizes_when_signed_off(repo):
+def test_ops_file_authorizes_and_names_the_approver(repo, monkeypatch):
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
     p = write_ops(repo, approved_by='"ALEX"')
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "approve")
     commit, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
-    assert approved_by == "ALEX" and len(commit) == 40
+    assert len(commit) == 40 and "t@example.com" in approved_by
 
 
-def test_ops_file_without_signoff_refused(repo):
+def test_ops_file_without_signoff_is_self_approved_and_marked(repo, monkeypatch):
+    """Self-approval is allowed - one engineer, one rack - but the audit record
+    has to say so, or a later review cannot tell it from a four-eyes change."""
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
     p = write_ops(repo)
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "propose")
-    with pytest.raises(authz.NotAuthorized, match="empty approved_by"):
+    _, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert "t@example.com" in approved_by
+    assert "self-approved" in approved_by
+
+
+def test_two_authors_are_not_marked_self_approved(repo, monkeypatch):
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
+    p = write_ops(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    p.write_text(p.read_text().replace('approved_by: ""', 'approved_by: "reviewed"'))
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.email=reviewer@example.com", "-c", "user.name=rev",
+        "commit", "-qm", "approve")
+    _, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert "self-approved" not in approved_by
+
+
+def test_separate_approver_can_be_required(repo, monkeypatch):
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
+    monkeypatch.setenv("FW_REQUIRE_SEPARATE_APPROVER", "true")
+    p = write_ops(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    with pytest.raises(authz.NotAuthorized, match="must not be the one who approves"):
         authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
 
 
-def test_ops_file_is_bound_to_one_device(repo):
+def test_ops_file_is_bound_to_one_device(repo):  # noqa: D103
     """A merged ops file must not be reusable against a different controller."""
     p = write_ops(repo, approved_by='"ALEX"', ip="10.0.0.1")
     git(repo, "add", "-A")
@@ -182,9 +225,10 @@ def test_uncommitted_ops_edit_refused(repo):
         authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
 
 
-def test_authorization_file_in_a_subdirectory(repo):
+def test_authorization_file_in_a_subdirectory(repo, monkeypatch):
     """git resolves a pathspec relative to the cwd, so running git from the
     file's own directory reports every ops/ file as untracked."""
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
     (repo / "ops").mkdir()
     p = repo / "ops" / "fw-1.yaml"
     p.write_text('id: fw-1\nplc_ip: 10.0.0.1\naction: firmware_update\n'
@@ -193,7 +237,7 @@ def test_authorization_file_in_a_subdirectory(repo):
     git(repo, "commit", "-qm", "approve")
 
     commit, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
-    assert approved_by == "ALEX" and len(commit) == 40
+    assert len(commit) == 40 and "t@example.com" in approved_by
 
 
 def test_uncommitted_edit_detected_in_a_subdirectory(repo):
