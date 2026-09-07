@@ -67,58 +67,50 @@ Every one of those outcomes is written to the audit log.
 
 ---
 
-## Authorization lives in git, not in an env var
+## What this tool enforces at run time
 
-Flashing firmware is fleet-wide and hard to walk back, so "which device may go
-to which revision" is not something a command line decides. It is a YAML file
-committed to git:
+Approvals are **authored and reviewed in your config repository** - how to write
+one, which entry forms exist, and who signs it off is documented there:
+[wago-plc-config → Approve a firmware update](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update).
 
-```yaml
-# firmware-policy.yaml
-approvals:
-  192.168.42.110: "4.9.1"    # CC100
-  192.168.42.118: "4.9.1"    # PFC200 G2
-  192.168.42.119: "4.9.1"    # PFC300
-  192.168.2.136:  "4.9.1"    # WP400
-  192.168.2.174:  "4.9.1"    # TP600
-```
-
-Before anything is flashed, the container refuses unless **all** of these hold:
+This section is what the container does with that file. Before anything is
+flashed it refuses unless all of these hold:
 
 1. the policy file is **tracked by git**
 2. the working-tree copy is **identical to the committed one** - editing the
    file locally authorizes nothing
 3. the device's IP is listed with the **exact revision** the resolved bundle
    declares
-4. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
+4. `approved_by` is filled, if the entry requires a named reviewer
+5. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
    signature**
 
-The authorizing commit sha is printed and can be audited afterwards with
-`git show <sha>` - "who approved this flash" stays answerable:
+On success it prints the authorizing commit, and the reviewer when the entry
+carries one:
 
 ```
-==> Authorized by commit ce3877349fce (/policy/firmware-policy.yaml): 192.168.42.118 -> 4.9.1
+==> Authorized by commit 18d2cbfef290 (/policy/firmware-policy.yaml), signed off by ALEX: 192.168.42.119 -> 4.9.1
 ```
 
-Refusals name the reason and exit before touching the device:
+Refusals name the reason and exit before the device is touched:
 
 ```
-FATAL: refused - 192.168.42.118 is approved for firmware 4.9.1, but the resolved
+FATAL: refused - 192.168.42.115 is approved for firmware 4.9.1, but the resolved
 bundle is 4.9.50. Commit a policy change if 4.9.50 is what you want.
 ```
 
-Mount the checkout (including its `.git`, which is what proves the commit) and
-point `FW_POLICY_FILE` at the file:
+Mount the checkout **including its `.git`** - that is what proves the approval
+was committed - and point `FW_POLICY_FILE` at the file:
 
 ```bash
-POLICY_HOST_DIR=/home/wago/Documents/mcp/wago-plc-config docker compose up --build
+POLICY_HOST_DIR=/path/to/wago-plc-config docker compose up --build
 ```
 
-`DRY_RUN=true` skips the gate on purpose - a dry run never calls `Start`, so
-nothing can be flashed, and rehearsing *before* asking for approval is the
-right order. `FW_AUTHZ=off` disables the gate entirely for one-off manual work;
-it prints a loud notice, and any run that uses it is by definition not
-git-authorized.
+`DRY_RUN=true` skips the gate on purpose: a dry run never calls `Start`, so
+nothing can be flashed, and rehearsing before asking for approval is the right
+order. `FW_AUTHZ=off` disables the gate entirely - see
+[Running this securely](#running-this-securely) for when that is and is not
+appropriate.
 
 ## Every run lands in the audit chain
 
@@ -148,10 +140,8 @@ denied" is the half that matters after an incident:
  "prev": "7c49824b5eca...", "revision": "4.9.1", "policy_file": "/policy/firmware-policy.yaml"}
 ```
 
-Verify the chain the same way as always:
-```bash
-docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
-```
+Commands for reading and verifying that trail are under
+[Verifying the trail afterwards](#verifying-the-trail-afterwards).
 
 Passwords never reach the log - `audit.redact_details()` runs before hashing,
 so the chain stays verifiable over exactly what is stored.
@@ -232,12 +222,11 @@ you have). The container:
    directory (`catalog.py` / `build_catalog.py`) - nothing is inferred from
    filenames
 3. Picks the bundle whose `ArticleList` contains the device's order number.
-   If exactly one bundle matches, it's used. If several do, the container
-   **refuses and lists them** - set `TARGET_VERSION` to choose. It never
-   guesses, because "highest revision" is not a safe tiebreak: WAGO's
-   PFC-G2 `red-autoupdate` bundle carries a byte-identical `ArticleList`
-   and a *higher* revision (4.9.50) than the standard 4.9.1 release, so
-   "latest" would silently flash redundancy firmware onto a plain PFC200 G2
+   If exactly one matches, it is used. If several do, the container **refuses
+   and lists them** - it never guesses, for the reason documented under
+   [why the revision must be exact](https://github.com/WagoAlex/wago-plc-config#why-the-revision-must-be-exact).
+   `TARGET_VERSION`, or the revision in the policy when running the fleet,
+   resolves it
 4. Validates the device's current version falls within *that bundle's own*
    declared upgrade or downgrade range before touching anything
 5. Refuses to run (no flash attempted) if: no bundle matches the device's
@@ -369,6 +358,25 @@ mkdir -p /tmp/fwupdate && chgrp admin /tmp/fwupdate && chmod 770 /tmp/fwupdate
 
 `network_mode: host` is required - the container needs direct LAN access to
 the PLC subnet.
+
+## Before your first production window
+
+- [ ] Rehearse with `DRY_RUN=true` on every device class you have not flashed
+      before, not just one - [What a run looks like](#what-a-run-looks-like)
+- [ ] Confirm `/tmp/fwupdate` exists on each device with the right ownership -
+      [Known preconditions](#known-preconditions-device-side-not-fixed-by-this-container)
+- [ ] Expect a slow reboot. A CC100 took 10 minutes to return, a WP400 about
+      one - [What a run looks like](#what-a-run-looks-like)
+- [ ] Know that progress plateaus at ~93% and never reaches 100 -
+      [What a run looks like](#what-a-run-looks-like)
+- [ ] Decide sequential or parallel, and why -
+      [The whole fleet in one command](#the-whole-fleet-in-one-command)
+- [ ] Review credentials, network placement and the escape hatches -
+      [Running this securely](#running-this-securely)
+- [ ] Have the failure table to hand -
+      [When an update fails](#when-an-update-fails)
+
+---
 
 ## Running this securely
 
