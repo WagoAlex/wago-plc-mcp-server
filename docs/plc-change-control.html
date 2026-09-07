@@ -1,0 +1,585 @@
+<title>PLC Change Control</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap">
+<style>
+  :root {
+    --green: #6ec800;
+    --green-hover: #8bd633;
+    --anthracite: #1f2837;
+    --gray-7: #eff0f1;
+    --gray-15: #dedfe1;
+    --gray-40: #a5a8af;
+    --gray-70: #616a73;
+    --attention: #ffe70a;
+    --warning: #bb0522;
+    --green-text: #4e8f00;
+
+    --ground: #eff0f1;
+    --surface: #ffffff;
+    --surface-sunken: #e7e9ea;
+    --ink: #1f2837;
+    --ink-muted: #616a73;
+    --rule: #dedfe1;
+    --rule-strong: #a5a8af;
+    --band: #1f2837;
+    --band-ink: #dedfe1;
+    --code-bg: #1f2837;
+    --code-ink: #dedfe1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #262d38;
+      --surface: #333b48;
+      --surface-sunken: #2b323d;
+      --ink: #dedfe1;
+      --ink-muted: #a5a8af;
+      --rule: #444c59;
+      --rule-strong: #707680;
+      --band: #1f2837;
+      --band-ink: #dedfe1;
+      --code-bg: #1f2837;
+      --code-ink: #dedfe1;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #262d38;
+    --surface: #333b48;
+    --surface-sunken: #2b323d;
+    --ink: #dedfe1;
+    --ink-muted: #a5a8af;
+    --rule: #444c59;
+    --rule-strong: #707680;
+    --band: #1f2837;
+    --band-ink: #dedfe1;
+    --code-bg: #1f2837;
+    --code-ink: #dedfe1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 72px; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    background: var(--band);
+    color: var(--band-ink);
+    border-bottom: 4px solid var(--green);
+  }
+  .masthead-inner {
+    max-width: 1080px; margin: 0 auto; padding: 28px 24px 26px;
+    display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-end; justify-content: space-between;
+  }
+  .masthead h1 {
+    margin: 0; font-size: 1.75rem; font-weight: 700; line-height: 1.15;
+    color: #ffffff; text-wrap: balance;
+  }
+  .eyebrow {
+    font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.9px;
+    color: var(--green); margin: 0 0 6px;
+  }
+  .masthead p { margin: 8px 0 0; max-width: 62ch; color: var(--gray-15); font-size: 0.95rem; }
+  .stamp {
+    font-family: Consolas, "Courier New", monospace; font-size: 0.75rem; font-weight: 600;
+    color: var(--gray-40); text-align: right; line-height: 1.7; white-space: nowrap;
+  }
+
+  /* ---------- generic type ---------- */
+  h2 {
+    font-size: 1.3rem; font-weight: 700; line-height: 1.2; margin: 0;
+    padding-bottom: 8px; border-bottom: 2px solid var(--anthracite);
+  }
+  :root[data-theme="dark"] h2 { border-bottom-color: var(--rule-strong); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) h2 { border-bottom-color: var(--rule-strong); } }
+  h3 { font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
+  p { margin: 0 0 12px; max-width: 68ch; }
+  section { margin-top: 44px; }
+  .lede { color: var(--ink-muted); font-size: 0.95rem; margin-top: 12px; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.82rem; font-weight: 600;
+  }
+  .label {
+    font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--ink-muted);
+  }
+
+  /* ---------- action classes ---------- */
+  .classes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2px; margin-top: 20px; background: var(--rule); }
+  .cls { background: var(--surface); padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .cls-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .cls h3 { margin: 0; }
+  .who {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 8px; white-space: nowrap;
+  }
+  .who-agent { background: var(--green); color: var(--anthracite); }
+  .who-review { background: var(--attention); color: var(--anthracite); }
+  .who-human { background: var(--warning); color: #ffffff; }
+  .cls p { font-size: 0.85rem; margin: 0; color: var(--ink-muted); max-width: none; }
+  .cls ul { margin: 0; padding-left: 18px; font-size: 0.85rem; }
+  .cls li { margin-bottom: 3px; }
+
+  /* ---------- roles ---------- */
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 20px; }
+  .role { border-left: 3px solid var(--green); padding-left: 14px; }
+  .role p { font-size: 0.85rem; color: var(--ink-muted); margin: 0; max-width: none; }
+  .role .cannot { color: var(--ink); font-weight: 600; display: block; margin-top: 6px; font-size: 0.85rem; }
+
+  /* ---------- procedures ---------- */
+  .proc { background: var(--surface); border: 1px solid var(--rule); margin-top: 20px; }
+  .proc-head {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--rule); background: var(--surface-sunken);
+  }
+  .proc-head h3 { margin: 0; font-size: 1.05rem; }
+  .proc-meta { font-family: Consolas, "Courier New", monospace; font-size: 0.78rem; color: var(--ink-muted); }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+  .steps > li {
+    display: grid; grid-template-columns: 44px 1fr; gap: 0 16px;
+    padding: 16px 20px; border-bottom: 1px solid var(--rule);
+  }
+  .steps > li:last-child { border-bottom: 0; }
+  .steps > li::before {
+    counter-increment: step; content: counter(step, decimal-leading-zero);
+    font-family: Consolas, "Courier New", monospace; font-size: 0.8rem; font-weight: 700;
+    color: var(--green-hover); padding-top: 2px;
+  }
+  .steps > li::before { color: var(--green-text); }
+  :root[data-theme="dark"] .steps > li::before { color: var(--green); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .steps > li::before { color: var(--green); } }
+  .step-body h4 { margin: 0 0 4px; font-size: 0.92rem; font-weight: 700; }
+  .step-body p { margin: 0; font-size: 0.87rem; color: var(--ink-muted); max-width: 70ch; }
+  .actor {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--ink-muted); display: block; margin-bottom: 3px;
+  }
+
+  pre {
+    margin: 10px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-ink);
+    font-family: Consolas, "Courier New", monospace; font-size: 0.78rem; font-weight: 400;
+    line-height: 1.6; overflow-x: auto; border-left: 3px solid var(--green);
+  }
+  pre .c { color: var(--gray-40); }
+  pre .k { color: var(--green); font-weight: 600; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; margin-top: 18px; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--ink-muted); background: var(--surface-sunken); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono, th.mono { font-family: Consolas, "Courier New", monospace; font-size: 0.8rem; font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- guarantee strip ---------- */
+  .guards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 20px; }
+  .guard { background: var(--surface); border-top: 3px solid var(--green); padding: 14px 16px 16px; }
+  .guard.stop { border-top-color: var(--warning); }
+  .guard h3 { font-size: 0.92rem; }
+  .guard p { font-size: 0.85rem; color: var(--ink-muted); margin: 0; max-width: none; }
+
+  footer {
+    margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule);
+    font-size: 0.75rem; color: var(--ink-muted);
+  }
+  footer p { max-width: 70ch; }
+</style>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <p class="eyebrow">WAGO PLC MCP Server</p>
+      <h1>Change control for a PLC fleet</h1>
+      <p>How a configuration change, a reboot, and a firmware update reach a controller once
+         GitOps mode is switched on. Written for engineers who use GitHub as a code repository
+         and have not run a build pipeline before.</p>
+    </div>
+    <div class="stamp">
+      Fleet 18 devices<br>
+      Firmware 04.09.01 (31)<br>
+      GITOPS_MODE = 1
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <h2>Three classes of change, and who may make each</h2>
+    <p class="lede">Every action against a controller falls into exactly one of these classes.
+       The class decides who is allowed to perform it, and that decision is enforced in code
+       on the server, not by convention.</p>
+
+    <div class="classes">
+      <div class="cls">
+        <div class="cls-top"><h3>Read</h3><span class="who who-agent">Assistant, directly</span></div>
+        <p>Values, diagnostics, status. Nothing on the device changes.</p>
+        <ul>
+          <li>Firmware version and build across the fleet</li>
+          <li>Update status and progress during a flash</li>
+          <li>Any of the roughly 400 device parameters</li>
+        </ul>
+      </div>
+      <div class="cls">
+        <div class="cls-top"><h3>Configure</h3><span class="who who-review">Proposed, then reviewed</span></div>
+        <p>Writable settings. In GitOps mode the assistant cannot write to the device; it
+           produces a change file for the configuration repository instead.</p>
+        <ul>
+          <li>NTP servers, SNMP, hostname</li>
+          <li>Serial interface assignment</li>
+          <li><span class="mono">0-0-docker-enabled</span></li>
+        </ul>
+      </div>
+      <div class="cls">
+        <div class="cls-top"><h3>Consequential</h3><span class="who who-human">Named person required</span></div>
+        <p>Reboot, factory reset, firmware. Refused outright for the assistant in any mode,
+           and executed only from an approved file that names a responsible person.</p>
+        <ul>
+          <li>Reboot and restart</li>
+          <li>Firmware update and downgrade</li>
+          <li>Factory reset, formatting</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The four participants</h2>
+    <p class="lede">Each has one job. Nothing in this system lets one of them take over another's.</p>
+
+    <div class="roles">
+      <div class="role">
+        <h3>The assistant</h3>
+        <p>Reads the fleet and drafts change files. Talks to the controllers through the MCP
+           server over the WAGO device REST interface.</p>
+        <span class="cannot">Cannot write to a device in GitOps mode, and cannot flash firmware in any mode.</span>
+      </div>
+      <div class="role">
+        <h3>You, the engineer</h3>
+        <p>Review a proposed change, add your name to it, and merge it. This is the only point
+           in the chain where a human decision is recorded.</p>
+        <span class="cannot">Merging is the approval. Nothing runs before it.</span>
+      </div>
+      <div class="role">
+        <h3>The configuration repository</h3>
+        <p>A normal Git repository holding one file per device plus the firmware policy. It is
+           the record of what the fleet is supposed to look like.</p>
+        <span class="cannot">The file is the instruction. An uncommitted edit authorizes nothing.</span>
+      </div>
+      <div class="role">
+        <h3>The job runner</h3>
+        <p>A small service on a PC inside the plant network. It watches the repository, and when
+           an approved change lands it carries that change out against the devices.</p>
+        <span class="cannot">It must sit inside the plant network. A cloud machine has no route to the controllers.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Procedure 1: switch a setting, using Docker as the example</h2>
+    <p class="lede">Applies to any writable parameter. Docker is shown because it is a setting
+       with real consequences for what the controller runs.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Enable the container runtime on 192.168.42.119</h3>
+        <span class="proc-meta">0-0-docker-enabled &nbsp;false &#8594; true</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>State the intent in plain language</h4>
+            <p>"Enable Docker on the PFC300 at 192.168.42.119." The assistant first reads the
+               current value, so the change is made against the device as it is, not as it was
+               assumed to be.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Assistant</span>
+            <h4>A change file is produced instead of a write</h4>
+            <p>With GitOps mode on, the write is intercepted. What comes back is a file for the
+               device, listing the parameter and its intended value.</p>
+<pre><span class="c"># plcs/192.168.42.119.yaml</span>
+plc_ip: 192.168.42.119
+managed_parameters:
+  <span class="k">0-0-docker-enabled</span>: true</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Open a change request and read the difference</h4>
+            <p>On GitHub this is a pull request. It shows the old value beside the new one, the
+               same way a diff shows a changed line of code. Nothing has reached the controller
+               at this point.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>A rehearsal runs automatically on the change request</h4>
+            <p>The runner reads the live values from the controller and prints the difference it
+               would apply. It does not write. This is the step that catches a device that is
+               unreachable, or a value that someone already changed by hand.</p>
+<pre>[192.168.42.119] Drift detected (1 parameter):
+  0-0-docker-enabled: False &#8594; True
+Dry-run. Pass --execute to apply.</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Approve and merge</h4>
+            <p>Your approval on the pull request is the authorization. It is recorded against
+               your GitHub account, not typed into the file.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>The change is written, and only the difference</h4>
+            <p>The same comparison runs again, this time writing. A parameter already at the
+               intended value is left alone, so re-running is harmless. The result is appended
+               to the audit log with your name on it.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Procedure 2: reboot a controller</h2>
+    <p class="lede">A reboot is not a setting: it happens once and cannot be undone by editing a
+       file afterwards. It therefore uses a one-shot instruction that is deleted after it runs.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Restart the Edge Controller at 192.168.42.121</h3>
+        <span class="proc-meta">ops/reboot-edge-121.yaml &nbsp;0-0-device-reboot</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Assistant</span>
+            <h4>The reboot is refused, and a proposal is written</h4>
+            <p>Asked to reboot the device, the server refuses the call and returns a one-shot
+               file. The field <span class="mono">approved_by</span> is deliberately empty.</p>
+<pre>plc_ip: 192.168.42.121
+action: invoke_method
+method_id: <span class="k">0-0-device-reboot</span>
+requires_human: CRITICAL
+approved_by: <span class="c">""</span></pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Open the change request; it is safe to leave open</h4>
+            <p>An unapproved proposal cannot execute. You can raise it now and merge it during
+               the next maintenance window without any risk in between.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Approve during the window, then merge</h4>
+            <p>Merging is what starts the job. Plan it the way you would plan walking to the
+               cabinet and power-cycling the device, because the effect is the same.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>The method is called once, then the file is removed</h4>
+            <p>The instruction is deleted from the repository after it succeeds, so it cannot be
+               replayed by accident on the next run. A failure leaves it in place for a retry.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Procedure 3: firmware update, and downgrade</h2>
+    <p class="lede">Firmware is the one change a later commit cannot reverse. It uses the same
+       one-shot instruction as a reboot, plus two checks that exist only here.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Update the Edge Controller at 192.168.42.121 to build 31</h3>
+        <span class="proc-meta">ops/fw-edge-121.yaml &nbsp;target 4.9.1</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Check the revision is permitted for this device</h4>
+            <p>The firmware policy lists, per controller, which revisions it may run. The
+               default installed when no revision is named is the newest permitted one.</p>
+<pre><span class="c"># firmware-policy.yaml</span>
+192.168.42.121: { <span class="k">allowed</span>: ["4.9.1"] }</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Engineer</span>
+            <h4>Raise the instruction and approve it</h4>
+            <p>Same shape as a reboot: one device, one revision, an empty
+               <span class="mono">approved_by</span> until you merge.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>The correct image is selected from the hardware, not the filename</h4>
+            <p>The controller is asked for its own order number and firmware build. Each
+               available image is opened and matched against that order number. Where two images
+               match, the job stops and lists them rather than guessing.</p>
+<pre>Device identity: order=0752-8303/8000-0002  firmware=04.09.01(31)
+Resolved: TP-Linux_update_V040901_31 (build 31)</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Two preconditions are checked before anything is written</h4>
+            <p>The controller must already be at or above the minimum build for its type, and
+               the installed version must fall inside the range the image itself declares
+               acceptable. Both are refusals, not warnings.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Transfer, install, restart</h4>
+            <p>The image is transferred in segments, the controller installs it and restarts
+               itself. It is unreachable for part of this. Progress stops at roughly 93 percent
+               and never reaches 100: completion is signalled by the status, not the percentage.</p>
+<pre>fwstatus: Started (3)  progress: 61%
+[device unreachable - restarting]
+fwstatus: Unconfirmed (4)  progress: 93%
+Done. fwstatus: Inactive (0)  firmware version: 04.09.01</pre>
+          </div>
+        </li>
+      </ol>
+    </div>
+
+    <h3 style="margin-top:28px">Downgrading to an earlier release</h3>
+    <p>A downgrade is the same procedure with an older revision named. It is not a special mode
+       and needs no separate tooling. Two conditions make it possible, and both are visible in
+       the change request before you approve it.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Condition</th><th>Where it is checked</th><th>What you do</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>The older revision is permitted for that controller</td>
+            <td>Firmware policy in the configuration repository</td>
+            <td>Add it to <span class="mono">allowed</span>. The newest entry stays the default, so listing an older release does not make it the target for everything else.</td>
+          </tr>
+          <tr>
+            <td>The image permits the installed version to move backwards</td>
+            <td>Declared inside the firmware image itself</td>
+            <td>Nothing. It is read from the image and refused if the installed version is outside that range.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <pre><span class="c"># A controller allowed to move back one release, still defaulting to the newest</span>
+192.168.42.121:
+  <span class="k">allowed</span>: ["4.8.9", "4.9.1"]
+  <span class="c"># default is 4.9.1, the newest allowed</span>
+
+<span class="c"># The instruction that performs the downgrade names the older revision explicitly</span>
+plc_ip: 192.168.42.121
+action: firmware_update
+<span class="k">target_version</span>: "4.8.9"</pre>
+
+    <p class="lede" style="margin-top:14px">Settings are preserved across a downgrade by the same
+       backup and restore the controller performs during any firmware change. Settings introduced
+       by a newer release have nowhere to go on the older one and are reported as restore errors
+       in the controller's own log.</p>
+  </section>
+
+  <section>
+    <h2>Vocabulary</h2>
+    <p class="lede">The terms a pipeline uses, expressed in plant terms.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Term</th><th>What it means here</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">Pull request</td><td>A change request. It shows the difference between what is running and what is proposed, and it holds your approval.</td></tr>
+          <tr><td class="mono">Merge</td><td>Accepting the change request. This is the moment authorization exists; it is also what starts the job.</td></tr>
+          <tr><td class="mono">Workflow</td><td>The stored procedure that carries out an approved change. It is fixed and reviewed like any other file in the repository.</td></tr>
+          <tr><td class="mono">Runner</td><td>The service PC inside the plant network that executes the procedure. Without one, an approved change simply waits.</td></tr>
+          <tr><td class="mono">Dry run</td><td>A rehearsal. Reads the controller, reports what it would change, writes nothing.</td></tr>
+          <tr><td class="mono">Audit log</td><td>A tamper-evident record. Each entry carries a hash of the previous one, so a removed or edited line can be detected.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What holds, and what does not</h2>
+    <div class="guards">
+      <div class="guard">
+        <h3>The assistant cannot flash or reboot</h3>
+        <p>Refused in code for every device and every mode, and the refusal itself is recorded.
+           This is not a setting you are expected to relax.</p>
+      </div>
+      <div class="guard">
+        <h3>An uncommitted file authorizes nothing</h3>
+        <p>The runner verifies that the instruction is committed and unmodified before acting on
+           it. Editing a file on disk has no effect.</p>
+      </div>
+      <div class="guard">
+        <h3>Every outcome is recorded</h3>
+        <p>Approvals, refusals, successes, device-reported failures and interrupted runs all
+           reach the audit log, and can be forwarded to a syslog collector outside the machine
+           that writes them.</p>
+      </div>
+      <div class="guard stop">
+        <h3>Four eyes is a repository setting</h3>
+        <p>If the repository does not require an approving reviewer, the same person can propose
+           and approve. That is permitted, and it is recorded as self-approved rather than
+           disguised. Requiring a second person is a branch protection rule, not something this
+           tooling can create.</p>
+      </div>
+      <div class="guard stop">
+        <h3>A firmware change is not reversible by commit</h3>
+        <p>A downgrade is a second firmware operation with its own risk and its own downtime. It
+           is not an undo.</p>
+      </div>
+      <div class="guard stop">
+        <h3>Devices are offline while they restart</h3>
+        <p>A CC100 has taken ten minutes to return. Silence during a firmware change is expected
+           and is not by itself a fault.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Values shown are read from the test rack: 18 controllers on firmware 04.09.01 build 31,
+       comprising CC100, PFC200 G2, PFC300, Edge Controller, TP600 and WP400. Parameter
+       identifiers and status codes are those returned by the devices themselves.</p>
+  </footer>
+</div>

@@ -105,6 +105,22 @@ flashed it refuses unless all of these hold:
 5. optionally (`FW_REQUIRE_SEPARATE_APPROVER=true`) the approver is not also
    the proposer
 
+### What gets installed when no revision is named
+
+A policy entry lists the revisions a device may run. With no `TARGET_VERSION`
+and no revision in the ops file, the tool installs the **newest allowed**, unless
+the entry pins a different `default`. A revision outside the list is refused,
+naming what was allowed:
+
+```
+FATAL: refused - 192.168.42.115 is approved for firmware 4.9.1, but the
+       resolved bundle is 4.9.50.
+```
+
+Which revisions a device is allowed to run is a fleet decision, so the entry
+forms are documented where approvals are written:
+[wago-plc-config -> Standing approval](https://github.com/WagoAlex/wago-plc-config#standing-approval-the-fleet-policy).
+
 ### Nobody types their own name
 
 `approved_by` is never something you have to fill in by hand. The approver is
