@@ -48,6 +48,8 @@ from pathlib import Path
 
 import yaml
 
+from catalog import parse_version
+
 
 class NotAuthorized(Exception):
     """Raised for every refusal. The message is meant to be shown verbatim."""
@@ -114,13 +116,43 @@ def load_policy(policy_file: str | Path) -> tuple[dict, str]:
     return policy, commit
 
 
+def _allowed_versions(entry) -> list[str]:
+    """Every revision this entry permits, newest last.
+
+    An entry may be a bare revision, a mapping with `version:`, or a mapping
+    with `allowed:` listing several. Several is the normal case once a device
+    class has more than one supported line - a PFC200 G2 that may run either
+    the standard 4.9.1 or, for the 0750-8217 modem variant, 4.9.50.
+    """
+    if not isinstance(entry, dict):
+        return [str(entry)]
+    allowed = entry.get("allowed")
+    if allowed:
+        if not isinstance(allowed, list):
+            raise NotAuthorized(f"policy entry {entry!r} has 'allowed:' that is not a list")
+        return [str(v) for v in allowed]
+    if "version" not in entry:
+        raise NotAuthorized(f"policy entry {entry!r} has neither 'allowed:' nor 'version:'")
+    return [str(entry["version"])]
+
+
+def _default_version(entry) -> str:
+    """What to install when no target was named: the newest allowed revision,
+    unless the entry pins a different default explicitly."""
+    versions = _allowed_versions(entry)
+    if isinstance(entry, dict) and entry.get("default"):
+        pinned = str(entry["default"])
+        if pinned not in versions:
+            raise NotAuthorized(
+                f"policy entry {entry!r} defaults to {pinned!r}, which is not in its allowed list {versions}"
+            )
+        return pinned
+    return max(versions, key=parse_version)
+
+
 def _entry_version(entry) -> str:
-    """An entry is either a bare revision or a mapping carrying one."""
-    if isinstance(entry, dict):
-        if "version" not in entry:
-            raise NotAuthorized(f"policy entry {entry!r} has no 'version:'")
-        return str(entry["version"])
-    return str(entry)
+    """Backwards-compatible single-version accessor: the default."""
+    return _default_version(entry)
 
 
 def load_ops_authorization(ops_file: str | Path, plc_ip: str, target_revision: str) -> tuple[str, str]:
@@ -157,8 +189,13 @@ def load_ops_authorization(ops_file: str | Path, plc_ip: str, target_revision: s
 
 
 def approved_hosts(policy: dict) -> dict[str, str]:
-    """{ip: target_revision} for every host the policy approves."""
-    return {str(host): _entry_version(entry) for host, entry in policy["approvals"].items()}
+    """{ip: default_revision} - what a fleet run installs when nothing is named."""
+    return {str(host): _default_version(entry) for host, entry in policy["approvals"].items()}
+
+
+def allowed_versions_for(policy: dict, plc_ip: str) -> list[str]:
+    """Every revision this host may run."""
+    return _allowed_versions(policy["approvals"][plc_ip])
 
 
 def resolve_approver(repo: Path, rel: Path, declared: str) -> tuple[str, str]:
@@ -248,10 +285,11 @@ def authorize(policy: dict, commit: str, plc_ip: str, target_revision: str) -> t
             f"{plc_ip} is not listed in the firmware policy. Approved hosts: "
             f"{', '.join(sorted(approvals)) or '(none)'}"
         )
-    want = approvals[plc_ip]
-    if want != str(target_revision):
+    allowed = allowed_versions_for(policy, plc_ip)
+    if str(target_revision) not in allowed:
+        listing = ", ".join(allowed)
         raise NotAuthorized(
-            f"{plc_ip} is approved for firmware {want}, but the resolved bundle is "
+            f"{plc_ip} is approved for firmware {listing}, but the resolved bundle is "
             f"{target_revision}. Commit a policy change if {target_revision} is what you want."
         )
     repo, rel = policy["_git_location"]
