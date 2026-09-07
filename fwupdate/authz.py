@@ -25,6 +25,17 @@ in wago-plc-config use, where a human must fill approved_by during PR review:
 An empty approved_by is refused even though the file is committed, which is
 what makes an unapproved PR safe to open.
 
+A firmware update can also be authorized by a one-shot ops file, the same shape
+the config repo already uses for a reboot - set FW_OPS_FILE to it. The ops file
+IS the approval, so it must carry approved_by, and the same git checks apply:
+
+    id: fw-pfc300-119
+    plc_ip: 192.168.42.119
+    action: firmware_update
+    target_version: "4.9.1"
+    requires_human: CRITICAL
+    approved_by: ""          # fill this before merging
+
 The commit sha that authorized the run is returned so it can be printed and
 written to the audit log - "who approved this flash" is answerable afterwards
 by `git show <sha>`.
@@ -50,25 +61,33 @@ def _git(repo: Path, *args: str) -> str:
     return r.stdout.strip()
 
 
-def load_policy(policy_file: str | Path) -> tuple[dict, str]:
-    """Verify the policy file is committed and clean; return (policy, commit_sha)."""
-    path = Path(policy_file).resolve()
-    if not path.is_file():
-        raise NotAuthorized(f"policy file {path} not found - firmware updates are refused without one")
+def _verify_committed(authorization_file: str | Path) -> tuple[Path, Path, Path]:
+    """Prove one file is tracked, unmodified and (optionally) on a signed HEAD.
 
-    repo = path.parent
+    Shared by both authorization sources - the fleet policy and a one-shot ops
+    file - so there is exactly one implementation of "this was committed".
+    Returns (absolute_path, repo_dir, path_relative_to_repo).
+    """
+    path = Path(authorization_file).resolve()
+    if not path.is_file():
+        raise NotAuthorized(f"authorization file {path} not found - firmware updates are refused without one")
+
     try:
-        toplevel = Path(_git(repo, "rev-parse", "--show-toplevel"))
+        toplevel = Path(_git(path.parent, "rev-parse", "--show-toplevel"))
     except NotAuthorized:
         raise NotAuthorized(f"{path} is not inside a git repository - no authorization possible") from None
 
+    # Every subsequent call runs from the repo ROOT, not the file's directory:
+    # git resolves a pathspec relative to the cwd, so running from ops/ would
+    # look for ops/ops/<file> and report every ops file as untracked.
+    repo = toplevel
     rel = path.relative_to(toplevel)
     _git(repo, "ls-files", "--error-unmatch", str(rel))  # raises if untracked
 
     if _git(repo, "diff", "HEAD", "--name-only", "--", str(rel)):
         raise NotAuthorized(
             f"{rel} has uncommitted changes. Commit the approval first - an uncommitted "
-            f"policy is not an authorization."
+            f"file is not an authorization."
         )
 
     if os.environ.get("FW_REQUIRE_SIGNED_COMMIT", "").lower() in ("1", "true", "yes"):
@@ -77,7 +96,12 @@ def load_policy(policy_file: str | Path) -> tuple[dict, str]:
             raise NotAuthorized(
                 f"FW_REQUIRE_SIGNED_COMMIT is set but HEAD has no valid signature: {r.stderr.strip()}"
             )
+    return path, repo, rel
 
+
+def load_policy(policy_file: str | Path) -> tuple[dict, str]:
+    """Verify the fleet policy is committed and clean; return (policy, commit_sha)."""
+    path, repo, rel = _verify_committed(policy_file)
     commit = _git(repo, "log", "-1", "--format=%H", "--", str(rel))
     with open(path) as f:
         policy = yaml.safe_load(f) or {}
@@ -93,6 +117,42 @@ def _entry_version(entry) -> str:
             raise NotAuthorized(f"policy entry {entry!r} has no 'version:'")
         return str(entry["version"])
     return str(entry)
+
+
+def load_ops_authorization(ops_file: str | Path, plc_ip: str, target_revision: str) -> tuple[str, str]:
+    """Authorize from a one-shot ops file instead of the fleet policy.
+
+    Same git proof as load_policy: tracked, unmodified, optionally signed. The
+    ops file names exactly one device and one revision, so a mismatch against
+    what the catalog resolved is a refusal rather than something to reconcile.
+    Returns (commit_sha, approved_by).
+    """
+    path, repo, rel = _verify_committed(ops_file)
+
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    if data.get("action") != "firmware_update":
+        raise NotAuthorized(f"{rel} is not a firmware_update ops file (action={data.get('action')!r})")
+    if str(data.get("plc_ip", "")) != plc_ip:
+        raise NotAuthorized(
+            f"{rel} authorizes {data.get('plc_ip')!r}, not {plc_ip} - one ops file, one device"
+        )
+    want = str(data.get("target_version", ""))
+    if want != str(target_revision):
+        raise NotAuthorized(
+            f"{rel} authorizes firmware {want!r}, but the resolved bundle is {target_revision}"
+        )
+
+    approved_by = os.environ.get("WAGO_APPROVED_BY", "").strip() or str(data.get("approved_by", "")).strip()
+    if not approved_by:
+        raise NotAuthorized(
+            f"{rel} has an empty approved_by. A human must fill it during PR review "
+            f"before a firmware update can run."
+        )
+
+    commit = _git(repo, "log", "-1", "--format=%H", "--", str(rel))
+    return commit, approved_by
 
 
 def approved_hosts(policy: dict) -> dict[str, str]:

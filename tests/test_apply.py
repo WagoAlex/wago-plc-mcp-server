@@ -8,6 +8,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import yaml
 import apply
 
 
@@ -270,3 +271,124 @@ async def test_readonly_host_blocks_ops(monkeypatch, tmp_path):
 
     assert rc == 1
     mock_client.invoke_method.assert_not_called()
+
+
+# --- firmware ops files: same lifecycle and gates as a reboot ----------------
+
+def _fw_ops(tmp_path, approved_by="", target_version="4.9.1", ip="10.0.0.1"):
+    p = tmp_path / "fw-test.yaml"
+    p.write_text(
+        f"id: fw-test\nplc_ip: {ip}\naction: firmware_update\n"
+        f"target_version: '{target_version}'\nrequires_human: CRITICAL\n"
+        f"approved_by: '{approved_by}'\n"
+    )
+    return p
+
+
+def test_firmware_ops_without_approved_by_is_refused(tmp_path, monkeypatch, capsys):
+    from apply import apply_firmware
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
+    monkeypatch.delenv("WAGO_READONLY_HOSTS", raising=False)
+    p = _fw_ops(tmp_path)
+    data = yaml.safe_load(p.read_text())
+
+    assert apply_firmware(data, p, execute=True) == 1
+    assert "no `approved_by`" in capsys.readouterr().err
+    assert p.exists(), "a refused op must not be deleted"
+
+
+def test_firmware_ops_without_target_version_is_refused(tmp_path, monkeypatch):
+    from apply import apply_firmware
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    p = tmp_path / "fw-bad.yaml"
+    p.write_text("id: fw-bad\nplc_ip: 10.0.0.1\naction: firmware_update\napproved_by: 'ALEX'\n")
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=True) == 1
+
+
+def test_firmware_ops_dry_run_never_touches_the_device(tmp_path, monkeypatch, capsys):
+    """A PR check must not upload 200 MB to a controller."""
+    from apply import apply_firmware
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    called = []
+    monkeypatch.setattr("apply.subprocess.run", lambda *a, **k: called.append(a) or None)
+    p = _fw_ops(tmp_path, approved_by="ALEX")
+
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=False) == 0
+    assert not called, "dry-run must not invoke the flash tool"
+    assert p.exists()
+    assert "Dry-run" in capsys.readouterr().out
+
+
+def test_firmware_ops_readonly_host_is_refused(tmp_path, monkeypatch):
+    from apply import apply_firmware
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    monkeypatch.setenv("WAGO_READONLY_HOSTS", "10.0.0.1")
+    p = _fw_ops(tmp_path, approved_by="ALEX")
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=True) == 1
+    assert p.exists()
+
+
+def test_failed_flash_keeps_the_ops_file_for_retry(tmp_path, monkeypatch):
+    from apply import apply_firmware
+
+    class R:
+        returncode = 1
+
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    monkeypatch.delenv("WAGO_READONLY_HOSTS", raising=False)
+    monkeypatch.setattr("apply.subprocess.run", lambda *a, **k: R())
+    tool = tmp_path / "fw_update.py"; tool.write_text("")
+    monkeypatch.setenv("FWUPDATE_TOOL", str(tool))
+    p = _fw_ops(tmp_path, approved_by="ALEX")
+
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=True) == 1
+    assert p.exists(), "a failed flash must leave the op in place"
+
+
+def test_successful_flash_deletes_the_ops_file(tmp_path, monkeypatch):
+    from apply import apply_firmware
+
+    class R:
+        returncode = 0
+
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    monkeypatch.delenv("WAGO_READONLY_HOSTS", raising=False)
+    monkeypatch.setattr("apply.subprocess.run", lambda *a, **k: R())
+    tool = tmp_path / "fw_update.py"; tool.write_text("")
+    monkeypatch.setenv("FWUPDATE_TOOL", str(tool))
+    p = _fw_ops(tmp_path, approved_by="ALEX")
+
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=True) == 0
+    assert not p.exists(), "a completed op is deleted, like a reboot"
+
+
+def test_allow_reflash_is_declared_in_the_yaml_not_the_environment(tmp_path, monkeypatch):
+    """Writing the version a device already runs must be visible to a reviewer."""
+    from apply import apply_firmware
+    captured = {}
+
+    class R:
+        returncode = 0
+
+    def fake_run(cmd, env=None, **k):
+        captured.update(env or {})
+        return R()
+
+    monkeypatch.setenv("WAGO_APPROVED_BY", "ALEX")
+    monkeypatch.delenv("WAGO_READONLY_HOSTS", raising=False)
+    monkeypatch.setattr("apply.subprocess.run", fake_run)
+    tool = tmp_path / "fw_update.py"; tool.write_text("")
+    monkeypatch.setenv("FWUPDATE_TOOL", str(tool))
+
+    p = tmp_path / "fw.yaml"
+    p.write_text("id: fw\nplc_ip: 10.0.0.1\naction: firmware_update\n"
+                 "target_version: '4.9.1'\napproved_by: 'ALEX'\nallow_reflash: true\n")
+    assert apply_firmware(yaml.safe_load(p.read_text()), p, execute=True) == 0
+    assert captured["FW_ALLOW_REFLASH"] == "true"
+    assert captured["FW_OPS_FILE"] == str(p.resolve())
+
+    p2 = tmp_path / "fw2.yaml"
+    p2.write_text("id: fw2\nplc_ip: 10.0.0.1\naction: firmware_update\n"
+                  "target_version: '4.9.1'\napproved_by: 'ALEX'\n")
+    assert apply_firmware(yaml.safe_load(p2.read_text()), p2, execute=True) == 0
+    assert captured["FW_ALLOW_REFLASH"] == "false"

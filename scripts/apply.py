@@ -9,6 +9,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,18 +21,29 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 def _client():
-    from wda_client import WDAClient  # noqa: PLC0415 — local import after sys.path patch
+    from wda_client import WDAClient  # noqa: PLC0415 - local import after sys.path patch
     return WDAClient
 
 
 def _audit(action: str, plc_ip: str, result: str, **details) -> None:
-    """Append an audit record if AUDIT_LOG_FILE is set; always harmless if not."""
+    """Record one action. Writes the hash chain when AUDIT_LOG_FILE is set, and
+    forwards to AUDIT_SYSLOG when that is set.
+
+    A CI runner usually has no persistent volume for the chain, so syslog alone
+    is a valid configuration - and the one that matters there, since a record
+    that only ever existed on an ephemeral runner is not an audit trail.
+    """
+    from audit import append_audit, build_entry, forward_to_syslog  # noqa: PLC0415 - after sys.path patch
+
     path = os.getenv("AUDIT_LOG_FILE", "").strip()
-    if not path:
-        return
-    from audit import append_audit  # noqa: PLC0415 — local import after sys.path patch
     try:
-        append_audit(path, action, plc_ip, "apply.py", result, **details)
+        if path:
+            append_audit(path, action, plc_ip, "apply.py", result, **details)  # forwards internally
+        elif os.getenv("AUDIT_SYSLOG", "").strip():
+            from audit import GENESIS  # noqa: PLC0415
+
+            line, _ = build_entry(action, plc_ip, "apply.py", result, GENESIS, details)
+            forward_to_syslog(line)
     except Exception as e:  # never let logging failure abort a reconcile
         print(f"[audit] WARNING: could not write audit record: {e}", file=sys.stderr)
 
@@ -45,12 +57,12 @@ def _coerce(desired, current):
             return type(current)(desired)
         except (ValueError, TypeError):
             return desired
-    return desired  # string / unknown — send as-is
+    return desired  # string / unknown - send as-is
 
 
 async def apply_desired_state(data: dict, execute: bool) -> int:
     """Read current PLC state, diff against desired, apply only drift. Returns exit code."""
-    from safety import compute_readonly_hosts  # noqa: PLC0415 — local import after sys.path patch
+    from safety import compute_readonly_hosts  # noqa: PLC0415 - local import after sys.path patch
 
     WDAClient = _client()
     plc_ip = data["plc_ip"]
@@ -80,7 +92,7 @@ async def apply_desired_state(data: dict, execute: bool) -> int:
         }
 
         if not drift:
-            print(f"[{plc_ip}] In sync — nothing to apply.")
+            print(f"[{plc_ip}] In sync - nothing to apply.")
             return 0
 
         print(f"[{plc_ip}] Drift detected ({len(drift)} parameter(s)):")
@@ -88,7 +100,7 @@ async def apply_desired_state(data: dict, execute: bool) -> int:
             print(f"  {k}: {cur!r} → {want!r}")
 
         if not execute:
-            print("\nDry-run — pass --execute to apply.")
+            print("\nDry-run - pass --execute to apply.")
             return 0
 
         patches = [{"id": k, "value": _coerce(v, current.get(k))} for k, (_, v) in drift.items()]
@@ -105,7 +117,7 @@ async def apply_desired_state(data: dict, execute: bool) -> int:
 
 async def apply_ops(data: dict, path: Path, execute: bool) -> int:
     """Invoke a one-shot method and delete the ops file on success. Returns exit code."""
-    from safety import compute_readonly_hosts, is_dangerous_method  # noqa: PLC0415 — local import after sys.path patch
+    from safety import compute_readonly_hosts, is_dangerous_method  # noqa: PLC0415 - local import after sys.path patch
 
     WDAClient = _client()
     plc_ip = data["plc_ip"]
@@ -135,7 +147,7 @@ async def apply_ops(data: dict, path: Path, execute: bool) -> int:
     print(f"[{plc_ip}] invoke_method: {method_id}  args={arguments}")
 
     if not execute:
-        print("Dry-run — pass --execute to apply.")
+        print("Dry-run - pass --execute to apply.")
         return 0
 
     client = WDAClient(
@@ -158,12 +170,97 @@ async def apply_ops(data: dict, path: Path, execute: bool) -> int:
         await client.close()
 
 
+# Where the flash tool lives. Overridable with FWUPDATE_TOOL for deployments
+# that keep it outside this checkout.
+FWUPDATE_TOOL = Path(__file__).resolve().parent.parent / "fwupdate" / "fw_update.py"
+
+
+def apply_firmware(data: dict, path: Path, execute: bool) -> int:
+    """Run a one-shot firmware update, then delete the ops file - the same
+    lifecycle as a reboot op.
+
+    The flash itself is delegated to fwupdate/fw_update.py rather than
+    reimplemented here: it owns the WDA upload protocol, the reboot poll and
+    the Finish-on-Unconfirmed timing. This function's job is the gate.
+
+    The ops file IS the authorization, and fw_update.py re-verifies that it is
+    committed and signed off - deliberately not trusting the dict we parsed
+    here, since a runner could be handed a modified working tree.
+    """
+    from safety import compute_readonly_hosts  # noqa: PLC0415 - local import after sys.path patch
+
+    plc_ip = data["plc_ip"]
+    target_version = str(data.get("target_version", "")).strip()
+    approved_by = os.getenv("WAGO_APPROVED_BY", "").strip() or str(data.get("approved_by", "")).strip()
+
+    if plc_ip in compute_readonly_hosts():
+        print(f"[{plc_ip}] REFUSED: read-only host (WAGO_READONLY_HOSTS / fleet '# readonly').", file=sys.stderr)
+        _audit("apply_firmware", plc_ip, "refused: read-only host", target_version=target_version)
+        return 1
+
+    if not target_version:
+        print(f"[{plc_ip}] REFUSED: ops file has no `target_version`.", file=sys.stderr)
+        _audit("apply_firmware", plc_ip, "refused: no target_version")
+        return 1
+
+    # Firmware is always dangerous - there is no non-dangerous variant to check for.
+    if not approved_by:
+        print(
+            f"[{plc_ip}] REFUSED: firmware update with no `approved_by`. "
+            f"A human must set approved_by in the ops file before this can run.",
+            file=sys.stderr,
+        )
+        _audit("apply_firmware", plc_ip, "refused: no approved_by", target_version=target_version)
+        return 1
+
+    reflash = " [re-flash: same version]" if data.get("allow_reflash") else ""
+    print(f"[{plc_ip}] firmware_update -> {target_version}{reflash}  (approved_by: {approved_by})")
+
+    if not execute:
+        # Deliberately does NOT contact the device or upload ~200 MB during a PR
+        # check. The gate is what a reviewer needs to see; the flash happens on merge.
+        print("Dry-run - pass --execute to apply.")
+        return 0
+
+    fw_update = Path(os.getenv("FWUPDATE_TOOL", "") or FWUPDATE_TOOL)
+    if not fw_update.is_file():
+        print(f"[{plc_ip}] ERROR: {fw_update} not found", file=sys.stderr)
+        _audit("apply_firmware", plc_ip, "error: fwupdate tool missing", target_version=target_version)
+        return 1
+
+    # allow_reflash is declared in the REVIEWED yaml, not injected by CI: writing
+    # the version a device already runs is a decision a reviewer should see.
+    env = {
+        **os.environ,
+        "PLC_IP": plc_ip,
+        "PLC_USERNAME": os.getenv("DEFAULT_PLC_USERNAME", "admin"),
+        "PLC_PASSWORD": os.getenv("DEFAULT_PLC_PASSWORD", ""),
+        "FW_OPS_FILE": str(path.resolve()),
+        "TARGET_VERSION": target_version,
+        "WAGO_APPROVED_BY": approved_by,
+        "FW_ALLOW_REFLASH": "true" if data.get("allow_reflash") else "false",
+    }
+    rc = subprocess.run([sys.executable, str(fw_update)], env=env).returncode
+    if rc != 0:
+        print(f"[{plc_ip}] firmware update FAILED (exit {rc}) - ops file kept for retry", file=sys.stderr)
+        return rc
+
+    # fw_update.py already wrote its own detailed audit records; this one closes
+    # the ops lifecycle so the trail matches a reboot's.
+    _audit("apply_firmware", plc_ip, "ok", target_version=target_version, approved_by=approved_by)
+    path.unlink()
+    print(f"Deleted {path}")
+    return 0
+
+
 async def run(proposal_path: Path, execute: bool) -> int:
     data = yaml.safe_load(proposal_path.read_text())
     if "managed_parameters" in data:
         return await apply_desired_state(data, execute)
     if data.get("action") == "invoke_method":
         return await apply_ops(data, proposal_path, execute)
+    if data.get("action") == "firmware_update":
+        return apply_firmware(data, proposal_path, execute)
     print(f"Unknown YAML shape in {proposal_path}", file=sys.stderr)
     return 1
 

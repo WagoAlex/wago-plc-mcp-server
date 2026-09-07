@@ -121,3 +121,88 @@ def test_mapping_entry_without_version_refused(repo):
     policy, _ = authz.load_policy(p)
     with pytest.raises(authz.NotAuthorized, match="no 'version:'"):
         authz.approved_hosts(policy)
+
+
+# --- ops-file authorization: firmware treated exactly like a reboot ----------
+
+def write_ops(repo, approved_by='""', version='"4.9.1"', ip="10.0.0.1", action="firmware_update"):
+    p = repo / "fw-test.yaml"
+    p.write_text(f'id: fw-test\nplc_ip: {ip}\naction: {action}\n'
+                 f'target_version: {version}\nrequires_human: CRITICAL\napproved_by: {approved_by}\n')
+    return p
+
+
+def test_ops_file_authorizes_when_signed_off(repo):
+    p = write_ops(repo, approved_by='"ALEX"')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    commit, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert approved_by == "ALEX" and len(commit) == 40
+
+
+def test_ops_file_without_signoff_refused(repo):
+    p = write_ops(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    with pytest.raises(authz.NotAuthorized, match="empty approved_by"):
+        authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+
+
+def test_ops_file_is_bound_to_one_device(repo):
+    """A merged ops file must not be reusable against a different controller."""
+    p = write_ops(repo, approved_by='"ALEX"', ip="10.0.0.1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    with pytest.raises(authz.NotAuthorized, match="one ops file, one device"):
+        authz.load_ops_authorization(p, "10.0.0.99", "4.9.1")
+
+
+def test_ops_file_is_bound_to_one_revision(repo):
+    p = write_ops(repo, approved_by='"ALEX"', version='"4.9.1"')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    with pytest.raises(authz.NotAuthorized, match="authorizes firmware"):
+        authz.load_ops_authorization(p, "10.0.0.1", "4.9.50")
+
+
+def test_reboot_ops_file_cannot_authorize_a_flash(repo):
+    p = write_ops(repo, approved_by='"ALEX"', action="invoke_method")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "reboot")
+    with pytest.raises(authz.NotAuthorized, match="not a firmware_update ops file"):
+        authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+
+
+def test_uncommitted_ops_edit_refused(repo):
+    p = write_ops(repo, approved_by='""')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    p.write_text(p.read_text().replace('approved_by: ""', 'approved_by: "self"'))
+    with pytest.raises(authz.NotAuthorized, match="uncommitted"):
+        authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+
+
+def test_authorization_file_in_a_subdirectory(repo):
+    """git resolves a pathspec relative to the cwd, so running git from the
+    file's own directory reports every ops/ file as untracked."""
+    (repo / "ops").mkdir()
+    p = repo / "ops" / "fw-1.yaml"
+    p.write_text('id: fw-1\nplc_ip: 10.0.0.1\naction: firmware_update\n'
+                 'target_version: "4.9.1"\nrequires_human: CRITICAL\napproved_by: "ALEX"\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+
+    commit, approved_by = authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
+    assert approved_by == "ALEX" and len(commit) == 40
+
+
+def test_uncommitted_edit_detected_in_a_subdirectory(repo):
+    (repo / "ops").mkdir()
+    p = repo / "ops" / "fw-1.yaml"
+    p.write_text('id: fw-1\nplc_ip: 10.0.0.1\naction: firmware_update\n'
+                 'target_version: "4.9.1"\nrequires_human: CRITICAL\napproved_by: ""\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "propose")
+    p.write_text(p.read_text().replace('approved_by: ""', 'approved_by: "self"'))
+    with pytest.raises(authz.NotAuthorized, match="uncommitted"):
+        authz.load_ops_authorization(p, "10.0.0.1", "4.9.1")
