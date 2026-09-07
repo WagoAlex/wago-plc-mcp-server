@@ -88,26 +88,18 @@ flashed it refuses unless all of these hold:
 
 ### Nobody types their own name
 
-`approved_by` does not have to be filled in by hand. The approver is resolved
-from the most authenticated source available:
+`approved_by` is never something you have to fill in by hand. The approver is
+resolved from the most authenticated source available:
 
-| Precedence | Source | Where it comes from |
+| Precedence | Source | Available when |
 |---|---|---|
-| 1 | **PR review** | The reviewers who approved the pull request, read from the GitHub review API on merge. Cited as `WAGO_APPROVAL_REF`, e.g. `wago-plc-config#4 opened by alice, approved by bob, merged by bob` |
-| 2 | `WAGO_APPROVED_BY` | The authenticated actor, when there was no review approval - a direct push, or a PR merged without one |
-| 3 | Commit author | Fallback for a hand-run update outside CI |
-| 4 | The value in the file | A typed name - weakest, used only if none of the above are available |
+| 1 | **PR review** | CI read the pull request's review approvals on merge. Passed as `WAGO_APPROVED_BY` plus a citable `WAGO_APPROVAL_REF` |
+| 2 | Authenticated actor | A PR merged without a review approval, or a direct push - `WAGO_APPROVED_BY` alone |
+| 3 | Commit author | Running the updater by hand, outside CI |
+| 4 | The value in the file | Nothing above was available. Weakest: a typed name proves nothing |
 
-**The pull request is the approval, not the commit.** A commit author is
-usually whoever *proposed* the change, and a squash or merge commit is authored
-by GitHub itself, so citing a commit is weakest exactly where it matters most.
-The PR carries the reviewer, the timestamp and a number you can point at
-afterwards. The commit-author fallback exists for running the updater by hand,
-where there is no PR to read.
-
-**Self-approval is allowed** - one engineer maintaining a rack should not need
-a second account - but it is recorded as such, so a later review can tell a
-four-eyes change from a one-person one without re-reading git history:
+Self-approval is **allowed and recorded**, not refused - one engineer
+maintaining a rack should not need a second account:
 
 ```
 ==> NOTE: proposer and approver are the same person (self-approved).
@@ -117,18 +109,16 @@ four-eyes change from a one-person one without re-reading git history:
     192.168.42.119 -> 4.9.1
 ```
 
-```json
-{"action": "firmware_update", "result": "authorized",
- "approved_by": "A. Engineer <a@example.com> [commit author, self-approved]",
- "self_approved": true, "commit": "3968873334d8cd4b..."}
-```
+`FW_REQUIRE_SEPARATE_APPROVER=true` refuses it instead, for anything under a
+change-control requirement.
 
-Set `FW_REQUIRE_SEPARATE_APPROVER=true` to refuse self-approval instead, for
-anything under a change-control requirement. Note what auto-fill costs: a file
-with an empty `approved_by` no longer refuses on its own, because committing it
-now **is** the approval. The two-person property moves to who is allowed to
-merge - branch protection with required reviewers is the stronger control, and
-this flag is the backstop for people running the updater by hand.
+What auto-fill costs, stated plainly: a file with an empty `approved_by` no
+longer refuses on its own, because committing and merging it **is** the
+approval. Whether a second person was involved is decided by your config
+repository's branch-protection settings, not by this tool - the tool records
+the truth either way. Setting that up, and who counts as an approver in each
+merge case, is documented where approvals are written:
+[wago-plc-config → Who counts as the approver](https://github.com/WagoAlex/wago-plc-config#who-counts-as-the-approver).
 
 On success it prints the authorizing commit, and the reviewer when the entry
 carries one:
@@ -182,7 +172,18 @@ denied" is the half that matters after an incident:
 ```json
 {"ts": "2026-09-07T12:45:37Z", "action": "firmware_update", "plc": "192.168.42.111",
  "agent": "fwupdate", "result": "refused: 192.168.42.111 is not listed in the firmware policy",
- "prev": "7c49824b5eca...", "revision": "4.9.1", "policy_file": "/policy/firmware-policy.yaml"}
+ "prev": "7c49824b5eca...", "revision": "4.9.1",
+ "authorization_file": "/policy/firmware-policy.yaml"}
+```
+
+An authorized run additionally carries who approved it and how that was
+established:
+
+```json
+{"result": "authorized", "revision": "4.9.1", "commit": "3968873334d8...",
+ "approved_by": "bob [PR review (WagoAlex/wago-plc-config#4 opened by alice, approved by bob, merged by bob)]",
+ "self_approved": false,
+ "approval_ref": "WagoAlex/wago-plc-config#4 opened by alice, approved by bob, merged by bob"}
 ```
 
 Commands for reading and verifying that trail are under
