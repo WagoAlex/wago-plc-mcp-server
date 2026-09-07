@@ -12,6 +12,54 @@ import zipfile
 from pathlib import Path
 
 
+# Minimum firmware build a device must already run before it may be updated,
+# by base order number. Below this the update path is not supported and the
+# device needs an intermediate step first - the bundle's own declared version
+# range does not express this, because it is a per-hardware constraint rather
+# than a property of the image.
+#
+# Stated by the fleet owner, 2026-09-07: build 28 for CC100, PFC200 G2, TP600
+# and Edge Controller; build 30 for PFC300.
+DEFAULT_MINIMUM_BUILD = 28
+MINIMUM_BUILD = {
+    "0750-8302": 30,  # PFC300
+}
+
+# 0750-8217 (PFC200 G2 with modem) takes the red-autoupdate line, which carries
+# the modem firmware. Both PFC-G2 bundles list all 35 article numbers including
+# this one, so the bundles themselves cannot disambiguate - only the approved
+# revision can. Kept here to make the refusal message say something useful.
+MODEM_VARIANT_ORDER = "0750-8217"
+MODEM_VARIANT_REVISION = "4.9.50"
+
+
+def minimum_build_for(device_order_number):
+    """The build this hardware must already be at to be updated."""
+    base = device_order_number.split("/")[0]
+    return MINIMUM_BUILD.get(base, DEFAULT_MINIMUM_BUILD)
+
+
+def check_minimum_build(device_order_number, current_build):
+    """Raise ValueError when the device is too old to take this update path.
+
+    current_build is 0-0-version-softwarereleaseindex, the NN in 04.09.01(31).
+    """
+    minimum = minimum_build_for(device_order_number)
+    try:
+        build = int(str(current_build).strip())
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"cannot read the device's firmware build ({current_build!r}); "
+            f"{device_order_number} requires build >= {minimum} before updating"
+        ) from None
+    if build < minimum:
+        raise ValueError(
+            f"{device_order_number} is at build {build}, below the minimum {minimum} "
+            f"for this update path. Update it to build {minimum} first."
+        )
+    return build
+
+
 def parse_version(v):
     """'04.09.01' or '4.9.1' -> (4, 9, 1). Tolerant of leading zeros."""
     return tuple(int(p) for p in v.strip().split("."))
@@ -94,15 +142,19 @@ def resolve_bundle(catalog, device_order_number, current_version, target_version
         if not candidates:
             raise ValueError(f"No bundle for {device_order_number} at version {target_version!r}")
     elif len(candidates) > 1:
-        # ponytail: refuse rather than guess. Nothing in package-info.xml
-        # distinguishes a variant line from the standard one - WAGO's
-        # PFC-G2 "red-autoupdate" bundle carries a byte-identical
-        # ArticleList and a *higher* revision (4.9.50 vs 4.9.1), so
-        # "highest revision wins" silently picks the redundancy firmware.
+        # Refuse rather than guess. Nothing in package-info.xml distinguishes a
+        # variant line from the standard one: both PFC-G2 bundles list the same
+        # 35 article numbers, and red-autoupdate carries a *higher* revision
+        # (4.9.50 vs 4.9.1). "Highest revision wins" would put the 0750-8217
+        # modem line onto every other PFC200 G2.
         listing = ", ".join(f"{b['revision']} ({b['wup_file']})" for b in candidates)
+        hint = ""
+        if device_order_number.split("/")[0] == MODEM_VARIANT_ORDER:
+            hint = (f" This is the {MODEM_VARIANT_ORDER} modem variant, which takes "
+                    f"{MODEM_VARIANT_REVISION} (red-autoupdate, modem firmware included).")
         raise ValueError(
             f"{len(candidates)} bundles match order number {device_order_number}: {listing}. "
-            f"Set TARGET_VERSION to the revision you want."
+            f"Set TARGET_VERSION to the revision you want.{hint}"
         )
 
     bundle = candidates[0]

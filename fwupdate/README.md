@@ -54,6 +54,7 @@ device's own reboot.
 
 | Situation | What happens |
 |---|---|
+| Device is below its minimum firmware build | Refused before anything is written - see below |
 | Device not approved in git | Refused before the device is contacted |
 | Approval edited but not committed | Refused - an uncommitted policy is not an authorization |
 | Approval says a different revision than the bundle | Refused, both values named |
@@ -66,6 +67,24 @@ device's own reboot.
 Every one of those outcomes is written to the audit log.
 
 ---
+
+## Minimum firmware build
+
+Some hardware cannot take an update directly from an old build and needs an
+intermediate step. Bundles do not express this - every one of them declares the
+same permissive `3.0.0-4.9.99` range - so the tool checks it separately, reading
+`0-0-version-softwarereleaseindex` (the `31` in `04.09.01(31)`) and refusing
+before `Activate`:
+
+```
+==> Device identity: order=0750-8302  current firmware=04.09.01(31)
+FATAL: 0750-8302 is at build 28, below the minimum 30 for this update path.
+       Update it to build 30 first.
+```
+
+An unreadable build is refused too, rather than assumed good. Which class needs
+what is a fleet fact, so it lives with the fleet:
+[wago-plc-config → Minimum firmware before updating](https://github.com/WagoAlex/wago-plc-config#minimum-firmware-before-updating).
 
 ## What this tool enforces at run time
 

@@ -57,7 +57,7 @@ except ModuleNotFoundError:  # running from a checkout rather than the container
 
 import authz
 import source
-from catalog import build_catalog, read_bundle_metadata, resolve_bundle
+from catalog import build_catalog, check_minimum_build, minimum_build_for, read_bundle_metadata, resolve_bundle
 
 STATUS_NAMES = {
     0: "Inactive",
@@ -227,14 +227,29 @@ def show_failure_diagnostics(c):
 
 
 def get_identity(c):
-    return get_param(c, "0-0-identity-ordernumber"), get_param(c, "0-0-version-firmwareversion")
+    return (
+        get_param(c, "0-0-identity-ordernumber"),
+        get_param(c, "0-0-version-firmwareversion"),
+        get_param(c, "0-0-version-softwarereleaseindex"),  # the NN in 04.09.01(31)
+    )
 
 
 def resolve_wup_path(c):
     """Catalog mode: identify the device, build the catalog from
     FIRMWARE_DIR, and pick the correct bundle. Returns a Path."""
-    order_number, current_version = get_identity(c)
-    show(f"==> Device identity: order={order_number}  current firmware={current_version}")
+    order_number, current_version, current_build = get_identity(c)
+    show(f"==> Device identity: order={order_number}  current firmware={current_version}({current_build})")
+
+    # Hardware-specific floor, separate from the bundle's own declared range: a
+    # device below it needs an intermediate update first, and finding that out
+    # after Start has already written flash is the expensive way to learn it.
+    try:
+        check_minimum_build(order_number, current_build)
+    except ValueError as e:
+        show(f"FATAL: {e}")
+        audit_record(f"refused: {e}", order_number=order_number, current_build=current_build,
+                     minimum_build=minimum_build_for(order_number))
+        sys.exit(1)
 
     show(f"==> Firmware source: {FIRMWARE_SOURCE}")
     try:
