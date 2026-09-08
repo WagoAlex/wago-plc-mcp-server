@@ -769,6 +769,7 @@ This project therefore splits it across three places, each owning one question:
 | How do I run it, how does the tool resolve the approver, what if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
 | What does the audit chain contain and how do I verify it? | Here, below |
 | What do the REST calls actually do? | [`docs/wda-firmware-update.md`](docs/wda-firmware-update.md) |
+| I know GitHub as a repository but not CI/CD - walk me through it | [`docs/plc-change-control.html`](docs/plc-change-control.html) |
 
 ### The agent cannot flash a controller
 
