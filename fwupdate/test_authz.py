@@ -25,13 +25,15 @@ def write_policy(repo, body='approvals:\n  10.0.0.1: "4.9.1"\n'):
     return p
 
 
-def test_approves_committed_host_and_revision(repo):
+def test_approves_committed_host_and_revision(repo, monkeypatch):
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
     p = write_policy(repo)
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "approve 10.0.0.1")
 
     policy, commit = authz.load_policy(p)
-    assert authz.authorize(policy, commit, "10.0.0.1", "4.9.1") == (commit, "")
+    sha, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert sha == commit and "t@example.com" in approved_by
     assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.1"}
 
 
@@ -333,3 +335,28 @@ def test_bare_revision_still_works(repo):
     policy, commit = authz.load_policy(p)
     assert authz.approved_hosts(policy) == {"10.0.0.1": "4.9.1"}
     authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+
+
+def test_a_bare_revision_entry_still_names_an_approver(repo, monkeypatch):
+    """A record that says a flash happened but not who stood behind it is the
+    one thing an audit trail must not produce."""
+    monkeypatch.delenv("WAGO_APPROVED_BY", raising=False)
+    p = write_policy(repo)  # bare "10.0.0.1: 4.9.1"
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+
+    _, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert approved_by, "bare-revision entries must still record an approver"
+    assert "t@example.com" in approved_by
+    assert "self-approved" in approved_by
+
+
+def test_allowed_list_entry_names_an_approver(repo, monkeypatch):
+    monkeypatch.setenv("WAGO_APPROVED_BY", "alice")
+    p = write_policy(repo, 'approvals:\n  10.0.0.1:\n    allowed: ["4.9.1"]\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "approve")
+    policy, commit = authz.load_policy(p)
+    _, approved_by = authz.authorize(policy, commit, "10.0.0.1", "4.9.1")
+    assert "alice" in approved_by

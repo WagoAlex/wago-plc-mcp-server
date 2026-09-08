@@ -261,15 +261,20 @@ def is_self_approved(repo: Path, rel: Path) -> bool:
 
 
 def _check_human_approval(plc_ip: str, entry, repo: Path, rel: Path) -> tuple[str, str]:
-    """Fleet-policy entries: a mapping carries the review gate. The approver is
-    resolved from the authenticated actor or the commit author, so nobody has to
-    type their own name into the file."""
-    if not isinstance(entry, dict):
-        return "", ""
-    if not entry.get("requires_human"):
-        declared = str(entry.get("approved_by", "")).strip()
-        return declared, "declared in file" if declared else ""
-    approver, source = resolve_approver(repo, rel, str(entry.get("approved_by", "")).strip())
+    """Who approved this, for any entry shape.
+
+    Every authorization names an approver, including a bare-revision entry. An
+    earlier version only resolved one when the entry carried requires_human, so
+    a fleet-policy run was recorded as "authorized" with approved_by: null - a
+    trail that says a flash happened but not who stood behind it, which is the
+    one thing an audit record exists to answer.
+
+    requires_human no longer gates whether an approver is recorded; it is the
+    separate-approver enforcement (FW_REQUIRE_SEPARATE_APPROVER) that treats it
+    as a stricter class.
+    """
+    declared = str(entry.get("approved_by", "")).strip() if isinstance(entry, dict) else ""
+    approver, source = resolve_approver(repo, rel, declared)
     if is_self_approved(repo, rel):
         source += ", self-approved"
     return approver, source
