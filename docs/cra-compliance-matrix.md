@@ -22,7 +22,7 @@ _Version: 2.0.0 | Date: 2026-06-12_
 | 5 | Integrity verification | ✅ Done | `audit_verify.py` — exit 0 = intact, exit 1 = tampered | `src/audit_verify.py` |
 | 6 | Availability | ✅ Done | Rate limiting 60 req/60 s per IP; 429 + Retry-After | `src/main.py` `_AuthMiddleware` |
 | 6 | Availability — log disk exhaustion | ✅ Done | Debug log max 30 MB; audit log max 50 MB (20 MB with SIEM) | `src/logging_config.py` |
-| 7 | Minimise attack surface | ✅ Done | 13 scoped MCP tools; no shell; no admin API; single container | Architecture by design |
+| 7 | Minimise attack surface | ✅ Done | 29 scoped MCP tools; no shell; no admin API; single container | Architecture by design |
 | 7 | Vulnerability monitoring | ✅ Done | Weekly CVE scan; Dependabot for dep updates | `.github/workflows/cve-scan.yml`, `.github/dependabot.yml` |
 | 8 | Security update capability | ✅ Done | Docker image distributed via Docker Hub; versioned tags | `build.sh --release` |
 | 8 | Update notification | ✅ Done | Version exposed at `/health`; changelog in GitHub releases | `src/main.py` `_HEALTH` |
