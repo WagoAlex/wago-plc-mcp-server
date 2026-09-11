@@ -18,6 +18,42 @@ def read_secret(name: str) -> str | None:
         return None
 
 
+def check_security_profile() -> None:
+    """Fail closed at startup when SECURITY_PROFILE=hardened but TLS isn't
+    fully configured on both legs (server<->PLC and client<->server).
+
+    Mirrors auth._check_key_entropy's fail-loud pattern: log the specific
+    gap, then SystemExit(1) rather than starting in a state that contradicts
+    the requested profile. Default profile (unset) is untouched — today's
+    warn-and-continue TLS behavior stays the default so existing deployments
+    don't break on upgrade. This is Phase 1 of
+    .claude/plans/iec62443-4-2-hardening.plan.md (FR4, transport
+    confidentiality) — it only gates whether TLS is *configured*, not
+    whether it's trustworthy; a bad cert still starts today, hardened or not.
+    """
+    if os.getenv("SECURITY_PROFILE", "").strip().lower() != "hardened":
+        return
+
+    wda_ca = os.getenv("WAGO_TLS_CA", "").strip()
+    wda_tls_ok = bool(wda_ca) and wda_ca.lower() not in {"false", "0"}
+
+    mcp_tls_ok = bool(os.getenv("MCP_TLS_CERT", "").strip()) and bool(os.getenv("MCP_TLS_KEY", "").strip())
+
+    if wda_tls_ok and mcp_tls_ok:
+        return
+
+    missing = []
+    if not wda_tls_ok:
+        missing.append("WAGO_TLS_CA (must be a real CA/cert path, not unset/false/0)")
+    if not mcp_tls_ok:
+        missing.append("MCP_TLS_CERT + MCP_TLS_KEY")
+    logger.error(
+        f"[security] SECURITY_PROFILE=hardened requires TLS on both legs; "
+        f"missing: {', '.join(missing)}. Refusing to start hardened over plaintext transport."
+    )
+    raise SystemExit(1)
+
+
 def resolve_tls_verify() -> bool | str:
     """Resolve WDA TLS verification from WAGO_TLS_CA env var.
 

@@ -224,52 +224,66 @@ expectation. This is the authoritative answer to "are all WDA functions covered?
 Legend: ✅ wrapped & on the live path · ◐ wrapped but not exposed as an MCP tool ·
 ❌ **not wrapped (coverage gap)** · N/A not applicable.
 
-| WDA endpoint                               | WDAClient                         | MCP tool             | Layer    | Status                     |
-| ------------------------------------------ | --------------------------------- | -------------------- | -------- | -------------------------- |
-| `GET /wda` (identity)                      | `ping` / `_acquire_token`         | —                    | L3 CM-01 | ✅                          |
-| `GET /wda/devices`                         | `list_devices`                    | describe_plc (count) | L3       | ✅                          |
-| `GET /wda/devices/{id}`                    | `get_device`                      | —                    | L1       | ◐                          |
-| `GET /wda/devices/{id}/features`           | —                                 | —                    | —        | ❌ gap                      |
-| `GET /wda/parameters`                      | `list_parameters`                 | find_parameters      | L3 CM-05 | ✅                          |
-| `GET /wda/parameters/{id}`                 | `get_parameter`                   | get_parameter        | L3 CM-07 | ✅                          |
-| `PATCH /wda/parameters` (bulk)             | `set_parameters`                  | set_parameters       | L4       | ✅                          |
-| `PATCH /wda/parameters/{id}`               | `set_parameter`                   | —                    | L4       | ◐                          |
-| `GET …/{id}/referencedinstances`           | —                                 | —                    | —        | ❌ gap                      |
-| `GET /wda/parameter-definitions`           | `list_parameter_definitions`      | (writeable cache)    | L3 CM-06 | ✅                          |
-| `GET /wda/parameter-definitions/{id}`      | `get_parameter_definition`        | —                    | L1       | ◐                          |
-| `GET /wda/methods`                         | `list_methods`                    | find_methods         | L3 CM-11 | ✅                          |
-| `GET /wda/methods/{id}`                    | `get_method`                      | get_method           | L3 CM-11 | ✅                          |
-| `POST /wda/methods/{id}/runs`              | `invoke_method`                   | invoke_method        | L4       | ✅                          |
-| `GET /wda/methods/{id}/runs` (list)        | —                                 | —                    | —        | ❌ gap                      |
-| `GET …/runs/{run_id}`                      | `get_method_run`                  | get_method_run       | L4       | ✅                          |
-| `DELETE …/runs/{run_id}`                   | `delete_method_run`               | —                    | L4       | ◐                          |
-| `GET /wda/method-definitions/{id}/inargs`  | `get_method_inargs`               | get_method           | L3 CM-11 | ✅                          |
-| `GET …/inargs/{name}`                      | —                                 | —                    | —        | ❌ gap                      |
-| `GET /wda/method-definitions/{id}/outargs` | `get_method_outargs`              | get_method           | L3 CM-11 | ✅                          |
-| `GET …/outargs/{name}`                     | —                                 | —                    | —        | ❌ gap                      |
-| `GET /wda/features`                        | `list_features`                   | describe_plc         | L3       | ✅                          |
-| `GET /wda/features/{id}`                   | `get_feature`                     | —                    | L1       | ◐                          |
-| `GET …/includedfeatures`                   | —                                 | —                    | —        | ❌ gap                      |
-| `GET …/containedparameters`                | —                                 | —                    | —        | ❌ gap                      |
-| `GET …/containedmethods`                   | —                                 | —                    | —        | ❌ gap                      |
-| `GET /wda/enum-definitions`                | `list_enum_definitions`           | (enum cache)         | L3 CM-09 | ✅                          |
-| `GET /wda/enum-definitions/{id}`           | `get_enum_definition`             | —                    | L1       | ◐                          |
-| `POST /wda/monitoring-lists`               | `create_monitoring_list`          | create_watchlist     | L3 CM-12 | ✅                          |
-| `GET /wda/monitoring-lists` (list)         | `list_monitoring_lists`           | —                    | L1       | ◐                          |
-| `GET /wda/monitoring-lists/{id}`           | `get_monitoring_list`             | read_watchlist       | L3 CM-12 | ✅                          |
-| `GET …/{id}/parameters`                    | `read_monitoring_list_parameters` | —                    | L1       | ◐                          |
-| `DELETE /wda/monitoring-lists/{id}`        | `delete_monitoring_list`          | delete_watchlist     | L3 CM-12 | ✅                          |
-| Class instances `…/instances/**`           | —                                 | —                    | —        | ❌ gap (read-only per spec) |
-| File API `/files/**`                       | —                                 | —                    | —        | ❌ gap                      |
+| WDA endpoint                               | WDAClient                         | MCP tool                    | Layer    | Status |
+| ------------------------------------------ | --------------------------------- | ---------------------------- | -------- | ------ |
+| `GET /wda` (identity)                      | `ping` / `_acquire_token`         | —                             | L3 CM-01 | ✅ |
+| `GET /wda/devices`                         | `list_devices`                    | describe_plc (count)         | L3       | ✅ |
+| `GET /wda/devices/{id}`                    | `get_device`                      | get_device                   | —        | ✅ (no test yet) |
+| `GET /wda/devices/{id}/features`           | `get_device_features`             | get_device                   | —        | ✅ (no test yet) |
+| `GET /wda/parameters`                      | `list_parameters`                 | find_parameters              | L3 CM-05 | ✅ |
+| `GET /wda/parameters/{id}`                 | `get_parameter`                   | get_parameter                | L3 CM-07 | ✅ |
+| `PATCH /wda/parameters` (bulk)             | `set_parameters`                  | set_parameters               | L4       | ✅ |
+| `PATCH /wda/parameters/{id}`               | `set_parameter`                   | set_parameter                | —        | ✅ (no test yet) |
+| `GET …/{id}/referencedinstances`           | `get_parameter_referenced_instances` | get_parameter_referenced_instances | — | ✅ (no test yet) |
+| `GET /wda/parameter-definitions`           | `list_parameter_definitions`      | (writeable cache)            | L3 CM-06 | ✅ |
+| `GET /wda/parameter-definitions/{id}`      | `get_parameter_definition`        | get_parameter_definition     | —        | ✅ (no test yet) |
+| `GET /wda/methods`                         | `list_methods`                    | find_methods                 | L3 CM-11 | ✅ |
+| `GET /wda/methods/{id}`                    | `get_method`                      | get_method                   | L3 CM-11 | ✅ |
+| `POST /wda/methods/{id}/runs`              | `invoke_method`                   | invoke_method                | L4       | ✅ |
+| `GET /wda/methods/{id}/runs` (list)        | `list_method_runs`                | list_method_runs             | —        | ✅ (no test yet) |
+| `GET …/runs/{run_id}`                      | `get_method_run`                  | get_method_run               | L4       | ✅ |
+| `DELETE …/runs/{run_id}`                   | `delete_method_run`               | delete_method_run            | —        | ✅ (no test yet) |
+| `GET /wda/method-definitions/{id}/inargs`  | `get_method_inargs`               | get_method                   | L3 CM-11 | ✅ |
+| `GET …/inargs/{name}`                      | `get_method_inarg`                | — (client-only)               | —        | ◐ no MCP tool — single-arg lookup has no caller beyond get_method's full-schema fetch |
+| `GET /wda/method-definitions/{id}/outargs` | `get_method_outargs`              | get_method                   | L3 CM-11 | ✅ |
+| `GET …/outargs/{name}`                     | `get_method_outarg`               | — (client-only)               | —        | ◐ no MCP tool, same reasoning as inargs/{name} |
+| `GET /wda/features`                        | `list_features`                   | describe_plc                 | L3       | ✅ |
+| `GET /wda/features/{id}`                   | `get_feature`                     | get_feature                  | —        | ✅ (no test yet) |
+| `GET …/includedfeatures`                   | `get_feature_included_features`   | get_feature                  | —        | ✅ (no test yet) |
+| `GET …/containedparameters`                | `get_feature_contained_parameters`| get_feature                  | —        | ✅ (no test yet) |
+| `GET …/containedmethods`                   | `get_feature_contained_methods`   | get_feature                  | —        | ✅ (no test yet) |
+| `GET /wda/enum-definitions`                | `list_enum_definitions`           | (enum cache)                 | L3 CM-09 | ✅ |
+| `GET /wda/enum-definitions/{id}`           | `get_enum_definition`             | get_enum_definition          | —        | ✅ (no test yet) |
+| `POST /wda/monitoring-lists`               | `create_monitoring_list`          | create_watchlist             | L3 CM-12 | ✅ |
+| `GET /wda/monitoring-lists` (list)         | `list_monitoring_lists`           | list_watchlists              | —        | ✅ (no test yet) |
+| `GET /wda/monitoring-lists/{id}`           | `get_monitoring_list`             | read_watchlist                | L3 CM-12 | ✅ |
+| `GET …/{id}/parameters`                    | `read_monitoring_list_parameters` | — (client-only)               | —        | ◐ no MCP tool — read_watchlist already returns values inline via ?include=parameters |
+| `DELETE /wda/monitoring-lists/{id}`        | `delete_monitoring_list`          | delete_watchlist              | L3 CM-12 | ✅ |
+| `GET /wda/parameters/{id}/instances`       | `list_parameter_instances`        | list_parameter_instances     | —        | ✅ (no test yet, no instance-typed param on the rack to verify against) |
+| `GET …/instances/{no}`                     | `get_parameter_instance`          | get_parameter_instance       | —        | ✅ (same caveat) |
+| `GET …/instances/{no}/device`              | `get_parameter_instance_device`   | get_parameter_instance       | —        | ✅ (same caveat) |
+| `GET …/instances/{no}/parameters`          | `get_parameter_instance_parameters`| get_parameter_instance      | —        | ✅ (same caveat) |
+| `GET …/instances/{no}/methods`             | `get_parameter_instance_methods`  | get_parameter_instance       | —        | ✅ (same caveat) |
+| `POST /files?context=`                     | `create_file`                     | create_file                  | —        | ✅ (no test yet, no file_id param on the rack to verify against) |
+| `HEAD /files/{id}`                         | `get_file_metadata`               | get_file_metadata            | —        | ✅ (same caveat) |
+| `GET /files/{id}`                          | `download_file`                   | download_file                 | —        | ✅ (same caveat) |
+| `PUT /files/{id}`                          | `upload_file`                     | upload_file                   | —        | ✅ (same caveat) |
+| `PATCH /files/{id}` (chunked)              | —                                 | —                              | —        | ❌ deliberate non-coverage — whole-file PUT covers every file_id param seen so far; add if one exceeds a single request |
 
 **Action items surfaced by this matrix:**
-- The ◐ rows (`get_device`, `get_feature`, `get_enum_definition`, `list_monitoring_lists`,
-  `read_monitoring_list_parameters`, `set_parameter`, `delete_method_run`,
-  `get_parameter_definition`) are reachable in code but have **no test** — cover them at
-  L1 with cassettes; cheap and they protect the registration/enrichment path.
-- The ❌ gaps are deliberate non-coverage. Decide per gap: *wrap + test* (e.g.
-  `method runs list` for audit, class instances for richer devices) or *document as
-  out-of-scope* in `SKILL.md` so it's an explicit product decision, not an accident.
+- Every previously-◐ row is now wrapped as an MCP tool (2026-09-11 coverage expansion:
+  devices, features, enums, parameter-definitions, monitoring-list listing, single-param
+  set, method-run listing/deletion, class instances, File API). None of it has L1 cassette
+  coverage yet — the class-instance and File API rows in particular have **no live device
+  on the rack that exercises them** (no `instantiations`-typed or `file_id`-typed parameter
+  seen in any FW31 capture), so treat those as implemented-but-unverified until a device
+  with such a parameter is captured (CT-08+, not yet written).
+- `inargs/{name}`, `outargs/{name}`, and `read_monitoring_list_parameters` stay client-only:
+  `get_method` and `read_watchlist` already return the same data as part of their combined
+  call, so a dedicated MCP tool would just be a slower way to get a subset of the same
+  response.
+- The chunked File API PATCH endpoint (multipart/byteranges) is still out of scope — no
+  observed file_id parameter has needed it.
 
 ---
 
@@ -449,7 +463,7 @@ all-class matrix (L3/L4). Kept here as the historical baseline.
 **WDA Bearer (T3):** token acquired ✅ · subsequent Bearer ✅ · 16-PLC fleet no regression ✅
 **Audit (T4):** set_parameters JSON entry ✅ · invoke_method entry ✅ · separate files ✅ · prev-hash chain ✅ · seed-on-restart ✅
 **TLS / SBOM:** WDA TLS-off warning ✅ · MCP TLS-off warning ✅ · syft SBOM on build ✅ · `--release` archive ✅ · syft-absent WARNING-not-fail ✅
-**MCP tools happy-path (single CC100):** all 13 tools exercised except `get_method_run` (not yet run live).
+**MCP tools happy-path (single CC100):** all 13 original tools exercised (pre-coverage-expansion baseline) except `get_method_run` (not yet run live).
 
 Gap vs. optimized target: every ✅ above was **one device, one firmware**. Re-run as the
 parametrized L3/L4 matrix across the 15-unit rack (5 CC100 · 4 PFC200 · 1 PFC300 ·
