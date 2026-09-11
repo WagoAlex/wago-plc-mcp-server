@@ -20,7 +20,7 @@ from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
-from config import parse_plcs_from_env, resolve_tls_verify
+from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
 
 # ───────────────────────── Bootstrap ─────────────────────────
@@ -881,6 +881,7 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
+    check_security_profile()  # fail closed before touching any PLC in plaintext
     _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
     plcs = parse_plcs_from_env()
