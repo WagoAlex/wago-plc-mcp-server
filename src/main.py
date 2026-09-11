@@ -11,8 +11,8 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 from loguru import logger
-from mcp.server.fastmcp import FastMCP, Context
-from mcp.server.fastmcp.prompts import base
+from mcp.server.mcpserver import MCPServer, Context
+from mcp.server.mcpserver.prompts import base
 
 from logging_config import setup_logging, setup_audit_logging
 from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
@@ -43,7 +43,7 @@ plc_manager = PLCManager(
     ssl_verify=resolve_tls_verify(),
 )
 
-mcp = FastMCP(
+mcp = MCPServer(
     name="wago-plc-mcp",
     instructions=(
         "WAGO PLC access via WDx REST API. "
@@ -51,8 +51,6 @@ mcp = FastMCP(
         "get_parameter/get_method → set_parameters/invoke_method. "
         "Use watchlists for repeated polling."
     ),
-    host=os.getenv("HOST", "0.0.0.0"),
-    port=int(os.getenv("PORT", "6042")),
 )
 
 FIND_LIMIT_MAX = 255
