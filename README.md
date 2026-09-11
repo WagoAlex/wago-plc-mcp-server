@@ -932,6 +932,19 @@ MCP_TLS_CERT=/run/secrets/mcp_tls_cert
 MCP_TLS_KEY=/run/secrets/mcp_tls_key
 ```
 
+**Enforcing both legs are actually configured:**
+
+```env
+SECURITY_PROFILE=hardened
+```
+
+Opt-in, default is unset. When set, the server refuses to start
+(`SystemExit(1)`, before contacting any PLC) unless `WAGO_TLS_CA` is a real
+CA/cert path (not unset/`false`/`0`) **and** both `MCP_TLS_CERT`/`MCP_TLS_KEY`
+are set - i.e. it turns the two startup warnings above into a hard stop. It
+only checks that TLS is *configured*, not that the cert is otherwise trustworthy
+- a self-signed cert you point `MCP_TLS_CERT` at still starts hardened.
+
 ### Audit log
 
 Every `set_parameters` and `invoke_method` call is appended to a
@@ -1090,6 +1103,7 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `MCP_TLS_CERT` | - | Path to TLS cert for MCP endpoint |
 | `MCP_TLS_KEY` | - | Path to TLS private key for MCP endpoint |
 | `MCP_TLS_KEY_PASSWORD` | - | Password for encrypted TLS private key (optional) |
+| `SECURITY_PROFILE` | - | `hardened` refuses to start unless `WAGO_TLS_CA` + `MCP_TLS_CERT`/`MCP_TLS_KEY` are all set - turns the TLS-disabled warnings into a startup failure |
 | `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
 | `SYSLOG_HOST` | - | Syslog/SIEM receiver hostname; enables audit forwarding |
 | `SYSLOG_PORT` | `514` | Syslog receiver port |
