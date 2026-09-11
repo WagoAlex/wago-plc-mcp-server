@@ -12,6 +12,8 @@ secrets:
   #   file: ./secrets/plc_password_192_168_2_17.txt
   # plc_password_192_168_42_42:
   #   file: ./secrets/plc_password_192_168_42_42.txt
+  plc_password_192_168_2_85:
+    file: ./secrets/plc_password_192_168_2_85.txt
 
 services:
   wago-plc-mcp-server:
@@ -30,6 +32,7 @@ services:
     secrets:
       - plc_default_password
       - mcp_api_key
+      - plc_password_192_168_2_85
       # - plc_password_192_168_2_17
       # - plc_password_192_168_42_42
 
