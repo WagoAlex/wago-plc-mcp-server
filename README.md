@@ -190,17 +190,64 @@ PORT=6042
 WAGO_TIMEOUT_SECONDS=45
 ```
 
+`WAGO_TIMEOUT_SECONDS` applies to every PLC in the fleet - set it to the
+slowest device class you're onboarding, not the average. CC100 needs 45+;
+most classes are fine at 15. IEC 62443-4-2-hardened units (see below) expose
+roughly 3x the parameters of their base class and have not been timing-tuned
+yet - if one fails registration with a timeout at 45s, that's a real open
+question for this project, not a typo in this guide.
+
 > [!TIP]
 > For large fleets, use `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt` - one IP
 > per line, `#` comments supported. Both can be set together; IPs are merged.
 
-### 2. Set the PLC password
+### 2. Set PLC passwords
 
+Every device class onboards the same way: register its IP in step 1, then
+give it credentials here. Two patterns, combinable:
+
+**Shared password** (fleets where every PLC uses the same login):
 ```bash
 mkdir -p secrets
 echo "your-plc-password" > secrets/plc_default_password.txt
 chmod 600 secrets/plc_default_password.txt
 ```
+
+**Per-PLC password** (any unit with its own login - common for hardened or
+customer-managed devices): add a secret named for its IP, then uncomment the
+matching lines in `docker-compose.yml` (`secrets:` block and the service's
+`secrets:` list):
+```bash
+echo "that-unit-password" > secrets/plc_password_192_168_2_85.txt
+chmod 600 secrets/plc_password_192_168_2_85.txt
+```
+Per-PLC secrets take priority over the shared default for a matching IP, so a
+mixed fleet just needs one of these per unit that doesn't share the default
+login - everything else falls back to `plc_default_password.txt`.
+
+> [!IMPORTANT]
+> **Onboarding IEC 62443-4-2-hardened units (CC100-IEC62443, and the planned
+> PFC400 family).** These register and behave like any other PLC - same WDA
+> API, same tools - but almost always ship with their own credentials, so
+> they need the per-PLC pattern above, not the shared default.
+> - **CC100-IEC62443** (order no. `751-9412`) is a hardened CC100 variant:
+>   registers under `device_class: "CC100"` (same order-number prefix), but
+>   exposes roughly 1056 WDA parameters instead of the base unit's 360 -
+>   additional security-config groups (firewall rules, certificates, account
+>   management), not a different device or a bigger baseline to expect from
+>   plain CC100s.
+> - **PFC400** (order no. `750-8400`) is not yet available to us - the code
+>   recognizes its order-number prefix so it registers under its own
+>   `device_class: "PFC400"` instead of falling through unclassified, but
+>   nothing about its onboarding, parameter set, or I/O model is verified.
+>   [Likely] it will share most of the CC100-IEC62443 security surface once
+>   real hardware exists to confirm that. It's also referenced elsewhere as
+>   order series `751-941x`, which overlaps with 751-9412 above - until a
+>   real unit is on hand to disambiguate, this server does **not** guess: any
+>   `0751-9412`-class order number classifies as CC100, not PFC400.
+> - Neither variant is described as "IEC 62443 compliant" or "certified"
+>   anywhere in this project - that's a formal third-party assessment of the
+>   *device*, not something this server's code can claim on WAGO's behalf.
 
 ### 3. Start
 
