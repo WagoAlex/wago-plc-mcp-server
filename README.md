@@ -2,7 +2,7 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
-[![MCP Tools](https://img.shields.io/badge/MCP_tools-14-1F2837.svg)](#tool-reference)
+[![MCP Tools](https://img.shields.io/badge/MCP_tools-29-1F2837.svg)](#tool-reference)
 [![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#supported-hardware)
 
 # wago-plc-mcp-server
@@ -58,7 +58,7 @@ flowchart TB
 
     subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
         direction LR
-        MCP("14 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
+        MCP("29 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
         Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
         MCP --- Guard
     end
@@ -77,6 +77,7 @@ flowchart TB
         P6("WP400")
         Pn("TP600")
     end
+    %% PFC400 (750-8400) omitted from this diagram - not yet in hand, see Supported hardware
 ```
 
 Demoed end to end with **16 PLCs** of mixed device class on a single rack.
@@ -257,7 +258,7 @@ claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc 
   }
 }
 ```
-Fully quit and relaunch Claude Desktop. You should see a hammer icon with 14 tools:
+Fully quit and relaunch Claude Desktop. You should see a hammer icon with 29 tools:
 
 ![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
@@ -341,7 +342,7 @@ your control program's I/O data.
 **What MCP is:** A standard protocol that lets an AI assistant call a fixed
 set of defined tools against a system, instead of you writing custom
 integration code for every request. This server turns the WDA REST API into
-14 tools an AI assistant can call directly.
+29 tools an AI assistant can call directly.
 
 | Term | Plain meaning | Closest thing you already know |
 |---|---|---|
@@ -379,9 +380,11 @@ What it *does* expose as live, poll-worthy values:
 | Device | Article Numbers | Notes |
 |--------|----------------|-------|
 | CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - set `WAGO_TIMEOUT_SECONDS=45` |
+| CC100-IEC62443 | `751-9412` | Hardened variant of CC100, same order-number prefix and class - ~1056 WDA params (additional security feature groups) vs. the base unit's 360 |
 | PFC100 Gen 2 | `750-8110` · `750-8111` · `750-8112` · `750-8112/025-000` | |
 | PFC200 Gen 2 | `750-8210` · `750-8211` · `750-8212` · `750-8216` · `750-8217` | |
 | PFC300 | `750-8302` | |
+| PFC400 | `750-8400` | **Not yet in hand** - order-number prefix is recognized so it registers under its own class, but nothing about it is verified against real hardware |
 | Edge Controller | `752-8303/8000-0002` | Exposes CODESYS runtime state via `0-0-plcruntime-*` |
 | WP400 | `762-34xx` | Web panel only - 189 WDA params, no CODESYS. HMI params: display brightness/orientation/screensaver, integrated browser startpage, touch cleaning mode |
 | TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Full PLC+HMI - 410 WDA params. CODESYS3, BACnet, cloud, serial, all WP400 HMI params plus front LED and acoustic feedback |
@@ -934,6 +937,10 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `list_plcs` | List all registered PLC IPs |
 | `describe_plc(plc_ip)` | Capability counts + feature names + `device_class`, `expected_parameter_count`, `parameter_count_ok` |
 | `get_plc_audit_log(plc_ip, action, limit)` | Read recent tamper-evident audit log entries; filter by PLC and/or action, newest first (max 500) |
+| `get_device(plc_ip, device_id)` | Device resource plus the features it exposes |
+| `get_feature(plc_ip, feature_id)` | Feature plus nested features, contained parameter/method definitions |
+| `get_enum_definition(plc_ip, enum_id)` | An enum's full case list (value → stringValue) |
+| `get_parameter_definition(plc_ip, parameter_id)` | writeable/userSetting/dataType/enum link, without reading a value |
 
 ### Parameters
 
@@ -943,6 +950,10 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `get_parameter(plc_ip, parameter_id)` | Read one value, enum labels resolved |
 | `get_parameters_bulk(requests)` | Read one param from N PLCs in parallel |
 | `set_parameters(plc_ip, parameters)` | Write one or more parameters (bulk PATCH) |
+| `set_parameter(plc_ip, parameter_id, value)` | Write a single parameter |
+| `get_parameter_referenced_instances(plc_ip, parameter_id)` | Instances referencing an `instance_identity_ref` parameter |
+| `list_parameter_instances(plc_ip, parameter_id)` | Instance numbers of a class-typed parameter |
+| `get_parameter_instance(plc_ip, parameter_id, instance_no)` | One instance: its device, own parameters, and methods |
 
 ### Methods
 
@@ -952,14 +963,30 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `get_method(plc_ip, method_id)` | Fetch inArgs/outArgs schema |
 | `invoke_method(plc_ip, method_id, arguments, wait)` | Execute sync or async |
 | `get_method_run(plc_ip, method_id, run_id)` | Poll async run status |
+| `list_method_runs(plc_ip, method_id)` | Past runs still held server-side |
+| `delete_method_run(plc_ip, method_id, run_id)` | Free a server-side run result early |
 
 ### Watchlists
 
 | Tool | Description |
 |------|-------------|
+| `list_watchlists(plc_ip)` | Watchlist IDs still active server-side |
 | `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Register a server-side monitoring list on the PLC |
 | `read_watchlist(plc_ip, watchlist_id)` | Return current values for all watched parameters (one HTTP request) |
 | `delete_watchlist(plc_ip, watchlist_id)` | Release the watchlist immediately |
+
+### Files (file_id-typed parameters)
+
+| Tool | Description |
+|------|-------------|
+| `create_file(plc_ip, context_parameter_id)` | Allocate a file_id for upload |
+| `upload_file(plc_ip, file_id, content_base64, content_type)` | Upload whole file content (base64) |
+| `download_file(plc_ip, file_id)` | Download file content as base64 |
+| `get_file_metadata(plc_ip, file_id)` | Size/type without downloading the body |
+
+> Class-instance and file tools are implemented against the WDA spec but have not been
+> exercised against real hardware - no `instantiations`- or `file_id`-typed parameter has
+> shown up on any device in our test fleet yet. See `docs/functional-test-status.md`.
 
 **Why watchlists exist:** Every `get_parameter` call opens a new HTTPS connection. For repeated polling of a fixed set across a fleet, the overhead compounds: 10 parameters × 15 PLCs every 30 seconds = 150 HTTPS round-trips per cycle. Watchlists solve this - one `read_watchlist` returns all current values in a single request.
 
