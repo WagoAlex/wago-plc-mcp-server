@@ -194,27 +194,52 @@
     font-size: 0.75rem; color: var(--ink-muted);
   }
   footer p { max-width: 70ch; }
-</style>
 
+  /* ---------- language ---------- */
+  .mast-right { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+  .langswitch { display: flex; gap: 0; border: 1px solid var(--rule-strong); }
+  .langswitch button {
+    font-family: inherit; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 5px 12px; border: 0; cursor: pointer;
+    background: transparent; color: var(--gray-40);
+  }
+  .langswitch button[aria-pressed="true"] { background: var(--green); color: var(--anthracite); }
+  .langswitch button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  /* English is the resting state, so the page reads before the script runs. */
+  [data-lang="de"] { display: none; }
+  html[lang="de"] [data-lang="de"] { display: revert; }
+  html[lang="de"] [data-lang="en"] { display: none; }
+</style>
 <header class="masthead">
   <div class="masthead-inner">
     <div>
       <p class="eyebrow">WAGO PLC MCP Server</p>
-      <h1>Change control for a PLC fleet</h1>
-      <p>How a configuration change, a reboot, and a firmware update reach a controller once
-         GitOps mode is switched on. Written for engineers who use GitHub as a code repository
-         and have not run a build pipeline before.</p>
+      <h1 data-lang="en">Change control for a PLC fleet</h1>
+      <h1 data-lang="de">Änderungssteuerung für eine Steuerungsflotte</h1>
+      <p data-lang="en">How a configuration change, a reboot, and a firmware update reach a controller
+         once GitOps mode is switched on. Written for engineers who use GitHub as a code
+         repository and have not run a build pipeline before.</p>
+      <p data-lang="de">Wie eine Parameteränderung, ein Neustart und ein Firmware-Update auf eine
+         Steuerung gelangen, sobald der GitOps-Betrieb aktiviert ist. Für Fachkräfte, die GitHub
+         als Quellcode-Ablage kennen, aber bislang keine Build-Pipeline betrieben haben.</p>
     </div>
-    <div class="stamp">
-      Fleet 18 devices<br>
-      Firmware 04.09.01 (31)<br>
-      GITOPS_MODE = 1
+    <div class="mast-right">
+      <div class="langswitch" role="group" aria-label="Language / Sprache">
+        <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-set-lang="de" aria-pressed="false">DE</button>
+      </div>
+      <div class="stamp">
+        <span data-lang="en">Fleet 18 devices</span><span data-lang="de">Flotte 18 Geräte</span><br>
+        Firmware 04.09.01 (31)<br>
+        GITOPS_MODE = 1
+      </div>
     </div>
   </div>
 </header>
 
 <div class="wrap">
-
+<div data-lang="en">
   <section>
     <h2>Three classes of change, and who may make each</h2>
     <p class="lede">Every action against a controller falls into exactly one of these classes.
@@ -243,8 +268,9 @@
       </div>
       <div class="cls">
         <div class="cls-top"><h3>Consequential</h3><span class="who who-human">Named person required</span></div>
-        <p>Reboot, factory reset, firmware. Refused outright for the assistant in any mode,
-           and executed only from an approved file that names a responsible person.</p>
+        <p>Reboot, factory reset, firmware. In GitOps mode the assistant can only propose one.
+           In live mode the call is denied unless that exact method ID has been put on the
+           allowlist, and the denial is logged either way.</p>
         <ul>
           <li>Reboot and restart</li>
           <li>Firmware update and downgrade</li>
@@ -263,7 +289,7 @@
         <h3>The assistant</h3>
         <p>Reads the fleet and drafts change files. Talks to the controllers through the MCP
            server over the WAGO device REST interface.</p>
-        <span class="cannot">Cannot write to a device in GitOps mode, and cannot flash firmware in any mode.</span>
+        <span class="cannot">Writes nothing to a device in GitOps mode. Never flashes firmware unless that exact method ID sits on the allowlist.</span>
       </div>
       <div class="role">
         <h3>You, the engineer</h3>
@@ -352,8 +378,8 @@ Dry-run. Pass --execute to apply.</pre>
             <span class="actor">Runner</span>
             <h4>The change is written, and only the difference</h4>
             <p>The same comparison runs again, this time writing. A parameter already at the
-               intended value is left alone, so re-running is harmless. The result is appended
-               to the audit log with your name on it.</p>
+               intended value is left alone, so re-running is harmless. The audit log records
+               which parameters changed; who approved the change stays with the pull request.</p>
           </div>
         </li>
       </ol>
@@ -542,9 +568,11 @@ action: firmware_update
     <h2>What holds, and what does not</h2>
     <div class="guards">
       <div class="guard">
-        <h3>The assistant cannot flash or reboot</h3>
-        <p>Refused in code for every device and every mode, and the refusal itself is recorded.
-           This is not a setting you are expected to relax.</p>
+        <h3>Firmware and reboot are gated, not impossible</h3>
+        <p>Denied for every device, with the denial recorded. One escape hatch exists:
+           <span class="mono">WAGO_ALLOW_METHODS</span> re-enables a single named method in live
+           mode. Treat putting a firmware method on that list as a decision with the same weight
+           as the flash itself.</p>
       </div>
       <div class="guard">
         <h3>An uncommitted file authorizes nothing</h3>
@@ -583,3 +611,403 @@ action: firmware_update
        identifiers and status codes are those returned by the devices themselves.</p>
   </footer>
 </div>
+<div data-lang="de">
+
+  <section>
+    <h2>Drei Arten von Zugriff, und wer sie ausführen darf</h2>
+    <p class="lede">Jeder Zugriff auf eine Steuerung gehört zu genau einer dieser Arten. Daraus
+       ergibt sich, wer ihn ausführen darf. Der Server setzt das im Code durch; es ist keine
+       Absprache, an die sich alle halten sollen.</p>
+
+    <div class="classes">
+      <div class="cls">
+        <div class="cls-top"><h3>Lesen</h3><span class="who who-agent">Assistent, direkt</span></div>
+        <p>Werte, Diagnose, Status. Das Gerät bleibt unverändert.</p>
+        <ul>
+          <li>Firmware-Version und Build der gesamten Flotte</li>
+          <li>Status und Fortschritt während eines laufenden Updates</li>
+          <li>Jeder der rund 400 Parameter eines Geräts</li>
+        </ul>
+      </div>
+      <div class="cls">
+        <div class="cls-top"><h3>Konfigurieren</h3><span class="who who-review">Vorschlag mit Freigabe</span></div>
+        <p>Beschreibbare Parameter. Im GitOps-Betrieb schreibt der Assistent nicht auf das Gerät.
+           Er legt stattdessen eine Änderungsdatei im Konfigurations-Repository an.</p>
+        <ul>
+          <li>NTP-Server, SNMP, Hostname</li>
+          <li>Belegung der seriellen Schnittstelle</li>
+          <li><span class="mono">0-0-docker-enabled</span></li>
+        </ul>
+      </div>
+      <div class="cls">
+        <div class="cls-top"><h3>Eingriff</h3><span class="who who-human">Nur namentlich</span></div>
+        <p>Neustart, Werksreset, Firmware. Im GitOps-Betrieb kann der Assistent so etwas nur
+           vorschlagen. Im Live-Betrieb wird der Aufruf abgelehnt, solange die betreffende
+           Methode nicht ausdrücklich freigeschaltet ist. Die Ablehnung steht in beiden Fällen
+           im Log.</p>
+        <ul>
+          <li>Neustart und Reboot</li>
+          <li>Firmware-Update und Downgrade</li>
+          <li>Werksreset, Formatieren</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Wer beteiligt ist</h2>
+    <p class="lede">Vier Beteiligte, vier klar getrennte Aufgaben. Keiner kann die Rolle eines
+       anderen übernehmen.</p>
+
+    <div class="roles">
+      <div class="role">
+        <h3>Der Assistent</h3>
+        <p>Liest die Flotte aus und entwirft Änderungsdateien. Die Verbindung zu den Steuerungen
+           läuft über den MCP-Server und die WDA-REST-Schnittstelle.</p>
+        <span class="cannot">Schreibt im GitOps-Betrieb nichts auf ein Gerät. Flasht keine Firmware, solange die Methode nicht ausdrücklich freigeschaltet ist.</span>
+      </div>
+      <div class="role">
+        <h3>Sie</h3>
+        <p>Prüfen den Vorschlag, geben ihn frei, mergen ihn. Das ist die einzige Stelle im ganzen
+           Ablauf, an der ein Mensch entscheidet.</p>
+        <span class="cannot">Der Merge ist die Freigabe. Vorher passiert nichts am Gerät.</span>
+      </div>
+      <div class="role">
+        <h3>Das Konfigurations-Repository</h3>
+        <p>Ein gewöhnliches Git-Repository: eine Datei pro Gerät, dazu die Firmware-Richtlinie.
+           Darin steht, wie die Anlage aussehen soll.</p>
+        <span class="cannot">Die Datei ist die Anweisung. Wer sie lokal ändert, ohne zu committen, hat nichts freigegeben.</span>
+      </div>
+      <div class="role">
+        <h3>Der Runner</h3>
+        <p>Ein kleiner Dienst auf einem PC im Anlagennetz. Er beobachtet das Repository und führt
+           an den Geräten aus, was freigegeben wurde.</p>
+        <span class="cannot">Er muss im Anlagennetz stehen. Ein Rechner in der Cloud hat keine Route zu den Steuerungen.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ablauf 1: einen Parameter ändern, Beispiel Docker</h2>
+    <p class="lede">Gilt für jeden beschreibbaren Parameter. Docker steht hier stellvertretend,
+       weil die Einstellung darüber entscheidet, was auf der Steuerung überhaupt läuft.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Container-Laufzeit auf 192.168.42.119 einschalten</h3>
+        <span class="proc-meta">0-0-docker-enabled &nbsp;false &#8594; true</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Im Klartext sagen, was passieren soll</h4>
+            <p>"Docker auf der PFC300 unter 192.168.42.119 einschalten." Der Assistent liest zuerst
+               den Istwert. Die Änderung setzt damit am tatsächlichen Zustand an, nicht an dem,
+               den zuletzt jemand angenommen hat.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Assistent</span>
+            <h4>Es entsteht eine Datei, kein Schreibzugriff</h4>
+            <p>Im GitOps-Betrieb wird der Schreibzugriff abgefangen. Zurück kommt eine Datei für
+               das Gerät mit Parameter und Sollwert.</p>
+<pre><span class="c"># plcs/192.168.42.119.yaml</span>
+plc_ip: 192.168.42.119
+managed_parameters:
+  <span class="k">0-0-docker-enabled</span>: true</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Pull Request öffnen und die Differenz lesen</h4>
+            <p>Der Pull Request stellt Ist und Soll gegenüber, wie ein Diff bei Quellcode. Bis
+               hierher hat nichts die Steuerung erreicht.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Am Pull Request läuft automatisch ein Probelauf</h4>
+            <p>Der Runner liest die Istwerte aus der Steuerung und meldet, was er schreiben würde.
+               Geschrieben wird nichts. Hier fällt auf, wenn ein Gerät nicht erreichbar ist oder
+               jemand den Wert zwischenzeitlich von Hand verstellt hat.</p>
+<pre>[192.168.42.119] Drift detected (1 parameter):
+  0-0-docker-enabled: False &#8594; True
+Dry-run. Pass --execute to apply.</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Freigeben und mergen</h4>
+            <p>Ihre Freigabe am Pull Request ist die Autorisierung. Sie hängt an Ihrem
+               GitHub-Konto und wird nicht in die Datei getippt.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Geschrieben wird nur, was abweicht</h4>
+            <p>Derselbe Vergleich läuft noch einmal, diesmal schreibend. Parameter, die bereits
+               stimmen, bleiben unberührt; ein zweiter Lauf richtet also keinen Schaden an. Im
+               Auditlog steht, welche Parameter sich geändert haben. Wer freigegeben hat, steht
+               am Pull Request.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ablauf 2: eine Steuerung neu starten</h2>
+    <p class="lede">Ein Neustart ist kein Parameter. Er passiert einmal, und kein späterer Commit
+       nimmt ihn zurück. Deshalb steht er in einer Datei, die nach der Ausführung gelöscht wird.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Edge Controller 192.168.42.121 neu starten</h3>
+        <span class="proc-meta">ops/reboot-edge-121.yaml &nbsp;0-0-device-reboot</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Assistent</span>
+            <h4>Der Aufruf wird verweigert, ein Vorschlag entsteht</h4>
+            <p>Der Server lehnt den Reboot ab und liefert eine Anweisungsdatei zurück. Das Feld
+               <span class="mono">approved_by</span> bleibt leer.</p>
+<pre>plc_ip: 192.168.42.121
+action: invoke_method
+method_id: <span class="k">0-0-device-reboot</span>
+requires_human: CRITICAL
+approved_by: <span class="c">""</span></pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Pull Request öffnen, er darf liegen bleiben</h4>
+            <p>Solange niemand freigibt, führt niemand etwas aus. Sie können den Vorschlag heute
+               einstellen und erst im nächsten Wartungsfenster mergen.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Im Wartungsfenster freigeben und mergen</h4>
+            <p>Der Merge löst den Neustart aus. Planen Sie ihn wie den Gang zum Schaltschrank, denn
+               die Wirkung auf die Anlage ist dieselbe.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Einmal aufrufen, dann Datei löschen</h4>
+            <p>Nach erfolgreicher Ausführung verschwindet die Anweisung aus dem Repository und kann
+               beim nächsten Lauf nicht versehentlich noch einmal greifen. Schlägt sie fehl, bleibt
+               sie für den zweiten Versuch liegen.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ablauf 3: Firmware-Update und Downgrade</h2>
+    <p class="lede">Firmware ist die einzige Änderung, die sich nicht per Commit zurücknehmen
+       lässt. Der Ablauf ist derselbe wie beim Neustart, mit zwei zusätzlichen Prüfungen.</p>
+
+    <div class="proc">
+      <div class="proc-head">
+        <h3>Edge Controller 192.168.42.121 auf Build 31 bringen</h3>
+        <span class="proc-meta">ops/fw-edge-121.yaml &nbsp;Ziel 4.9.1</span>
+      </div>
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Prüfen, welche Version für dieses Gerät zugelassen ist</h4>
+            <p>Die Firmware-Richtlinie listet je Steuerung die zugelassenen Versionen. Nennen Sie
+               keine, installiert der Runner die neueste davon.</p>
+<pre><span class="c"># firmware-policy.yaml</span>
+192.168.42.121: { <span class="k">allowed</span>: ["4.9.1"] }</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Techniker</span>
+            <h4>Anweisung einstellen und freigeben</h4>
+            <p>Aufbau wie beim Neustart: ein Gerät, eine Version, ein leeres
+               <span class="mono">approved_by</span> bis zum Merge.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Das passende Image kommt aus der Hardware, nicht aus dem Dateinamen</h4>
+            <p>Der Runner fragt die Steuerung nach Artikelnummer und Build, öffnet jedes verfügbare
+               Image und vergleicht dessen Artikelliste damit. Passen zwei Images, bricht er ab
+               und listet beide auf, statt zu raten.</p>
+<pre>Device identity: order=0752-8303/8000-0002  firmware=04.09.01(31)
+Resolved: TP-Linux_update_V040901_31 (build 31)</pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Zwei Prüfungen vor dem ersten Schreibzugriff</h4>
+            <p>Die Steuerung muss den Mindest-Build ihres Typs erreicht haben, und die installierte
+               Version muss in dem Bereich liegen, den das Image selbst zulässt. Beides führt zum
+               Abbruch, nicht zu einer Warnung.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <span class="actor">Runner</span>
+            <h4>Übertragen, installieren, neu starten</h4>
+            <p>Das Image geht in Blöcken auf das Gerät, die Steuerung installiert es und startet
+               sich selbst neu. In dieser Zeit ist sie zeitweise nicht erreichbar. Der Fortschritt
+               bleibt bei etwa 93 Prozent stehen und erreicht nie 100. Fertig ist der Vorgang,
+               wenn der Status das sagt, nicht der Prozentwert.</p>
+<pre>fwstatus: Started (3)  progress: 61%
+[device unreachable - restarting]
+fwstatus: Unconfirmed (4)  progress: 93%
+Done. fwstatus: Inactive (0)  firmware version: 04.09.01</pre>
+          </div>
+        </li>
+      </ol>
+    </div>
+
+    <h3 style="margin-top:28px">Downgrade auf eine ältere Version</h3>
+    <p>Ein Downgrade ist derselbe Ablauf mit einer älteren Zielversion. Es braucht keinen
+       Sondermodus und kein zweites Werkzeug. Zwei Bedingungen müssen erfüllt sein, und beide
+       stehen im Pull Request, bevor Sie freigeben.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Bedingung</th><th>Geprüft wird sie</th><th>Ihr Anteil</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Die ältere Version ist für diese Steuerung zugelassen</td>
+            <td>in der Firmware-Richtlinie im Konfigurations-Repository</td>
+            <td>Version in <span class="mono">allowed</span> eintragen. Die neueste bleibt Vorgabe, eine ältere aufzunehmen ändert daran nichts.</td>
+          </tr>
+          <tr>
+            <td>Das Image erlaubt den Rückschritt von der installierten Version</td>
+            <td>im Firmware-Image selbst</td>
+            <td>Nichts. Der Runner liest den Bereich aus dem Image und bricht ab, wenn die installierte Version außerhalb liegt.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <pre><span class="c"># Eine Steuerung darf eine Version zurück, Vorgabe bleibt die neueste</span>
+192.168.42.121:
+  <span class="k">allowed</span>: ["4.8.9", "4.9.1"]
+  <span class="c"># Vorgabe ist 4.9.1</span>
+
+<span class="c"># Die Anweisung für das Downgrade nennt die ältere Version ausdrücklich</span>
+plc_ip: 192.168.42.121
+action: firmware_update
+<span class="k">target_version</span>: "4.8.9"</pre>
+
+    <p class="lede" style="margin-top:14px">Die Einstellungen übernimmt dieselbe Sicherung und
+       Rücksicherung, die bei jedem Firmware-Wechsel läuft. Parameter, die es erst ab einer
+       neueren Version gibt, finden auf der älteren kein Ziel. Sie tauchen im Geräteprotokoll als
+       Restore-Fehler auf.</p>
+  </section>
+
+  <section>
+    <h2>Begriffe</h2>
+    <p class="lede">Was die Pipeline-Begriffe in der Anlage bedeuten.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Begriff</th><th>Bedeutung hier</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">Pull Request</td><td>Der Änderungsantrag. Er zeigt Ist gegen Soll und trägt Ihre Freigabe.</td></tr>
+          <tr><td class="mono">Merge</td><td>Die Annahme des Antrags. Damit entsteht die Autorisierung, und damit startet die Ausführung.</td></tr>
+          <tr><td class="mono">Workflow</td><td>Der hinterlegte Ablauf, der eine freigegebene Änderung ausführt. Er liegt als Datei im Repository und wird geprüft wie jede andere.</td></tr>
+          <tr><td class="mono">Runner</td><td>Der PC im Anlagennetz, der diesen Ablauf ausführt. Fehlt er, bleibt eine freigegebene Änderung liegen.</td></tr>
+          <tr><td class="mono">Dry run</td><td>Der Probelauf. Liest die Steuerung, meldet die geplante Änderung, schreibt nichts.</td></tr>
+          <tr><td class="mono">Auditlog</td><td>Der manipulationssichere Nachweis. Jeder Eintrag trägt den Hash des vorherigen, ein gelöschter oder geänderter Eintrag fällt auf.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Was gilt, und was nicht</h2>
+    <div class="guards">
+      <div class="guard">
+        <h3>Firmware und Reboot sind gesperrt, nicht unmöglich</h3>
+        <p>Abgelehnt für jedes Gerät, die Ablehnung steht im Auditlog. Eine Ausnahme gibt es:
+           <span class="mono">WAGO_ALLOW_METHODS</span> schaltet im Live-Betrieb genau eine
+           benannte Methode wieder frei. Eine Firmware-Methode dort einzutragen wiegt so schwer
+           wie der Flashvorgang selbst.</p>
+      </div>
+      <div class="guard">
+        <h3>Ohne Commit keine Freigabe</h3>
+        <p>Der Runner prüft vor jeder Aktion, ob die Anweisung committet und unverändert ist. Eine
+           Änderung auf der Festplatte bleibt folgenlos.</p>
+      </div>
+      <div class="guard">
+        <h3>Jedes Ergebnis steht im Log</h3>
+        <p>Freigaben, Ablehnungen, Erfolge, Gerätefehler und abgebrochene Läufe. Auf Wunsch geht
+           alles zusätzlich an einen Syslog-Server außerhalb des Rechners, der das Log schreibt.</p>
+      </div>
+      <div class="guard stop">
+        <h3>Vier Augen sind eine Repository-Einstellung</h3>
+        <p>Verlangt das Repository keinen zweiten Prüfer, darf dieselbe Person vorschlagen und
+           freigeben. Das ist erlaubt und wird als Selbstfreigabe ausgewiesen. Einen zweiten
+           Prüfer erzwingt eine Branch-Protection-Regel, nicht dieses Werkzeug.</p>
+      </div>
+      <div class="guard stop">
+        <h3>Firmware lässt sich nicht per Commit zurücknehmen</h3>
+        <p>Ein Downgrade ist ein zweiter Firmware-Vorgang mit eigenem Risiko und eigenem
+           Stillstand. Es ist kein Undo.</p>
+      </div>
+      <div class="guard stop">
+        <h3>Während des Neustarts ist das Gerät weg</h3>
+        <p>Eine CC100 hat zehn Minuten gebraucht, bis sie wieder antwortete. Funkstille während
+           eines Firmware-Wechsels ist normal und für sich genommen kein Fehler.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Alle Werte stammen vom Prüfstand: 18 Steuerungen auf Firmware 04.09.01 Build 31, darunter
+       CC100, PFC200 G2, PFC300, Edge Controller, TP600 und WP400. Parameternamen und Statuscodes
+       sind die, die die Geräte selbst liefern.</p>
+  </footer>
+</div>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-set-lang]"));
+
+    function apply(lang) {
+      root.lang = lang;
+      buttons.forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+      });
+      try { localStorage.setItem("wago-lang", lang); } catch (e) { /* storage may be blocked */ }
+    }
+
+    var stored = null;
+    try { stored = localStorage.getItem("wago-lang"); } catch (e) { /* storage may be blocked */ }
+    var browser = (navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
+    apply(stored === "en" || stored === "de" ? stored : browser);
+
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () { apply(b.getAttribute("data-set-lang")); });
+    });
+  })();
+</script>
