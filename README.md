@@ -1006,7 +1006,7 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 
 | Tool | Description |
 |------|-------------|
-| `find_parameters(plc_ip, query, writeable_only, user_settings_only, limit)` | Search by keyword (up to 100 results) |
+| `find_parameters(plc_ip, query, writeable_only, user_settings_only, limit)` | Search by keyword (default 20 results, max 255) |
 | `get_parameter(plc_ip, parameter_id)` | Read one value, enum labels resolved |
 | `get_parameters_bulk(requests)` | Read one param from N PLCs in parallel |
 | `set_parameters(plc_ip, parameters)` | Write one or more parameters (bulk PATCH) |
