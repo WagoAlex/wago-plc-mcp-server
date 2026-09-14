@@ -93,8 +93,11 @@ fi
 # one per product with digital elements.
 FW_IMAGE="${REPO}-fwupdate:${VERSION}"
 echo "▶ building ${FW_IMAGE}"
+# Repo root context: the Dockerfile copies src/audit.py alongside fwupdate/.
+# --target base: the last stage is dev (pytest, no entrypoint), not the release.
 # shellcheck disable=SC2086
-docker build ${NO_CACHE} -t "${FW_IMAGE}" -t "${REPO}-fwupdate:latest" fwupdate/
+docker build ${NO_CACHE} --target base -f fwupdate/Dockerfile \
+  -t "${FW_IMAGE}" -t "${REPO}-fwupdate:latest" .
 if command -v syft &>/dev/null; then
   echo "▶ generating fwupdate SBOM → sbom/sbom-fwupdate-${VERSION}.json"
   mkdir -p sbom
