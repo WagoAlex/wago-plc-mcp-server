@@ -58,9 +58,18 @@ def _infer_device_class(name: str, order_number: str = "") -> str:
     """Infer device class from WDA device name or orderNumber.
 
     FW31 dropped the 'name' field; fall back to orderNumber prefix:
-      0751-  → CC100 | 0750-82 → PFC200 | 0750-83 → PFC300 | 0752- → Edge
+      0751-  → CC100 | 0750-82 → PFC200 | 0750-83 → PFC300 | 0750-84 → PFC400
+      | 0752- → Edge
+
+    PFC400 (750-8400) is not yet in the test rack — this mapping is unverified
+    against real hardware. It's added so the unit registers under its own
+    class label instead of silently falling through to "" the day one arrives.
+    No entry exists for it in KNOWN_PARAM_COUNTS for the same reason: an
+    invented count would make describe_plc's parameter_count_ok check lie.
     """
     n = name.upper()
+    if "PFC400" in n:
+        return "PFC400"
     if "CC100" in n:
         return "CC100"
     if "PFC300" in n:
@@ -75,6 +84,8 @@ def _infer_device_class(name: str, order_number: str = "") -> str:
         return "CC100"
     if o.startswith("0752-"):
         return "Edge"
+    if o.startswith("0750-84"):
+        return "PFC400"
     if o.startswith("0750-82"):
         return "PFC200"
     if o.startswith("0750-83"):

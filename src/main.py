@@ -1,8 +1,9 @@
 """WAGO PLC MCP Server — optimized for OpenClaw agents (small local models).
 
-12 tools, compact responses, smart pre-validation.
+Full WDA endpoint coverage, compact responses, smart pre-validation.
 """
 import asyncio
+import base64
 import json
 import os
 from difflib import get_close_matches
@@ -19,7 +20,7 @@ from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
-from config import parse_plcs_from_env, resolve_tls_verify
+from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
 
 # ───────────────────────── Bootstrap ─────────────────────────
@@ -253,6 +254,73 @@ async def describe_plc(ctx: Context, plc_ip: str) -> dict:
     }
 
 
+@mcp.tool()
+async def get_device(ctx: Context, plc_ip: str, device_id: str) -> dict:
+    """Get a device resource plus the features it exposes (one call)."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    if device_id not in plc.devices:
+        return {"error": f"Unknown device '{device_id}'. Available: {sorted(plc.devices)}"}
+    try:
+        device, features = await asyncio.gather(
+            plc.client.get_device(device_id),
+            plc.client.get_device_features(device_id),
+        )
+    except Exception as e:
+        return {"error": str(e)}
+    device.setdefault("attributes", {})["features"] = [f.get("id") for f in features]
+    return device
+
+
+@mcp.tool()
+async def get_feature(ctx: Context, plc_ip: str, feature_id: str) -> dict:
+    """Get a feature plus its composition: nested features, contained parameter/method definitions (one call)."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    if feature_id not in plc.features:
+        return {"error": f"Unknown feature '{feature_id}'. Available: {sorted(plc.features)}"}
+    try:
+        feature, included, params, methods = await asyncio.gather(
+            plc.client.get_feature(feature_id),
+            plc.client.get_feature_included_features(feature_id),
+            plc.client.get_feature_contained_parameters(feature_id),
+            plc.client.get_feature_contained_methods(feature_id),
+        )
+    except Exception as e:
+        return {"error": str(e)}
+    attrs = feature.setdefault("attributes", {})
+    attrs["includedFeatures"] = [f.get("id") for f in included]
+    attrs["containedParameters"] = [p.get("id") for p in params]
+    attrs["containedMethods"] = [m.get("id") for m in methods]
+    return feature
+
+
+@mcp.tool()
+async def get_enum_definition(ctx: Context, plc_ip: str, enum_id: str) -> dict:
+    """Get an enum definition's cases (value → stringValue). Useful to inspect an enum's full case list directly."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        return await plc.client.get_enum_definition(enum_id)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def get_parameter_definition(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
+    """Get a parameter's definition: writeable, userSetting, dataType, related enum — without reading its value."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        return await plc.client.get_parameter_definition(parameter_id)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ───────────────────────── Tools: parameters ─────────────────────────
 
 @mcp.tool()
@@ -388,6 +456,58 @@ async def set_parameters(
         logger.error(f"[{plc_ip}] set_parameters failed: {e}")
         _audit_log("set_parameters", plc_ip, {"params": parameters}, f"error: {e}")
         return {"error": str(e)}
+
+
+@mcp.tool()
+async def set_parameter(ctx: Context, plc_ip: str, parameter_id: str, value) -> dict:
+    """Write a single parameter. Prefer set_parameters for more than one — same PATCH-per-call cost either way."""
+    return await set_parameters(ctx, plc_ip, [{"id": parameter_id, "value": value}])
+
+
+@mcp.tool()
+async def get_parameter_referenced_instances(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
+    """For an instance_identity_ref-typed parameter: the class instances that reference it."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        return {"instances": await plc.client.get_parameter_referenced_instances(parameter_id)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def list_parameter_instances(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
+    """List instance numbers of a class-typed parameter (dataType 'instantiations'). Use get_parameter_instance for detail."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        return {"instances": await plc.client.list_parameter_instances(parameter_id)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def get_parameter_instance(ctx: Context, plc_ip: str, parameter_id: str, instance_no: str) -> dict:
+    """Get one class-parameter instance: its device, own parameters, and methods (one call)."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        instance, device, params, methods = await asyncio.gather(
+            plc.client.get_parameter_instance(parameter_id, instance_no),
+            plc.client.get_parameter_instance_device(parameter_id, instance_no),
+            plc.client.get_parameter_instance_parameters(parameter_id, instance_no),
+            plc.client.get_parameter_instance_methods(parameter_id, instance_no),
+        )
+    except Exception as e:
+        return {"error": str(e)}
+    attrs = instance.setdefault("attributes", {})
+    attrs["device"] = device
+    attrs["parameters"] = [p.get("id") for p in params]
+    attrs["methods"] = [m.get("id") for m in methods]
+    return instance
 
 
 # ───────────────────────── Tools: methods ─────────────────────────
@@ -526,7 +646,49 @@ async def get_method_run(
     }
 
 
+@mcp.tool()
+async def list_method_runs(ctx: Context, plc_ip: str, method_id: str) -> dict:
+    """List past runs of a method still held server-side (audit/inspection use)."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        runs = await plc.client.list_method_runs(method_id)
+    except Exception as e:
+        return {"error": str(e)}
+    return {"runs": [
+        {"run_id": r.get("id"), "status": r.get("attributes", {}).get("executionStatus")}
+        for r in runs
+    ]}
+
+
+@mcp.tool()
+async def delete_method_run(ctx: Context, plc_ip: str, method_id: str, run_id: str) -> dict:
+    """Free a server-side run result before it expires on its own. Optional housekeeping, not required for correctness."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        ok = await plc.client.delete_method_run(method_id, run_id)
+    except Exception as e:
+        return {"error": str(e)}
+    return {"status": "ok" if ok else "not_found"}
+
+
 # ───────────────────────── Tools: watchlists (monitoring lists) ─────────────────────────
+
+@mcp.tool()
+async def list_watchlists(ctx: Context, plc_ip: str) -> dict:
+    """List watchlist IDs still active server-side (e.g. after a restart, to find orphans)."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        lists = await plc.client.list_monitoring_lists()
+    except Exception as e:
+        return {"error": str(e)}
+    return {"watchlist_ids": [wl.get("id") for wl in lists]}
+
 
 @mcp.tool()
 async def create_watchlist(
@@ -600,6 +762,73 @@ async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict
         return {"error": str(e)}
 
 
+# ───────────────────────── Tools: files (file_id-typed parameters) ─────────────────────────
+# ponytail: whole-file transfer only, no chunked upload tool — see wda_client.upload_file.
+
+@mcp.tool()
+async def create_file(ctx: Context, plc_ip: str, context_parameter_id: str) -> dict:
+    """Allocate a file_id for uploading content into a file_id-typed parameter."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    if context_parameter_id not in plc.parameters:
+        return {"error": f"Unknown parameter '{context_parameter_id}'"}
+    try:
+        file_id = await plc.client.create_file(context_parameter_id)
+        return {"file_id": file_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def upload_file(
+    ctx: Context, plc_ip: str, file_id: str, content_base64: str, content_type: str = "application/octet-stream"
+) -> dict:
+    """Upload whole file content (base64-encoded) to a file_id from create_file."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    if plc_ip in _READONLY_HOSTS:
+        return {"error": f"PLC {plc_ip} is read-only; file upload refused."}
+    try:
+        content = base64.b64decode(content_base64)
+        result = await plc.client.upload_file(file_id, content, content_type)
+        _audit_log("upload_file", plc_ip, {"file_id": file_id, "bytes": len(content)}, "ok")
+        return result
+    except Exception as e:
+        _audit_log("upload_file", plc_ip, {"file_id": file_id}, f"error: {e}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def download_file(ctx: Context, plc_ip: str, file_id: str) -> dict:
+    """Download a file's content as base64. Pairs with a parameter whose dataType is file_id."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        content = await plc.client.download_file(file_id)
+        return {"content_base64": base64.b64encode(content).decode("ascii"), "size": len(content)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def get_file_metadata(ctx: Context, plc_ip: str, file_id: str) -> dict:
+    """HEAD a file_id — size/content-type without downloading the body."""
+    plc, err = _require_plc(plc_ip)
+    if err:
+        return err
+    try:
+        headers = await plc.client.get_file_metadata(file_id)
+        return {
+            "content_type": headers.get("content-type"),
+            "content_length": headers.get("content-length"),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ───────────────────────── Prompt for agents ─────────────────────────
 
 @mcp.prompt()
@@ -652,6 +881,7 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
+    check_security_profile()  # fail closed before touching any PLC in plaintext
     _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
     plcs = parse_plcs_from_env()

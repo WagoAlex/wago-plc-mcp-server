@@ -54,7 +54,7 @@ The following standards and specifications were applied in demonstrating conform
 | 3. Protection of confidentiality | ✅ | Docker Secrets for credentials; TLS available on both legs (T2.1, T2.2) |
 | 4. Protection of integrity | ✅ | Hash-chained audit log (T4.1); tamper detection via `audit_verify.py` |
 | 5. Availability protection | ✅ | Rate limiting 60 req/60 s per IP (T2.3); log rotation prevents disk exhaustion |
-| 6. Minimised attack surface | ✅ | Single-container deployment; 13 scoped tools; no shell exposure |
+| 6. Minimised attack surface | ✅ | Single-container deployment; 29 scoped tools; no shell exposure |
 | 7. Vulnerability disclosure | ✅ | SECURITY.md with CVD policy and patch SLA |
 | 8. Security updates | ✅ | Patch SLA defined (Critical 7d / High 30d / Medium 90d); automated dep updates (T3.2) |
 

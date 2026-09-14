@@ -155,6 +155,30 @@ class WDAClient:
         r.raise_for_status()
         return r.json()["data"]["attributes"]
 
+    async def get_parameter_referenced_instances(self, pid: str) -> list[dict]:
+        """For instance_identity_ref-typed parameters: the instances that reference this one."""
+        return await self._paginate(f"/wda/parameters/{pid}/referencedinstances")
+
+    async def list_parameter_instances(self, pid: str) -> list[dict]:
+        """Instances of a class-typed parameter (dataType 'instantiations')."""
+        return await self._paginate(f"/wda/parameters/{pid}/instances")
+
+    async def get_parameter_instance(self, pid: str, instance_no: str) -> dict:
+        r = await self._request("GET", f"/wda/parameters/{pid}/instances/{instance_no}")
+        r.raise_for_status()
+        return r.json()["data"]
+
+    async def get_parameter_instance_device(self, pid: str, instance_no: str) -> dict:
+        r = await self._request("GET", f"/wda/parameters/{pid}/instances/{instance_no}/device")
+        r.raise_for_status()
+        return r.json()["data"]
+
+    async def get_parameter_instance_parameters(self, pid: str, instance_no: str) -> list[dict]:
+        return await self._paginate(f"/wda/parameters/{pid}/instances/{instance_no}/parameters")
+
+    async def get_parameter_instance_methods(self, pid: str, instance_no: str) -> list[dict]:
+        return await self._paginate(f"/wda/parameters/{pid}/instances/{instance_no}/methods")
+
     async def set_parameters(self, items: list[dict]) -> dict:
         payload = {
             "data": [
@@ -201,6 +225,9 @@ class WDAClient:
         r.raise_for_status()
         return r.json()["data"]
 
+    async def get_device_features(self, did: str) -> list[dict]:
+        return await self._paginate(f"/wda/devices/{did}/features")
+
     async def list_features(self) -> list[dict]:
         return await self._paginate("/wda/features")
 
@@ -208,6 +235,15 @@ class WDAClient:
         r = await self._request("GET", f"/wda/features/{fid}")
         r.raise_for_status()
         return r.json()["data"]
+
+    async def get_feature_included_features(self, fid: str) -> list[dict]:
+        return await self._paginate(f"/wda/features/{fid}/includedfeatures")
+
+    async def get_feature_contained_parameters(self, fid: str) -> list[dict]:
+        return await self._paginate(f"/wda/features/{fid}/containedparameters")
+
+    async def get_feature_contained_methods(self, fid: str) -> list[dict]:
+        return await self._paginate(f"/wda/features/{fid}/containedmethods")
 
     async def list_methods(self) -> list[dict]:
         return await self._paginate("/wda/methods")
@@ -222,10 +258,20 @@ class WDAClient:
         r.raise_for_status()
         return r.json().get("data", [])
 
+    async def get_method_inarg(self, mid: str, name: str) -> dict:
+        r = await self._request("GET", f"/wda/method-definitions/{mid}/inargs/{name}")
+        r.raise_for_status()
+        return r.json()["data"]
+
     async def get_method_outargs(self, mid: str) -> list[dict]:
         r = await self._request("GET", f"/wda/method-definitions/{mid}/outargs")
         r.raise_for_status()
         return r.json().get("data", [])
+
+    async def get_method_outarg(self, mid: str, name: str) -> dict:
+        r = await self._request("GET", f"/wda/method-definitions/{mid}/outargs/{name}")
+        r.raise_for_status()
+        return r.json()["data"]
 
     async def invoke_method(
         self,
@@ -243,6 +289,9 @@ class WDAClient:
         )
         r.raise_for_status()
         return r.json().get("data", {})
+
+    async def list_method_runs(self, mid: str) -> list[dict]:
+        return await self._paginate(f"/wda/methods/{mid}/runs")
 
     async def get_method_run(self, mid: str, run_id: str) -> dict:
         r = await self._request("GET", f"/wda/methods/{mid}/runs/{run_id}")
@@ -303,3 +352,35 @@ class WDAClient:
     async def delete_monitoring_list(self, mlid: str) -> bool:
         r = await self._request("DELETE", f"/wda/monitoring-lists/{mlid}")
         return r.status_code in (200, 204)
+
+    # ───────────────────────── File API (/files, not /wda/files) ─────────────────────────
+    # ponytail: whole-file PUT only — the spec's chunked PATCH (multipart/byteranges) has
+    # no caller yet on any file_id-typed parameter we've seen; add it when a real file
+    # exceeds a single-request upload.
+
+    async def create_file(self, context_parameter_id: str) -> str:
+        """POST /files?context=<parameter-id> — allocate a file_id for upload."""
+        r = await self._request("POST", "/files", params={"context": context_parameter_id})
+        r.raise_for_status()
+        return r.json()["data"]["id"]
+
+    async def get_file_metadata(self, file_id: str) -> dict:
+        """HEAD /files/{file_id} — metadata only, no body."""
+        r = await self._request("HEAD", f"/files/{file_id}")
+        r.raise_for_status()
+        return dict(r.headers)
+
+    async def download_file(self, file_id: str) -> bytes:
+        r = await self._request("GET", f"/files/{file_id}")
+        r.raise_for_status()
+        return r.content
+
+    async def upload_file(self, file_id: str, content: bytes, content_type: str = "application/octet-stream") -> dict:
+        r = await self._request(
+            "PUT", f"/files/{file_id}",
+            content=content, headers={"Content-Type": content_type},
+        )
+        r.raise_for_status()
+        if r.status_code == 204 or not r.content:
+            return {"status": "ok"}
+        return r.json()

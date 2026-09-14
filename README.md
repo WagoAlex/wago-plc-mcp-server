@@ -2,7 +2,7 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
-[![MCP Tools](https://img.shields.io/badge/MCP_tools-14-1F2837.svg)](#tool-reference)
+[![MCP Tools](https://img.shields.io/badge/MCP_tools-29-1F2837.svg)](#tool-reference)
 [![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#supported-hardware)
 
 # wago-plc-mcp-server
@@ -58,7 +58,7 @@ flowchart TB
 
     subgraph Server["wago-plc-mcp-server - Docker, port 6042"]
         direction LR
-        MCP("14 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
+        MCP("29 MCP tools<br/>find_parameters · get_parameter<br/>set_parameters · invoke_method<br/>create/read_watchlist · get_plc_audit_log · …")
         Guard("Bearer auth · rate limiting<br/>hash-chained audit log")
         MCP --- Guard
     end
@@ -77,6 +77,7 @@ flowchart TB
         P6("WP400")
         Pn("TP600")
     end
+    %% PFC400 (750-8400) omitted from this diagram - not yet in hand, see Supported hardware
 ```
 
 Demoed end to end with **16 PLCs** of mixed device class on a single rack.
@@ -189,17 +190,64 @@ PORT=6042
 WAGO_TIMEOUT_SECONDS=45
 ```
 
+`WAGO_TIMEOUT_SECONDS` applies to every PLC in the fleet - set it to the
+slowest device class you're onboarding, not the average. CC100 needs 45+;
+most classes are fine at 15. IEC 62443-4-2-hardened units (see below) expose
+roughly 3x the parameters of their base class and have not been timing-tuned
+yet - if one fails registration with a timeout at 45s, that's a real open
+question for this project, not a typo in this guide.
+
 > [!TIP]
 > For large fleets, use `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt` - one IP
 > per line, `#` comments supported. Both can be set together; IPs are merged.
 
-### 2. Set the PLC password
+### 2. Set PLC passwords
 
+Every device class onboards the same way: register its IP in step 1, then
+give it credentials here. Two patterns, combinable:
+
+**Shared password** (fleets where every PLC uses the same login):
 ```bash
 mkdir -p secrets
 echo "your-plc-password" > secrets/plc_default_password.txt
 chmod 600 secrets/plc_default_password.txt
 ```
+
+**Per-PLC password** (any unit with its own login - common for hardened or
+customer-managed devices): add a secret named for its IP, then uncomment the
+matching lines in `docker-compose.yml` (`secrets:` block and the service's
+`secrets:` list):
+```bash
+echo "that-unit-password" > secrets/plc_password_192_168_2_85.txt
+chmod 600 secrets/plc_password_192_168_2_85.txt
+```
+Per-PLC secrets take priority over the shared default for a matching IP, so a
+mixed fleet just needs one of these per unit that doesn't share the default
+login - everything else falls back to `plc_default_password.txt`.
+
+> [!IMPORTANT]
+> **Onboarding IEC 62443-4-2-hardened units (CC100-IEC62443, and the planned
+> PFC400 family).** These register and behave like any other PLC - same WDA
+> API, same tools - but almost always ship with their own credentials, so
+> they need the per-PLC pattern above, not the shared default.
+> - **CC100-IEC62443** (order no. `751-9412`) is a hardened CC100 variant:
+>   registers under `device_class: "CC100"` (same order-number prefix), but
+>   exposes roughly 1056 WDA parameters instead of the base unit's 360 -
+>   additional security-config groups (firewall rules, certificates, account
+>   management), not a different device or a bigger baseline to expect from
+>   plain CC100s.
+> - **PFC400** (order no. `750-8400`) is not yet available to us - the code
+>   recognizes its order-number prefix so it registers under its own
+>   `device_class: "PFC400"` instead of falling through unclassified, but
+>   nothing about its onboarding, parameter set, or I/O model is verified.
+>   [Likely] it will share most of the CC100-IEC62443 security surface once
+>   real hardware exists to confirm that. It's also referenced elsewhere as
+>   order series `751-941x`, which overlaps with 751-9412 above - until a
+>   real unit is on hand to disambiguate, this server does **not** guess: any
+>   `0751-9412`-class order number classifies as CC100, not PFC400.
+> - Neither variant is described as "IEC 62443 compliant" or "certified"
+>   anywhere in this project - that's a formal third-party assessment of the
+>   *device*, not something this server's code can claim on WAGO's behalf.
 
 ### 3. Start
 
@@ -257,7 +305,7 @@ claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc 
   }
 }
 ```
-Fully quit and relaunch Claude Desktop. You should see a hammer icon with 14 tools:
+Fully quit and relaunch Claude Desktop. You should see a hammer icon with 29 tools:
 
 ![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
@@ -341,7 +389,7 @@ your control program's I/O data.
 **What MCP is:** A standard protocol that lets an AI assistant call a fixed
 set of defined tools against a system, instead of you writing custom
 integration code for every request. This server turns the WDA REST API into
-14 tools an AI assistant can call directly.
+29 tools an AI assistant can call directly.
 
 | Term | Plain meaning | Closest thing you already know |
 |---|---|---|
@@ -379,9 +427,11 @@ What it *does* expose as live, poll-worthy values:
 | Device | Article Numbers | Notes |
 |--------|----------------|-------|
 | CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - set `WAGO_TIMEOUT_SECONDS=45` |
+| CC100-IEC62443 | `751-9412` | Hardened variant of CC100, same order-number prefix and class - ~1056 WDA params (additional security feature groups) vs. the base unit's 360 |
 | PFC100 Gen 2 | `750-8110` · `750-8111` · `750-8112` · `750-8112/025-000` | |
 | PFC200 Gen 2 | `750-8210` · `750-8211` · `750-8212` · `750-8216` · `750-8217` | |
 | PFC300 | `750-8302` | |
+| PFC400 | `750-8400` | **Not yet in hand** - order-number prefix is recognized so it registers under its own class, but nothing about it is verified against real hardware |
 | Edge Controller | `752-8303/8000-0002` | Exposes CODESYS runtime state via `0-0-plcruntime-*` |
 | WP400 | `762-34xx` | Web panel only - 189 WDA params, no CODESYS. HMI params: display brightness/orientation/screensaver, integrated browser startpage, touch cleaning mode |
 | TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Full PLC+HMI - 410 WDA params. CODESYS3, BACnet, cloud, serial, all WP400 HMI params plus front LED and acoustic feedback |
@@ -882,6 +932,19 @@ MCP_TLS_CERT=/run/secrets/mcp_tls_cert
 MCP_TLS_KEY=/run/secrets/mcp_tls_key
 ```
 
+**Enforcing both legs are actually configured:**
+
+```env
+SECURITY_PROFILE=hardened
+```
+
+Opt-in, default is unset. When set, the server refuses to start
+(`SystemExit(1)`, before contacting any PLC) unless `WAGO_TLS_CA` is a real
+CA/cert path (not unset/`false`/`0`) **and** both `MCP_TLS_CERT`/`MCP_TLS_KEY`
+are set - i.e. it turns the two startup warnings above into a hard stop. It
+only checks that TLS is *configured*, not that the cert is otherwise trustworthy
+- a self-signed cert you point `MCP_TLS_CERT` at still starts hardened.
+
 ### Audit log
 
 Every `set_parameters` and `invoke_method` call is appended to a
@@ -934,6 +997,10 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `list_plcs` | List all registered PLC IPs |
 | `describe_plc(plc_ip)` | Capability counts + feature names + `device_class`, `expected_parameter_count`, `parameter_count_ok` |
 | `get_plc_audit_log(plc_ip, action, limit)` | Read recent tamper-evident audit log entries; filter by PLC and/or action, newest first (max 500) |
+| `get_device(plc_ip, device_id)` | Device resource plus the features it exposes |
+| `get_feature(plc_ip, feature_id)` | Feature plus nested features, contained parameter/method definitions |
+| `get_enum_definition(plc_ip, enum_id)` | An enum's full case list (value → stringValue) |
+| `get_parameter_definition(plc_ip, parameter_id)` | writeable/userSetting/dataType/enum link, without reading a value |
 
 ### Parameters
 
@@ -943,6 +1010,10 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `get_parameter(plc_ip, parameter_id)` | Read one value, enum labels resolved |
 | `get_parameters_bulk(requests)` | Read one param from N PLCs in parallel |
 | `set_parameters(plc_ip, parameters)` | Write one or more parameters (bulk PATCH) |
+| `set_parameter(plc_ip, parameter_id, value)` | Write a single parameter |
+| `get_parameter_referenced_instances(plc_ip, parameter_id)` | Instances referencing an `instance_identity_ref` parameter |
+| `list_parameter_instances(plc_ip, parameter_id)` | Instance numbers of a class-typed parameter |
+| `get_parameter_instance(plc_ip, parameter_id, instance_no)` | One instance: its device, own parameters, and methods |
 
 ### Methods
 
@@ -952,14 +1023,30 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 | `get_method(plc_ip, method_id)` | Fetch inArgs/outArgs schema |
 | `invoke_method(plc_ip, method_id, arguments, wait)` | Execute sync or async |
 | `get_method_run(plc_ip, method_id, run_id)` | Poll async run status |
+| `list_method_runs(plc_ip, method_id)` | Past runs still held server-side |
+| `delete_method_run(plc_ip, method_id, run_id)` | Free a server-side run result early |
 
 ### Watchlists
 
 | Tool | Description |
 |------|-------------|
+| `list_watchlists(plc_ip)` | Watchlist IDs still active server-side |
 | `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Register a server-side monitoring list on the PLC |
 | `read_watchlist(plc_ip, watchlist_id)` | Return current values for all watched parameters (one HTTP request) |
 | `delete_watchlist(plc_ip, watchlist_id)` | Release the watchlist immediately |
+
+### Files (file_id-typed parameters)
+
+| Tool | Description |
+|------|-------------|
+| `create_file(plc_ip, context_parameter_id)` | Allocate a file_id for upload |
+| `upload_file(plc_ip, file_id, content_base64, content_type)` | Upload whole file content (base64) |
+| `download_file(plc_ip, file_id)` | Download file content as base64 |
+| `get_file_metadata(plc_ip, file_id)` | Size/type without downloading the body |
+
+> Class-instance and file tools are implemented against the WDA spec but have not been
+> exercised against real hardware - no `instantiations`- or `file_id`-typed parameter has
+> shown up on any device in our test fleet yet. See `docs/functional-test-status.md`.
 
 **Why watchlists exist:** Every `get_parameter` call opens a new HTTPS connection. For repeated polling of a fixed set across a fleet, the overhead compounds: 10 parameters × 15 PLCs every 30 seconds = 150 HTTPS round-trips per cycle. Watchlists solve this - one `read_watchlist` returns all current values in a single request.
 
@@ -1016,6 +1103,7 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `MCP_TLS_CERT` | - | Path to TLS cert for MCP endpoint |
 | `MCP_TLS_KEY` | - | Path to TLS private key for MCP endpoint |
 | `MCP_TLS_KEY_PASSWORD` | - | Password for encrypted TLS private key (optional) |
+| `SECURITY_PROFILE` | - | `hardened` refuses to start unless `WAGO_TLS_CA` + `MCP_TLS_CERT`/`MCP_TLS_KEY` are all set - turns the TLS-disabled warnings into a startup failure |
 | `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
 | `SYSLOG_HOST` | - | Syslog/SIEM receiver hostname; enables audit forwarding |
 | `SYSLOG_PORT` | `514` | Syslog receiver port |

@@ -160,23 +160,39 @@ LOG_FILE=/app/mcp_server.log
 
 ---
 
-## Tool Reference (13 tools)
+## Tool Reference (29 tools — full WDA endpoint coverage)
 
 | Tool | Purpose | Network? |
 |------|---------|---------|
 | `list_plcs` | List registered PLC IPs | No (cache) |
+| `get_plc_audit_log` | Query the tamper-evident audit chain | No (local file) |
 | `describe_plc` | Capability summary + `device_class`, `expected_parameter_count`, `parameter_count_ok` | No (cache) |
+| `get_device` | Device resource + the features it exposes | Yes |
+| `get_feature` | Feature + nested features/contained params/methods | Yes |
+| `get_enum_definition` | An enum's full case list | Yes |
+| `get_parameter_definition` | writeable/userSetting/dataType/enum link, no value read | Yes |
 | `find_parameters` | Substring/fuzzy search, up to 255 results | No (cache) |
 | `get_parameter` | Read one parameter | Yes |
 | `get_parameters_bulk` | Read one param from N PLCs in parallel | Yes × N concurrent |
 | `set_parameters` | Bulk PATCH, pre-validates writeability | Yes |
+| `set_parameter` | Single-parameter PATCH | Yes |
+| `get_parameter_referenced_instances` | Instances referencing an instance_identity_ref param | Yes |
+| `list_parameter_instances` | Instance numbers of a class-typed parameter | Yes |
+| `get_parameter_instance` | One instance: device + its parameters + methods | Yes |
 | `find_methods` | Search method IDs | No (cache) |
 | `get_method` | Fetch inArgs/outArgs schema | Yes |
 | `invoke_method` | Execute method (sync or async) | Yes |
 | `get_method_run` | Poll async method run | Yes |
+| `list_method_runs` | Past runs still held server-side | Yes |
+| `delete_method_run` | Free a server-side run result early | Yes |
+| `list_watchlists` | Watchlist IDs still active server-side | Yes |
 | `create_watchlist` | Server-side monitoring list | Yes |
 | `read_watchlist` | Read watchlist values (resets timeout) | Yes |
 | `delete_watchlist` | Free watchlist before timeout | Yes |
+| `create_file` | Allocate a file_id for upload | Yes |
+| `upload_file` | Upload whole file content (base64) | Yes |
+| `download_file` | Download file content as base64 | Yes |
+| `get_file_metadata` | HEAD a file_id — size/type without downloading | Yes |
 
 ### Safety gates (`src/safety.py`) — enforced before every write/invoke
 
