@@ -1,0 +1,4 @@
+# Local build artifacts must not overwrite what the image builds itself: a stale
+# host src/*.egg-info made locally built images report an old version (2.1.1).
+**/*.egg-info
+**/__pycache__

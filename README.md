@@ -1,5 +1,7 @@
 ![wago-plc-mcp-server - bridge WAGO PLCs to AI agents](docs/media/hero-banner.svg)
 
+<!-- mcp-name: io.github.WagoAlex/wago-plc-mcp-server -->
+
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-29-1F2837.svg)](#tool-reference)

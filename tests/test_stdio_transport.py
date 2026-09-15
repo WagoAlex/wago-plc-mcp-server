@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 _MAIN = Path(__file__).parent.parent / "src" / "main.py"
@@ -49,5 +50,9 @@ def test_stdio_mode_answers_initialize_with_only_jsonrpc_on_stdout(tmp_path: Pat
     assert lines, f"no stdout; exit={proc.returncode}\nstderr:\n{proc.stderr[-2000:]}"
     for line in lines:
         json.loads(line)  # raises on any non-JSON-RPC output (banners, prints)
-    assert json.loads(lines[0])["id"] == 1
-    assert "result" in json.loads(lines[0])
+    response = json.loads(lines[0])
+    assert response["id"] == 1
+    assert "result" in response
+
+    pyproject = tomllib.loads((_MAIN.parent.parent / "pyproject.toml").read_text())
+    assert response["result"]["serverInfo"]["version"] == pyproject["project"]["version"]
