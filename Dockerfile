@@ -34,7 +34,8 @@ FROM base AS dev
 # Install dev dependency group (pytest, respx, pytest-asyncio, pytest-cov, pyyaml, …)
 RUN uv pip install --system --no-cache-dir --group dev
 
-# Copy test suite, reconciler script, and FW31 cassettes (contract tests) into the image
-COPY tests/ ./tests/
+# Reconciler script and FW31 cassettes (contract tests). The test suite itself is
+# local only and not in the repository, so it is mounted at run time:
+#   docker run --rm -v "$PWD/tests:/app/tests:ro" wmcp-dev pytest tests/ -m "not live and not mutate and not soak"
 COPY scripts/ ./scripts/
 COPY docs/*-fw31-parameters-raw.json ./docs/

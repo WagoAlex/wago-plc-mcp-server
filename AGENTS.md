@@ -174,7 +174,9 @@ underscores). Do not re-introduce runtime fleet registration as an MCP tool.
 **ALWAYS:**
 - Read `wago-quickref/references/wda-api-reference.md` before changing any
   WDA HTTP call.
-- Run tests inside Docker: `docker exec wmcp pytest tests/`.
+- Run tests inside Docker with the dev image and a bind mount (the test suite
+  is kept locally and is not part of this repository):
+  `docker run --rm -v "$PWD/tests:/app/tests:ro" wmcp-dev pytest tests/`.
 - Tag commits: `fix:`, `feat:`, `chore:`, `docs:`.
 - Bump `version.txt` and run `./build.sh` before publishing an image.
 
@@ -261,9 +263,10 @@ docker logs wmcp -f
 ./build.sh --patch --start   # + docker compose up
 ./build.sh --release         # build current version, push to Docker Hub, archive SBOM
 
-# Tests inside container
-docker exec wmcp pytest tests/
-docker exec wmcp ruff check src/
+# Tests (suite kept locally, not in this repository) and lint, in the dev image
+docker build --target dev -t wmcp-dev .
+docker run --rm -v "$PWD/tests:/app/tests:ro" wmcp-dev pytest tests/ -m "not live and not mutate and not soak"
+docker run --rm -v "$PWD:/w:ro" -w /w wmcp-dev uvx ruff check src/
 ```
 
 Container name: `wmcp`. Image: `wagoalex/wago-plc-mcp-server:latest`.

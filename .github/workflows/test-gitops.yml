@@ -1,4 +1,7 @@
-name: Tests
+name: Version guard
+
+# The test suite is kept locally and is not part of this repository, so CI only
+# checks that every published artifact carries the same version.
 
 on:
   push:
@@ -6,7 +9,6 @@ on:
     paths:
       - src/**
       - scripts/**
-      - tests/**
       - Dockerfile
       - pyproject.toml
       - version.txt
@@ -16,7 +18,6 @@ on:
     paths:
       - src/**
       - scripts/**
-      - tests/**
       - Dockerfile
       - pyproject.toml
       - version.txt
@@ -24,8 +25,8 @@ on:
       - integrations/mcpb/**
 
 jobs:
-  test:
-    name: Unit tests (no PLC)
+  versions:
+    name: Version sources agree
     runs-on: ubuntu-latest
 
     steps:
@@ -34,12 +35,3 @@ jobs:
       # PyPI, Docker, MCP Registry and .mcpb must ship one version (build.sh stamps them)
       - name: Check version sources agree
         run: python3 scripts/check_versions.py
-
-      - name: Build dev image
-        run: docker build --target dev -t wago-plc-mcp-server-dev .
-
-      - name: Run test suite
-        run: |
-          docker run --rm wago-plc-mcp-server-dev \
-            pytest tests/ -v --tb=short \
-            -m "not live and not mutate and not soak"
