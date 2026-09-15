@@ -6,6 +6,7 @@ from safety import (
     is_dangerous_method,
     parse_allowed_methods,
     parse_readonly_hosts,
+    writes_allowed,
 )
 
 
@@ -53,6 +54,23 @@ def test_compute_readonly_hosts_merges_env_and_fleet_file(monkeypatch, tmp_path)
     monkeypatch.setenv("WAGO_READONLY_HOSTS", "10.0.0.9")
     monkeypatch.setenv("WAGO_PLC_HOSTS_FILE", str(fleet))
     assert compute_readonly_hosts() == frozenset({"10.0.0.9", "192.168.42.118"})
+
+
+def test_writes_allowed_when_unset(monkeypatch):
+    monkeypatch.delenv("WAGO_ALLOW_WRITES", raising=False)
+    assert writes_allowed()
+
+
+@pytest.mark.parametrize("raw", ["true", "TRUE", " true "])
+def test_writes_allowed_only_on_explicit_true(monkeypatch, raw):
+    monkeypatch.setenv("WAGO_ALLOW_WRITES", raw)
+    assert writes_allowed()
+
+
+@pytest.mark.parametrize("raw", ["false", "", "0", "yes", "${user_config.allow_writes}"])
+def test_writes_frozen_for_anything_else(monkeypatch, raw):
+    monkeypatch.setenv("WAGO_ALLOW_WRITES", raw)
+    assert not writes_allowed()
 
 
 def test_compute_readonly_hosts_missing_file_degrades_to_env(monkeypatch):

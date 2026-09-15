@@ -61,6 +61,18 @@ def parse_readonly_hosts(raw: str | None) -> frozenset[str]:
     return _parse_csv_set(raw)
 
 
+def writes_allowed() -> bool:
+    """Fleet-wide write switch (WAGO_ALLOW_WRITES), checked alongside the per-PLC set.
+
+    Unset keeps today's behavior (writes allowed, per-PLC read-only still applies).
+    Any value other than "true" freezes every PLC: the .mcpb install form sets it from
+    an "Allow writes" checkbox that defaults off, so an empty or unsubstituted value
+    fails closed instead of opening writes.
+    """
+    raw = os.getenv("WAGO_ALLOW_WRITES")
+    return raw is None or raw.strip().lower() == "true"
+
+
 def compute_readonly_hosts() -> frozenset[str]:
     """Effective read-only host set: WAGO_READONLY_HOSTS env + fleet-file `# readonly` tags.
 

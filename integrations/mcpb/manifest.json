@@ -1,0 +1,83 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "wago-plc-mcp-server",
+  "display_name": "WAGO PLC",
+  "version": "2.3.0",
+  "description": "Read and monitor WAGO PLC parameters over the WDA REST API. Read-only unless you allow writes.",
+  "long_description": "Connects Claude Desktop to WAGO controllers (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network through the native WDA REST API over HTTPS.\n\n**Read-only by default.** Parameter writes, method calls and file uploads are refused until you tick *Allow writes and method calls*. Reboot, factory reset and firmware methods stay blocked even then.\n\nThis bundle is for a single user and a handful of PLCs. For a shared or production fleet, run the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
+  "author": {
+    "name": "Alexander Fugmann",
+    "url": "https://github.com/WagoAlex"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WagoAlex/wago-plc-mcp-server"
+  },
+  "homepage": "https://github.com/WagoAlex/wago-plc-mcp-server",
+  "documentation": "https://github.com/WagoAlex/wago-plc-mcp-server#readme",
+  "support": "https://github.com/WagoAlex/wago-plc-mcp-server/issues",
+  "license": "MPL-2.0",
+  "icon": "icon.png",
+  "keywords": ["wago", "plc", "industrial", "automation", "wda", "ot", "iot"],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "src/main.py"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "WAGO_PLC_HOSTS": "${user_config.plc_hosts}",
+        "DEFAULT_PLC_USERNAME": "${user_config.username}",
+        "DEFAULT_PLC_PASSWORD": "${user_config.password}",
+        "WAGO_TIMEOUT_SECONDS": "${user_config.timeout_seconds}",
+        "WAGO_ALLOW_WRITES": "${user_config.allow_writes}",
+        "AUDIT_LOG_FILE": "${HOME}/.wago-plc-mcp/audit.log",
+        "LOG_LEVEL": "WARNING"
+      }
+    }
+  },
+  "user_config": {
+    "plc_hosts": {
+      "type": "string",
+      "title": "PLC IP addresses",
+      "description": "Comma-separated IPs of your WAGO controllers, reachable from this computer. Example: 192.168.1.10,192.168.1.11",
+      "required": true
+    },
+    "username": {
+      "type": "string",
+      "title": "PLC username",
+      "description": "Web-based management (WBM) user on the controllers.",
+      "default": "admin",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "PLC password",
+      "description": "Password for that user, same on all listed PLCs. Stored in your OS keychain.",
+      "sensitive": true,
+      "required": true
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "title": "Request timeout (seconds)",
+      "description": "CC100 needs 45 or more; other controllers work with 15.",
+      "default": 45,
+      "min": 5,
+      "max": 300
+    },
+    "allow_writes": {
+      "type": "boolean",
+      "title": "Allow writes and method calls",
+      "description": "Off: every PLC is read-only. On: Claude can change parameters, run methods and upload files on the listed PLCs. Only enable for controllers you are allowed to change.",
+      "default": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  }
+}

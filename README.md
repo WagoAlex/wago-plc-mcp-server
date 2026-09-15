@@ -491,7 +491,7 @@ precedence over everything else; otherwise the server mode decides.
 
 | Condition | Read | `set_parameters` | Safe `invoke_method` | Dangerous `invoke_method` |
 |---|---|---|---|---|
-| **Read-only PLC** (`WAGO_READONLY_HOSTS` or fleet `# readonly`) - any mode | Allowed | **Refused** | **Refused** | **Refused** |
+| **Read-only PLC** (`WAGO_ALLOW_WRITES` set but not `true`, `WAGO_READONLY_HOSTS`, or fleet `# readonly`) - any mode | Allowed | **Refused** | **Refused** | **Refused** |
 | **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Denied** unless ID in `WAGO_ALLOW_METHODS` |
 | **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a PR YAML fragment (no direct write) | Returns a PR YAML fragment | Returns a PR YAML flagged `requires_human: CRITICAL`; `apply.py` refuses to run it until a human sets `approved_by` |
 
@@ -841,7 +841,8 @@ in code and **cannot be overridden by the agent**:
 
 | Gate | What it does | Configure |
 |------|--------------|-----------|
-| **Read-only PLCs** | Listed controllers reject *all* writes and method calls, in every mode | `WAGO_READONLY_HOSTS=ip,ip` or a `# readonly` tag per line in the fleet file |
+| **Read-only PLCs** | Listed controllers reject *all* writes, method calls and file uploads, in every mode | `WAGO_READONLY_HOSTS=ip,ip` or a `# readonly` tag per line in the fleet file |
+| **Fleet-wide write switch** | Freezes *every* PLC the same way. Unset keeps writes possible; any value other than `true` blocks them, so a missing or mistyped value fails closed. The Claude Desktop extension sets it from its "Allow writes" checkbox, off by default | `WAGO_ALLOW_WRITES=true` to allow, e.g. `false` to freeze all |
 | **Dangerous-method denylist** | Reboot / restart / factory-reset / firmware / format are denied in live mode unless explicitly allowlisted | `WAGO_ALLOW_METHODS=<exact-method-id>` to re-enable one |
 | **Human approval for dangerous ops** | In GitOps mode these become a PR flagged `requires_human: CRITICAL`; `apply.py` refuses to run until a human sets `approved_by` | set `approved_by` during PR review, or inject `WAGO_APPROVED_BY` from CI |
 
@@ -1145,7 +1146,8 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `MCP_API_KEY` | - | Bearer token for `/mcp`; auto-generated if absent |
 | `GITOPS_MODE` | `0` | `1` = intercept writes, return YAML fragments |
 | `WAGO_GITOPS_REPO` | `wago-plc-config` | Config repo name/path shown in the returned YAML's `next_step` - point this at a fork or a differently-named repo |
-| `WAGO_READONLY_HOSTS` | - | Comma-separated PLC IPs that refuse `set_parameters`/`invoke_method` in every mode |
+| `WAGO_READONLY_HOSTS` | - | Comma-separated PLC IPs that refuse `set_parameters`/`invoke_method`/file uploads in every mode |
+| `WAGO_ALLOW_WRITES` | - (writes allowed) | Fleet-wide switch: `true` allows writes; any other value (`false`, empty) makes **all** PLCs read-only |
 | `WAGO_ALLOW_METHODS` | - | Comma-separated exact method IDs to re-allow from the dangerous-method denylist in live mode |
 | `WAGO_TLS_CA` | - | WDA TLS: `false` (off), `true` (system CA), or path |
 | `MCP_TLS_CERT` | - | Path to TLS cert for MCP endpoint |
