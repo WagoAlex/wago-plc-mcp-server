@@ -1,5 +1,8 @@
 FROM python:3.14-slim AS base
 
+# MCP Registry ownership marker for the OCI package; must equal server.json "name"
+LABEL io.modelcontextprotocol.server.name="io.github.WagoAlex/wago-plc-mcp-server"
+
 WORKDIR /app
 
 # curl is required for the docker-compose healthcheck

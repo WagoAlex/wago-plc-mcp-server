@@ -39,6 +39,8 @@ jobs:
       contents: write        # push tag + release branch + create GitHub Release
       pull-requests: write   # open the version-bump PR against main
       security-events: write # upload SARIF if we extend with CVE scan here later
+    outputs:
+      version: ${{ steps.ver.outputs.value }}
 
     steps:
       - name: Checkout
@@ -114,3 +116,51 @@ jobs:
           name: sbom-${{ steps.ver.outputs.value }}-${{ github.sha }}
           path: sbom-${{ steps.ver.outputs.value }}.json
           retention-days: 90
+
+  # PyPI gets the same version as Docker Hub on every release, so `uvx
+  # wago-plc-mcp-server` never lags behind again (it sat at 2.1.1 while the image
+  # reached 2.3.0). Builds from the pushed tag, i.e. the version-bump commit.
+  #
+  # Required repository secret:
+  #   PYPI_API_TOKEN  - PyPI API token scoped to the wago-plc-mcp-server project
+  #
+  # Safe to re-run ("Re-run failed jobs"): PyPI ignores re-uploads of identical files.
+  pypi:
+    name: Publish to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0  # no floating major tag published; node24 runtime
+        with:
+          enable-cache: false
+
+      - name: Build
+        run: uv build
+
+      - name: Check built version matches release
+        run: |
+          ls dist/
+          test -f "dist/wago_plc_mcp_server-${{ needs.release.outputs.version }}-py3-none-any.whl"
+
+      - name: Smoke test wheel (stdio initialize)
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            | TRANSPORT=stdio WAGO_PLC_HOSTS='' AUDIT_LOG_FILE=/tmp/audit.log LOG_LEVEL=WARNING \
+              uvx --from dist/*.whl wago-plc-mcp-server \
+            | tee /tmp/init.json
+          grep -q '"version":"${{ needs.release.outputs.version }}"' /tmp/init.json
+
+      - name: Publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish --trusted-publishing never

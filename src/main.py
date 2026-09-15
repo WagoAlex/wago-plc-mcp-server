@@ -7,6 +7,7 @@ import base64
 import json
 import os
 from difflib import get_close_matches
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 
 import uvicorn
@@ -44,8 +45,14 @@ plc_manager = PLCManager(
     ssl_verify=resolve_tls_verify(),
 )
 
+try:
+    SERVER_VERSION = package_version("wago-plc-mcp-server")
+except PackageNotFoundError:  # bare checkout without `pip install -e .`
+    SERVER_VERSION = "0.0.0+local"
+
 mcp = MCPServer(
     name="wago-plc-mcp",
+    version=SERVER_VERSION,  # shown in initialize.serverInfo; registries and .mcpb display it
     instructions=(
         "WAGO PLC access via WDx REST API. "
         "Workflow: list_plcs → describe_plc → find_parameters/find_methods → "
