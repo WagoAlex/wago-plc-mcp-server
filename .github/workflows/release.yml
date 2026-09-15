@@ -261,3 +261,28 @@ jobs:
         run: |
           gh release upload "v${VERSION}" "integrations/mcpb/wago-plc-mcp-server-${VERSION}.mcpb" \
             --clobber --repo "${{ github.repository }}"
+
+  # Final gate: every public channel must serve this version, checked from the
+  # outside (PyPI, Docker Hub, MCP Registry, .mcpb asset, uvx initialize).
+  # Retries cover CDN/index lag; a miss fails the run red on release day.
+  verify:
+    name: Verify published channels
+    needs: [release, pypi, registry, mcpb]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0  # no floating major tag published; node24 runtime
+        with:
+          enable-cache: false
+
+      - name: Check every channel serves the release version
+        run: python3 scripts/verify_release.py "${{ needs.release.outputs.version }}"
