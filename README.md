@@ -49,10 +49,12 @@ regardless of persona.
 flowchart TB
     subgraph Clients["AI clients (any MCP client works)"]
         direction LR
-        CD("Claude Desktop<br/>(stdio, via wago_proxy.py)")
+        CD("Claude Desktop<br/>(direct HTTP)")
         CC("Claude Code<br/>(direct HTTP)")
         OC("OpenClaw<br/>(direct HTTP)")
     end
+    %% Legacy/offline path: wago_proxy.py bridges stdio to HTTP for Claude
+    %% Desktop clients too old to speak remote MCP directly - see Windows .exe
 
     CD & CC & OC -- "Bearer token" --> MCP
 
@@ -78,10 +80,26 @@ flowchart TB
         Pn("TP600")
     end
     %% PFC400 (750-8400) omitted from this diagram - not yet in hand, see Supported hardware
+
+    subgraph FW["fwupdate - separate tool, human-run only (v2.3.0)"]
+        direction LR
+        Op("Operator<br/>(maintenance window)") --> Az("Git-gated approval<br/>(policy committed + reviewed)")
+        Az --> Flash("Firmware flash<br/>over WDA REST")
+    end
+
+    Flash --> P1 & P2 & P3 & P4 & P5 & P6 & Pn
+    Flash -. shares the hash-chained audit log .-> Guard
 ```
 
 Demoed end to end with **16 PLCs** of mixed device class on a single rack.
 The parallel fan-out model has no architectural ceiling below **100+**.
+
+Firmware updates are deliberately **not** an MCP tool - the server refuses
+every firmware method so an agent can never flash a controller. `fwupdate/`
+is a separate container a person runs by hand, and it refuses to start
+without an approval already committed and reviewed in a git-tracked policy
+file. See [`fwupdate/README.md`](fwupdate/README.md) for the full
+authorization model.
 
 ---
 
@@ -498,6 +516,7 @@ the full tool/config reference.
 | Path | Best for | Requires |
 |---|---|---|
 | [Docker](#docker-recommended) | Plant server, shared multi-user fleet | Docker host on the OT network |
+| [Portainer](#portainer) | Docker host managed remotely through Portainer's UI | Portainer pointed at that Docker host |
 | [Windows .exe](#windows-exe) | OT engineer laptop, air-gapped Windows | Nothing - zero dependencies |
 | [uvx / PyPI](#uvx--pypi) | Developer machine, any OS | `uv` installed |
 | [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed |
@@ -537,6 +556,33 @@ WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt
 
 Fleet changes require editing the file and restarting the container. The
 audit log persists across restarts on the `./data` volume.
+
+---
+
+### Portainer
+
+Same image, deployed and managed from Portainer's UI instead of the CLI -
+useful when Portainer is remote from the Docker host and can't see its
+filesystem (no `env_file`, no Docker Secrets - see the comment block in the
+compose file for why).
+
+1. **Edit the volume path first.** [`docker-compose.portainer.yml`](docker-compose.portainer.yml)
+   bind-mounts `./data` as an *absolute* host path
+   (`/home/wago/Documents/mcp/wago-plc-mcp-server/data`) because Portainer
+   resolves relative paths against its own stack folder, not your checkout.
+   Change that path to match wherever this repo lives on the target Docker
+   host before deploying - otherwise the audit log and API key land in the
+   wrong place.
+2. **Portainer → Stacks → Add stack**, paste the (edited) compose file.
+3. **Environment variables** panel: fill in the values listed in the
+   compose file's header comment, or upload
+   [`portainer.env.example`](portainer.env.example) via *Load variables from
+   a .env file* and edit from there. `MCP_API_KEY` here replaces the Docker
+   Secret (`secrets/mcp_api_key.txt`) that `docker-compose.yml` uses - it
+   lives in Portainer's database instead of a file, which is a real
+   trade-off against the CRA-hardening secrets setup, not a drop-in
+   equivalent.
+4. Deploy the stack. Same `http://<host>:6042/mcp` endpoint as the CLI path.
 
 ---
 
@@ -1213,7 +1259,10 @@ echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
 - WAGO PLC with WDx/WDA REST API enabled (firmware build ≥ 28)
 - Network route from Docker host to PLC subnets
 
-For Claude Desktop proxy: Python 3.11+ and `fastmcp` on the client machine.
+Claude Desktop connects directly over HTTP (no proxy needed) unless you're
+using the [Windows .exe](#windows-exe) bundle or running `wago_proxy.py`
+directly for an older client - that path additionally needs Python 3.11+
+and `fastmcp` on the client machine.
 
 ---
 

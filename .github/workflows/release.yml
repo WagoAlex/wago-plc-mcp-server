@@ -8,8 +8,11 @@ name: Release
 #   DOCKERHUB_USERNAME  — Docker Hub account (wagoalex)
 #   DOCKERHUB_TOKEN     — Docker Hub access token (not your password)
 #
-# If main has branch protection, enable "Allow GitHub Actions to bypass required PRs"
-# under Settings → Branches → main, or route the release through a dedicated release branch.
+# The version-bump commit lands on main via a PR (see "Open version-bump PR"
+# below), not a direct push - a direct push to HEAD:main was silently rejected
+# by branch protection while the tag/image still went out, which is exactly
+# how v2.3.0 ended up tagged and on Docker Hub without ever reaching main
+# (fixed 2026-09-15). The tag itself still pushes straight to origin.
 
 on:
   workflow_dispatch:
@@ -33,7 +36,8 @@ jobs:
     name: Build · Push · Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # push version bump commit + tag + create GitHub Release
+      contents: write        # push tag + release branch + create GitHub Release
+      pull-requests: write   # open the version-bump PR against main
       security-events: write # upload SARIF if we extend with CVE scan here later
 
     steps:
@@ -74,10 +78,24 @@ jobs:
         id: ver
         run: echo "value=$(cat version.txt)" >> "$GITHUB_OUTPUT"
 
-      # Push the version-bump commit and the annotated tag.
-      # Uses the GITHUB_TOKEN credential that actions/checkout persisted.
-      - name: Push version commit and tag
-        run: git push origin HEAD:main --follow-tags
+      # Push just the tag straight to origin - tag refs aren't covered by
+      # branch protection, so this always lands regardless of main's rules.
+      - name: Push tag
+        run: git push origin "v${{ steps.ver.outputs.value }}"
+
+      # The version-bump commit goes to main through a PR instead of a direct
+      # push, so branch protection can't silently swallow it. Docker Hub and
+      # the tag are already live at this point either way.
+      - name: Open version-bump PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="release/v${{ steps.ver.outputs.value }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: release v${{ steps.ver.outputs.value }}" \
+            --body "Version bump for v${{ steps.ver.outputs.value }}. Docker image (\`wagoalex/wago-plc-mcp-server:${{ steps.ver.outputs.value }}\`) and the tag are already published - this only lands the version-bump commit on main."
 
       # Upload SBOM to the GitHub Release as a downloadable asset.
       # The SBOM file at repo root is produced by build.sh (image-based, CycloneDX JSON).
