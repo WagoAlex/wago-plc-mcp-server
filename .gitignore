@@ -82,7 +82,6 @@ src/*.egg-info/
 # local dev compose override
 docker-compose.dev.yml
 
-# tests: root-level test modules are tracked; scratch subdirs stay local
-/tests/*
-!/tests/__init__.py
-!/tests/test_*.py
+# tests: the whole suite is kept locally and never published (owner decision 2026-09-15).
+# Run it with the dev image and a bind mount, see Dockerfile dev target.
+/tests/

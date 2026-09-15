@@ -3,9 +3,10 @@
 > Status as of 2026-06-15.
 > Goal: prove the server runs smoothly with **all current WAGO WDA functions**
 > across **CC100, PFC200, PFC300, and Edge Controller**.
-> No automated suite exists yet — the "Done" entries below are manual,
-> single-device verifications. The strategy section optimizes toward a repeatable,
-> device-parametrized matrix.
+> The automated test suite described below exists but is kept locally and is not
+> published in this repository (since 2026-09-15); `tests/` paths refer to a local
+> checkout. The strategy section optimizes toward a repeatable, device-parametrized
+> matrix.
 
 ---
 
