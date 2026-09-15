@@ -51,7 +51,14 @@ KNOWN_PARAM_COUNTS: dict[str, int] = {
     "PFC200": 398,
     "PFC300": 393,
     "Edge": 394,
+    "WP400": 189,
+    "TP600": 410,
 }
+
+# 762 panel order-number series, as listed in README "Supported hardware".
+# Undocumented series stay unclassified rather than getting a wrong expected count.
+_WP400_ORDER_PREFIXES = ("0762-34",)
+_TP600_ORDER_PREFIXES = ("0762-42", "0762-43", "0762-52", "0762-53", "0762-62", "0762-63")
 
 
 def _infer_device_class(name: str, order_number: str = "") -> str:
@@ -59,7 +66,8 @@ def _infer_device_class(name: str, order_number: str = "") -> str:
 
     FW31 dropped the 'name' field; fall back to orderNumber prefix:
       0751-  → CC100 | 0750-82 → PFC200 | 0750-83 → PFC300 | 0750-84 → PFC400
-      | 0752- → Edge
+      | 0752- → Edge | 0762-34 → WP400
+      | 0762-42/43/52/53/62/63 → TP600
 
     PFC400 (750-8400) is not yet in the test rack — this mapping is unverified
     against real hardware. It's added so the unit registers under its own
@@ -78,8 +86,16 @@ def _infer_device_class(name: str, order_number: str = "") -> str:
         return "PFC200"
     if "EDGE" in n or n.startswith("EC"):
         return "Edge"
+    if "WP400" in n:
+        return "WP400"
+    if "TP600" in n:
+        return "TP600"
     # Fallback: orderNumber prefix (FW31+)
     o = order_number
+    if o.startswith(_WP400_ORDER_PREFIXES):
+        return "WP400"
+    if o.startswith(_TP600_ORDER_PREFIXES):
+        return "TP600"
     if o.startswith("0751-"):
         return "CC100"
     if o.startswith("0752-"):
