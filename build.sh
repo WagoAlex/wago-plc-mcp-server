@@ -4,7 +4,7 @@
 # Usage:
 #   ./build.sh [--patch|--minor|--major] [--no-cache] [--start] [--push] [--release] [--ci]
 #
-#   --patch / --minor / --major  bump version in version.txt + pyproject.toml
+#   --patch / --minor / --major  bump version in version.txt, pyproject.toml, server.json, .mcpb manifest
 #   --no-cache                   pass --no-cache to docker build
 #   --start                      replace the running wmcp container after build
 #   --push                       push image to Docker Hub
@@ -62,6 +62,24 @@ if [[ -n "$BUMP" ]]; then
   VERSION="${V_MAJOR}.${V_MINOR}.${V_PATCH}"
   echo "$VERSION" > version.txt
   sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+  # MCP Registry server.json and the .mcpb manifest ship the same version
+  # (scripts/check_versions.py fails CI when they drift).
+  python3 - "$VERSION" <<'PY'
+import json, re, sys
+version = sys.argv[1]
+for path in ("server.json", "integrations/mcpb/manifest.json"):
+    with open(path) as f:
+        data = json.load(f)
+    data["version"] = version
+    for pkg in data.get("packages", []):
+        if pkg["registryType"] == "oci":
+            pkg["identifier"] = re.sub(r":[^:/]+$", f":{version}", pkg["identifier"])
+        else:
+            pkg["version"] = version
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+PY
   echo "▶ bumped to ${VERSION}"
 fi
 
@@ -115,7 +133,7 @@ fi
 # ── git release (commit + tag) ────────────────────────────────────────────────
 if $DO_RELEASE; then
   if [[ -n "$BUMP" ]]; then
-    git add version.txt pyproject.toml
+    git add version.txt pyproject.toml server.json integrations/mcpb/manifest.json
     git commit -m "chore: release v${VERSION}"
   fi
 

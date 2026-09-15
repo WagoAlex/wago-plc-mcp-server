@@ -164,3 +164,65 @@ jobs:
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: uv publish --trusted-publishing never
+
+  # MCP Registry entry io.github.WagoAlex/wago-plc-mcp-server. Runs after PyPI and the
+  # Docker push because the registry checks that both packages in server.json exist
+  # and carry the ownership marker (README mcp-name / Dockerfile label).
+  # Login is GitHub OIDC for the repo owner's namespace - no stored secret.
+  registry:
+    name: Publish to MCP Registry
+    needs: [release, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # mcp-publisher login github-oidc
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          persist-credentials: false
+
+      - name: Check version sources agree
+        run: python3 scripts/check_versions.py
+
+      - name: Install mcp-publisher
+        run: |
+          curl -sfL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+
+      # Re-run safe: a version that is already listed counts as done.
+      - name: Publish
+        run: |
+          ./mcp-publisher login github-oidc
+          if ! ./mcp-publisher publish 2>&1 | tee /tmp/publish.log; then
+            grep -qi "already exists" /tmp/publish.log || exit 1
+            echo "version already listed - nothing to do"
+          fi
+
+  # Claude Desktop extension, attached to the GitHub Release created above.
+  mcpb:
+    name: Attach .mcpb to GitHub Release
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # upload release asset
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          persist-credentials: false
+
+      - name: Pack bundle
+        run: integrations/mcpb/pack.sh
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          gh release upload "v${VERSION}" "integrations/mcpb/wago-plc-mcp-server-${VERSION}.mcpb" \
+            --clobber --repo "${{ github.repository }}"

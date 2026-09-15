@@ -1,0 +1,135 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.WagoAlex/wago-plc-mcp-server",
+  "title": "WAGO PLC",
+  "description": "Read and monitor WAGO PLC parameters over the WDA REST API. Read-only unless writes are allowed.",
+  "version": "2.3.0",
+  "websiteUrl": "https://github.com/WagoAlex/wago-plc-mcp-server",
+  "repository": {
+    "url": "https://github.com/WagoAlex/wago-plc-mcp-server",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "wago-plc-mcp-server",
+      "version": "2.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TRANSPORT",
+          "description": "MCP transport. Fixed to stdio for this package.",
+          "value": "stdio",
+          "isRequired": true
+        },
+        {
+          "name": "WAGO_PLC_HOSTS",
+          "description": "Comma-separated IPs of the WAGO PLCs, reachable from this machine",
+          "placeholder": "192.168.1.10,192.168.1.11",
+          "isRequired": true
+        },
+        {
+          "name": "DEFAULT_PLC_USERNAME",
+          "description": "WBM username on the PLCs",
+          "default": "admin",
+          "isRequired": true
+        },
+        {
+          "name": "DEFAULT_PLC_PASSWORD",
+          "description": "WBM password, same on all listed PLCs",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "WAGO_TIMEOUT_SECONDS",
+          "description": "WDA request timeout. CC100 needs 45 or more, other controllers work with 15",
+          "default": "45",
+          "format": "number"
+        },
+        {
+          "name": "WAGO_ALLOW_WRITES",
+          "description": "true lets the agent change parameters, run methods and upload files. Anything else keeps every PLC read-only",
+          "default": "false",
+          "choices": [
+            "false",
+            "true"
+          ],
+          "format": "boolean",
+          "isRequired": true
+        },
+        {
+          "name": "AUDIT_LOG_FILE",
+          "description": "Optional path for the tamper-evident audit log of writes and refusals",
+          "format": "filepath"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "docker.io/wagoalex/wago-plc-mcp-server:2.3.0",
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--network",
+          "value": "host",
+          "description": "PLC subnets are routed via the host network"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TRANSPORT",
+          "description": "MCP transport. Fixed to stdio for this package.",
+          "value": "stdio",
+          "isRequired": true
+        },
+        {
+          "name": "WAGO_PLC_HOSTS",
+          "description": "Comma-separated IPs of the WAGO PLCs, reachable from this machine",
+          "placeholder": "192.168.1.10,192.168.1.11",
+          "isRequired": true
+        },
+        {
+          "name": "DEFAULT_PLC_USERNAME",
+          "description": "WBM username on the PLCs",
+          "default": "admin",
+          "isRequired": true
+        },
+        {
+          "name": "DEFAULT_PLC_PASSWORD",
+          "description": "WBM password, same on all listed PLCs",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "WAGO_TIMEOUT_SECONDS",
+          "description": "WDA request timeout. CC100 needs 45 or more, other controllers work with 15",
+          "default": "45",
+          "format": "number"
+        },
+        {
+          "name": "WAGO_ALLOW_WRITES",
+          "description": "true lets the agent change parameters, run methods and upload files. Anything else keeps every PLC read-only",
+          "default": "false",
+          "choices": [
+            "false",
+            "true"
+          ],
+          "format": "boolean",
+          "isRequired": true
+        },
+        {
+          "name": "AUDIT_LOG_FILE",
+          "description": "Optional path for the tamper-evident audit log of writes and refusals",
+          "format": "filepath"
+        }
+      ]
+    }
+  ]
+}
