@@ -1,0 +1,63 @@
+# ─────────────────── wago-plc-mcp: Portainer stack (Docker Hub image) ───────────────────
+# Deploy: Portainer → Stacks → Add stack → paste this file, then fill in the
+# "Environment variables" panel (see list below) before deploying.
+#
+# Why no env_file / Docker secrets here: Portainer runs on a different machine than
+# this Docker host and reaches it over the network (no Edge Agent) - env_file and
+# `secrets: file:` are resolved by Portainer's OWN filesystem before the container is
+# even created, so absolute paths on this host are invisible to it. Bind-mounted
+# volumes below are fine because those are resolved by the Docker daemon ON THIS HOST,
+# not by Portainer.
+#
+# Set these in Portainer's stack "Environment variables" before deploying
+# (values live in Portainer's DB instead of Docker file-secrets - weaker at rest than
+# the CRA-hardening secrets setup in docker-compose.yml, see README "Portainer"):
+#   WAGO_PLC_HOSTS                  CSV of PLC IPs (or use WAGO_PLC_HOSTS_FILE below)
+#   DEFAULT_PLC_USERNAME
+#   DEFAULT_PLC_PASSWORD            shared fallback password
+#   MCP_API_KEY                     bearer key for /mcp (replaces Docker secret mcp_api_key)
+#   PLC_PASSWORDS_192_168_2_85      per-PLC override for the CC100-IEC62443 unit
+#                                   (documented backward-compat env fallback in src/config.py)
+#   HOST, PORT, TRANSPORT, WAGO_TIMEOUT_SECONDS, WAGO_PAGE_LIMIT,
+#   WAGO_MAX_CONCURRENT_REGISTRATIONS, LOG_LEVEL, LOG_FILE
+
+services:
+  wago-plc-mcp-server:
+    image: wagoalex/wago-plc-mcp-server:latest
+    container_name: wmcp
+    environment:
+      - WAGO_PLC_HOSTS
+      # - WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt   # alt to WAGO_PLC_HOSTS for large fleets
+      - DEFAULT_PLC_USERNAME
+      - DEFAULT_PLC_PASSWORD
+      - MCP_API_KEY
+      - PLC_PASSWORDS_192_168_2_85
+      # - PLC_PASSWORDS_192_168_2_17
+      - HOST
+      - PORT
+      - TRANSPORT
+      - WAGO_TIMEOUT_SECONDS
+      - WAGO_PAGE_LIMIT
+      - WAGO_MAX_CONCURRENT_REGISTRATIONS
+      - LOG_LEVEL
+      - LOG_FILE
+      - AUDIT_LOG_FILE=/app/data/audit.log
+    restart: unless-stopped
+
+    volumes:
+      - /home/wago/Documents/mcp/wago-plc-mcp-server/data:/app/data
+
+    network_mode: host  # PLC subnets are routed to the host; keep this unless bridging.
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 2 http://localhost:6042/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
