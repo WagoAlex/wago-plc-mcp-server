@@ -22,7 +22,7 @@ from enricher import enrich_parameter, enrich_method_definition, parse_watchlist
 from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
 from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify
-from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods
+from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods, writes_allowed
 
 # ───────────────────────── Bootstrap ─────────────────────────
 
@@ -74,13 +74,21 @@ _GITOPS_REPO: str = os.getenv("WAGO_GITOPS_REPO", "wago-plc-config")
 # WAGO_READONLY_HOSTS env with any `# readonly`-tagged lines in the fleet file.
 _ALLOWED_METHODS: frozenset[str] = parse_allowed_methods(os.getenv("WAGO_ALLOW_METHODS"))
 _READONLY_HOSTS: frozenset[str] = compute_readonly_hosts()
+_WRITES_ALLOWED: bool = writes_allowed()
 
 # Make a deliberately-opened dangerous path loud at startup.
 for _m in _ALLOWED_METHODS:
     if is_dangerous_method(_m):
         logger.warning(f"[safety] WAGO_ALLOW_METHODS re-enables DANGEROUS method for live use: {_m}")
-if _READONLY_HOSTS:
+if not _WRITES_ALLOWED:
+    logger.info("[safety] WAGO_ALLOW_WRITES is not 'true': ALL PLCs are read-only (writes/invokes refused)")
+elif _READONLY_HOSTS:
     logger.info(f"[safety] Read-only PLCs (writes/invokes refused): {sorted(_READONLY_HOSTS)}")
+
+
+def _is_readonly(plc_ip: str) -> bool:
+    """Single write gate: fleet-wide WAGO_ALLOW_WRITES switch or per-PLC read-only set."""
+    return not _WRITES_ALLOWED or plc_ip in _READONLY_HOSTS
 
 
 # ───────────────────────── Helpers ─────────────────────────
@@ -436,9 +444,9 @@ async def set_parameters(
     if err:
         return err
 
-    if plc_ip in _READONLY_HOSTS:
+    if _is_readonly(plc_ip):
         _audit_log("set_parameters", plc_ip, {"params": parameters}, "refused: read-only host")
-        return {"error": f"PLC {plc_ip} is read-only (WAGO_READONLY_HOSTS / fleet.txt '# readonly'); writes refused."}
+        return {"error": f"PLC {plc_ip} is read-only (WAGO_ALLOW_WRITES / WAGO_READONLY_HOSTS / fleet.txt '# readonly'); writes refused."}
 
     unknown = [p.get("id") for p in parameters if p.get("id") not in plc.parameters]
     if unknown:
@@ -583,9 +591,9 @@ async def invoke_method(
             + (f". Did you mean: {', '.join(matches)}?" if matches else "")
         }
 
-    if plc_ip in _READONLY_HOSTS:
+    if _is_readonly(plc_ip):
         _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "refused: read-only host")
-        return {"error": f"PLC {plc_ip} is read-only (WAGO_READONLY_HOSTS / fleet.txt '# readonly'); method invocation refused."}
+        return {"error": f"PLC {plc_ip} is read-only (WAGO_ALLOW_WRITES / WAGO_READONLY_HOSTS / fleet.txt '# readonly'); method invocation refused."}
 
     # Gate 1: a dangerous method (reboot/reset/firmware) is never executed
     # autonomously. In GitOps mode it may be *proposed* for human PR approval;
@@ -776,6 +784,8 @@ async def create_file(ctx: Context, plc_ip: str, context_parameter_id: str) -> d
     plc, err = _require_plc(plc_ip)
     if err:
         return err
+    if _is_readonly(plc_ip):
+        return {"error": f"PLC {plc_ip} is read-only; file allocation refused."}
     if context_parameter_id not in plc.parameters:
         return {"error": f"Unknown parameter '{context_parameter_id}'"}
     try:
@@ -793,7 +803,7 @@ async def upload_file(
     plc, err = _require_plc(plc_ip)
     if err:
         return err
-    if plc_ip in _READONLY_HOSTS:
+    if _is_readonly(plc_ip):
         return {"error": f"PLC {plc_ip} is read-only; file upload refused."}
     try:
         content = base64.b64decode(content_base64)
@@ -875,7 +885,7 @@ def wago_assistant(query: str) -> list[base.Message]:
         "- For invoke_method: create ops/<id>.yaml with the returned ops_yaml (one-shot, deleted after CI applies it).",
         "",
         "**Safety gates (cannot be bypassed by an agent):**",
-        "- Read-only PLCs (WAGO_READONLY_HOSTS / fleet '# readonly') refuse all writes/invokes in every mode.",
+        "- Read-only PLCs (WAGO_ALLOW_WRITES not 'true' / WAGO_READONLY_HOSTS / fleet '# readonly') refuse all writes/invokes in every mode.",
         "- Dangerous methods (reboot/restart/factoryreset/firmware/format) are NEVER run autonomously.",
         "  Live mode: denied unless allowlisted. GitOps mode: proposed with `requires_human: CRITICAL` —",
         "  a human must set `approved_by` in the ops file; do NOT fill it yourself.",
