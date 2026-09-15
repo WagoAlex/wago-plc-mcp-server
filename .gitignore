@@ -13,7 +13,6 @@ venv/
 dist/
 build/
 *.egg-info/
-wago_proxy.py
 
 # uv lockfile (optional — commit if you want reproducible builds)
 # uv.lock
