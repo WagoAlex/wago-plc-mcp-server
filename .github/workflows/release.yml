@@ -5,14 +5,21 @@ name: Release
 # Local builds: ./build.sh --patch (no push) or ./build.sh --patch --release (push + tag).
 #
 # Required repository secrets:
-#   DOCKERHUB_USERNAME  — Docker Hub account (wagoalex)
-#   DOCKERHUB_TOKEN     — Docker Hub access token (not your password)
+#   DOCKERHUB_USERNAME  - Docker Hub account (wagoalex)
+#   DOCKERHUB_TOKEN     - Docker Hub access token (not your password)
+#   PYPI_API_TOKEN      - PyPI API token scoped to the wago-plc-mcp-server project
 #
 # The version-bump commit lands on main via a PR (see "Open version-bump PR"
 # below), not a direct push - a direct push to HEAD:main was silently rejected
 # by branch protection while the tag/image still went out, which is exactly
 # how v2.3.0 ended up tagged and on Docker Hub without ever reaching main
 # (fixed 2026-09-15). The tag itself still pushes straight to origin.
+#
+# Resuming a half-finished release: if a run already pushed the Docker image and
+# the tag but failed before the remaining channels, run again with
+# `resume_version` set (e.g. 2.3.1). That skips bump/build/push/tag and publishes
+# the GitHub Release (SBOM regenerated from the pushed image), PyPI, the MCP
+# Registry and the .mcpb from the existing tag. `bump` is ignored in that mode.
 
 on:
   workflow_dispatch:
@@ -30,6 +37,11 @@ on:
         description: Build without Docker layer cache
         type: boolean
         default: false
+      resume_version:
+        description: Resume an already tagged release (e.g. 2.3.1) - skips bump/build/push
+        required: false
+        type: string
+        default: ""
 
 jobs:
   release:
@@ -57,6 +69,7 @@ jobs:
       # which GitHub forced to Node.js 24 on 2026-06-16, breaking secret injection.
       # Using plain shell commands until upstream actions ship Node.js 24 builds.
       - name: Set up Docker Buildx
+        if: inputs.resume_version == ''
         run: |
           docker buildx create --use --name ci-builder
           docker buildx inspect --bootstrap
@@ -70,37 +83,42 @@ jobs:
         uses: anchore/sbom-action/download-syft@v0
 
       - name: Run build.sh
+        if: inputs.resume_version == ''
         run: |
           chmod +x build.sh
           FLAGS="--${{ inputs.bump }} --release --ci"
           [[ "${{ inputs.no_cache }}" == "true" ]] && FLAGS="$FLAGS --no-cache"
           ./build.sh $FLAGS
 
-      - name: Read bumped version
+      - name: Check out existing release tag
+        if: inputs.resume_version != ''
+        env:
+          VERSION: ${{ inputs.resume_version }}
+        run: |
+          git checkout "v${VERSION}"
+          test "$(cat version.txt)" = "${VERSION}" \
+            || { echo "::error::version.txt at v${VERSION} is $(cat version.txt)"; exit 1; }
+
+      - name: Read release version
         id: ver
         run: echo "value=$(cat version.txt)" >> "$GITHUB_OUTPUT"
 
       # Push just the tag straight to origin - tag refs aren't covered by
       # branch protection, so this always lands regardless of main's rules.
       - name: Push tag
+        if: inputs.resume_version == ''
         run: git push origin "v${{ steps.ver.outputs.value }}"
 
-      # The version-bump commit goes to main through a PR instead of a direct
-      # push, so branch protection can't silently swallow it. Docker Hub and
-      # the tag are already live at this point either way.
-      - name: Open version-bump PR
+      # build.sh wrote the SBOM on a normal run. On resume, rebuild it from the
+      # image that is already on Docker Hub (fails if that image was never pushed).
+      - name: Regenerate SBOM from pushed image
+        if: inputs.resume_version != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCH="release/v${{ steps.ver.outputs.value }}"
-          git checkout -b "$BRANCH"
-          git push origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" \
-            --title "chore: release v${{ steps.ver.outputs.value }}" \
-            --body "Version bump for v${{ steps.ver.outputs.value }}. Docker image (\`wagoalex/wago-plc-mcp-server:${{ steps.ver.outputs.value }}\`) and the tag are already published - this only lands the version-bump commit on main."
+          VERSION: ${{ steps.ver.outputs.value }}
+        run: syft "docker.io/wagoalex/wago-plc-mcp-server:${VERSION}" -o cyclonedx-json="sbom-${VERSION}.json"
 
       # Upload SBOM to the GitHub Release as a downloadable asset.
-      # The SBOM file at repo root is produced by build.sh (image-based, CycloneDX JSON).
+      # The SBOM file at repo root is image-based CycloneDX JSON.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -117,12 +135,27 @@ jobs:
           path: sbom-${{ steps.ver.outputs.value }}.json
           retention-days: 90
 
+      # The version-bump commit goes to main through a PR instead of a direct
+      # push, so branch protection can't silently swallow it. Runs last and does
+      # not fail the release: the image and tag are public by now, and PyPI,
+      # the MCP Registry and the .mcpb must still follow (v2.3.1 stalled here
+      # when Actions was not allowed to create PRs). Open the PR by hand if it warns.
+      - name: Open version-bump PR
+        if: inputs.resume_version == ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="release/v${{ steps.ver.outputs.value }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: release v${{ steps.ver.outputs.value }}" \
+            --body "Version bump for v${{ steps.ver.outputs.value }}. Docker image (\`wagoalex/wago-plc-mcp-server:${{ steps.ver.outputs.value }}\`) and the tag are already published - this only lands the version-bump commit on main."
+
   # PyPI gets the same version as Docker Hub on every release, so `uvx
   # wago-plc-mcp-server` never lags behind again (it sat at 2.1.1 while the image
   # reached 2.3.0). Builds from the pushed tag, i.e. the version-bump commit.
-  #
-  # Required repository secret:
-  #   PYPI_API_TOKEN  - PyPI API token scoped to the wago-plc-mcp-server project
   #
   # Safe to re-run ("Re-run failed jobs"): PyPI ignores re-uploads of identical files.
   pypi:
@@ -193,8 +226,10 @@ jobs:
             | tar xz mcp-publisher
 
       # Re-run safe: a version that is already listed counts as done.
+      # pipefail: without it the pipe returns tee's status and a failed publish passes.
       - name: Publish
         run: |
+          set -o pipefail
           ./mcp-publisher login github-oidc
           if ! ./mcp-publisher publish 2>&1 | tee /tmp/publish.log; then
             grep -qi "already exists" /tmp/publish.log || exit 1
