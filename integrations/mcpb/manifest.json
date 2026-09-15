@@ -19,13 +19,26 @@
   "support": "https://github.com/WagoAlex/wago-plc-mcp-server/issues",
   "license": "MPL-2.0",
   "icon": "icon.png",
-  "keywords": ["wago", "plc", "industrial", "automation", "wda", "ot", "iot"],
+  "keywords": [
+    "wago",
+    "plc",
+    "industrial",
+    "automation",
+    "wda",
+    "ot",
+    "iot"
+  ],
   "server": {
     "type": "uv",
     "entry_point": "src/main.py",
     "mcp_config": {
       "command": "uv",
-      "args": ["run", "--directory", "${__dirname}", "src/main.py"],
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "src/main.py"
+      ],
       "env": {
         "TRANSPORT": "stdio",
         "WAGO_PLC_HOSTS": "${user_config.plc_hosts}",
@@ -75,7 +88,11 @@
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "python": ">=3.11"
     }
