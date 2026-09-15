@@ -12,7 +12,7 @@ _CRA Article 28 — required before placing the product on the EU market._
 | **Product description** | MCP server bridging WAGO PLCs to LLM agents via WDA/WDx REST API |
 | **Version range** | 2.x (all patch releases) |
 | **Docker image** | `wagoalex/wago-plc-mcp-server` |
-| **Source repository** | https://github.com/AlexanderFugmann/wago-plc-mcp-server |
+| **Source repository** | https://github.com/WagoAlex/wago-plc-mcp-server |
 | **Product category** | Software — network-connected product with digital elements (CRA Article 3(1)) |
 
 ---
@@ -22,7 +22,7 @@ _CRA Article 28 — required before placing the product on the EU market._
 | Field | Value |
 |-------|-------|
 | **Name** | Alexander Fugmann |
-| **Email** | alexevgenichernich@gmail.com |
+| **Email** | alexander.fugmann@wago.com |
 | **Country** | EU |
 
 ---

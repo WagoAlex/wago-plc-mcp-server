@@ -3,6 +3,7 @@
 <!-- mcp-name: io.github.WagoAlex/wago-plc-mcp-server -->
 
 [![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
+[![PyPI](https://img.shields.io/pypi/v/wago-plc-mcp-server?color=6EC800)](https://pypi.org/project/wago-plc-mcp-server/)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-29-1F2837.svg)](#tool-reference)
 [![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#supported-hardware)
@@ -17,7 +18,7 @@
 
 | I am a... | I want to... | Start here |
 |-----------|-------------|------------|
-| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) → [What can I ask it?](#what-can-i-ask-it) |
+| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) → [What can I ask it?](#what-can-i-ask-it), or the one-file [Claude Desktop extension](#claude-desktop-extension-mcpb) |
 | **Automation / OT engineer** | Understand what this does to my PLCs and whether it's safe | **Part 2** → [What this does and doesn't do](#what-this-does-and-doesnt-do) |
 | **Software / DevOps engineer** | Deploy this in production with GitOps, TLS, and audit logging | **Part 3** → [Production deployment](#production-deployment) → [GitOps write-gate](#gitops-write-gate) |
 
@@ -519,6 +520,8 @@ the full tool/config reference.
 |---|---|---|
 | [Docker](#docker-recommended) | Plant server, shared multi-user fleet | Docker host on the OT network |
 | [Portainer](#portainer) | Docker host managed remotely through Portainer's UI | Portainer pointed at that Docker host |
+| [Claude Desktop extension](#claude-desktop-extension-mcpb) | One engineer, a handful of PLCs, no Docker | Claude Desktop |
+| [MCP Registry](#mcp-registry) | Clients that install servers from the official registry | `uv` or Docker |
 | [Windows .exe](#windows-exe) | OT engineer laptop, air-gapped Windows | Nothing - zero dependencies |
 | [uvx / PyPI](#uvx--pypi) | Developer machine, any OS | `uv` installed |
 | [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed |
@@ -617,6 +620,45 @@ deploy\windows\setup.bat        # configure .env and get the Claude Desktop JSON
 
 ---
 
+### Claude Desktop extension (.mcpb)
+
+<img src="docs/media/wago-plc-illustration.png" alt="WAGO controller illustration" width="320" align="right">
+
+One file, no Docker and no Python install: Claude Desktop runs the server
+itself. Meant for one engineer and a handful of controllers; use
+[Docker](#docker-recommended) for a shared or production fleet.
+
+1. Download `wago-plc-mcp-server-<version>.mcpb` from the
+   [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
+2. Open it with Claude Desktop: double-click the file, or drag it onto the
+   Claude Desktop window.
+3. Fill in the install form: PLC IP addresses, username, password and request
+   timeout. Claude Desktop keeps the password in its secure storage.
+4. Leave **Allow writes and method calls** unticked unless Claude should change
+   these controllers. Unticked, every PLC is read-only: parameter writes,
+   method calls and file uploads are refused and logged.
+
+Writes and refusals are recorded in `~/.wago-plc-mcp/audit.log`. Reboot,
+factory reset and firmware methods stay blocked even with writes allowed.
+
+<br clear="right">
+
+---
+
+### MCP Registry
+
+Listed in the official [MCP Registry](https://registry.modelcontextprotocol.io)
+as `io.github.WagoAlex/wago-plc-mcp-server`. Clients that install servers from
+the registry offer two packages. Both ask for the PLC IPs and password, and for
+`WAGO_ALLOW_WRITES`, which defaults to `false` (every PLC read-only).
+
+| Package | Runs as | Needs |
+|---|---|---|
+| PyPI `wago-plc-mcp-server` | `uvx wago-plc-mcp-server` over stdio | [`uv`](https://docs.astral.sh/uv/getting-started/installation/) |
+| Docker `wagoalex/wago-plc-mcp-server` | `docker run -i --network host ...` over stdio | Docker on a machine that reaches the PLCs |
+
+---
+
 ### uvx / PyPI
 
 Runs the full server locally in stdio mode - no Docker, no proxy, no
@@ -647,6 +689,9 @@ connect, adds a few seconds).
 ```
 
 Prefer Docker for fleets > 20 PLCs to avoid per-session re-registration.
+
+To keep every PLC read-only, add `"WAGO_ALLOW_WRITES": "false"` to `env`
+(see [Safety gates](#safety-gates---guarding-against-a-rogue-agent)).
 
 ---
 
