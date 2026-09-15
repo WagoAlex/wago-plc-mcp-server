@@ -66,8 +66,11 @@ docs/.obsidian/
 # Source video recordings — GIFs are committed instead
 docs/media/*.mp4
 
-# Connector/integration sketches — local only until ready to publish
-/integrations/
+# Connector/integration sketches - local only until ready to publish.
+# Published artifacts (the .mcpb bundle source) are tracked.
+/integrations/*
+!/integrations/mcpb/
+/integrations/mcpb/*.mcpb
 
 claude_desktop_config.json
 .firecrawl/

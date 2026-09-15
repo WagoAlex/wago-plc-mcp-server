@@ -879,6 +879,7 @@ def wago_assistant(query: str) -> list[base.Message]:
 # ───────────────────────── Entry point ─────────────────────────
 
 async def main() -> None:
+    global _AGENT_ID
     check_security_profile()  # fail closed before touching any PLC in plaintext
     _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
 
@@ -895,11 +896,22 @@ async def main() -> None:
     port = os.getenv("PORT", "6042")
     transport = os.getenv("TRANSPORT", "streamable-http").strip().lower()
 
+    # stdio has no HTTP endpoint, so no bearer key or TLS. It must run before
+    # resolve_api_key(): the key banner prints to stdout, which is the JSON-RPC
+    # channel here. Awaited directly because mcp.run() starts a second event loop.
+    if transport == "stdio":
+        _AGENT_ID = "stdio"
+        logger.info("MCP server transport: stdio (uvx / Claude Desktop direct mode)")
+        try:
+            await mcp.run_stdio_async()
+        finally:
+            await plc_manager.close_all()
+        return
+
     api_key, is_new_key = resolve_api_key()
     if is_new_key:
         print_key_banner(api_key)
 
-    global _AGENT_ID
     _AGENT_ID = "key-" + api_key[:8]
 
     tls_cert = os.getenv("MCP_TLS_CERT") or None
@@ -907,11 +919,6 @@ async def main() -> None:
     tls_password = os.getenv("MCP_TLS_KEY_PASSWORD") or None
     tls_enabled = bool(tls_cert and tls_key)
     scheme = "https" if tls_enabled else "http"
-
-    if transport == "stdio":
-        logger.info("MCP server transport: stdio (uvx / Claude Desktop direct mode)")
-        mcp.run(transport="stdio")
-        return
 
     if transport == "sse":
         endpoint = f"{scheme}://{host}:{port}/sse"

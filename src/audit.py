@@ -11,6 +11,7 @@ import logging
 import logging.handlers
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -113,7 +114,8 @@ def _syslog_handler() -> logging.Handler | None:
         _SYSLOG_HANDLER = handler
         return handler
     except Exception as e:
-        print(f"[audit] WARNING: syslog target {target!r} unusable: {e} - continuing without it")
+        # stderr: in stdio transport stdout is the JSON-RPC channel
+        print(f"[audit] WARNING: syslog target {target!r} unusable: {e} - continuing without it", file=sys.stderr)
         _SYSLOG_FAILED = True
         return None
 
