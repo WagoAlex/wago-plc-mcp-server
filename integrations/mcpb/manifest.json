@@ -5,7 +5,7 @@
   "display_name": "WAGO PLC",
   "version": "2.4.0",
   "description": "Read and monitor WAGO PLC parameters over the WDA REST API. The server blocks writes until you allow them.",
-  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you turn on *Allow writes and method calls*. The server always blocks reboot, factory reset, and firmware methods.\n\nThis bundle works for one user and a few PLCs. For a shared or production fleet, use the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
+  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you turn on *Allow writes and method calls*. The server always blocks reboot, factory reset, and firmware methods.\n\n**GitOps mode.** Turn on *GitOps mode* to get a YAML file for a reviewed pull request instead of a direct write.\n\nThis bundle works for one user and a few PLCs. For a shared or production fleet, use the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
   "author": {
     "name": "Alexander Fugmann",
     "email": "alexander.fugmann@wago.com",
@@ -51,6 +51,8 @@
         "WAGO_TIMEOUT_SECONDS": "${user_config.timeout_seconds}",
         "WAGO_ALLOW_WRITES": "${user_config.allow_writes}",
         "WAGO_READONLY_HOSTS": "${user_config.readonly_hosts}",
+        "GITOPS_MODE": "${user_config.gitops_mode}",
+        "WAGO_GITOPS_REPO": "${user_config.gitops_repo}",
         "WAGO_PAGE_LIMIT": "${user_config.page_limit}",
         "WAGO_MAX_CONCURRENT_REGISTRATIONS": "${user_config.max_concurrent_registrations}",
         "WAGO_MAX_CONCURRENT_READS": "${user_config.max_concurrent_reads}",
@@ -121,6 +123,19 @@
       "title": "Force read-only on these PLCs (optional)",
       "description": "Comma-separated list of PLC IP addresses. These PLCs stay read-only even when 'Allow writes and method calls' is on.",
       "default": "",
+      "required": false
+    },
+    "gitops_mode": {
+      "type": "boolean",
+      "title": "GitOps mode (propose changes for review)",
+      "description": "When on, the server does not write to the PLCs. Parameter writes and method calls return a YAML file for a pull request in your config repository. A person reviews the pull request, and CI applies it. This setting has an effect only when 'Allow writes and method calls' is on.",
+      "default": false
+    },
+    "gitops_repo": {
+      "type": "string",
+      "title": "GitOps config repository (optional)",
+      "description": "Name of the repository that receives the YAML files. The server shows this name in the next step of each YAML file. Leave blank to use wago-plc-config.",
+      "default": "wago-plc-config",
       "required": false
     },
     "page_limit": {
