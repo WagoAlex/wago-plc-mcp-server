@@ -197,6 +197,11 @@ The server merges the IP field and the IP file. You can use both.
 **Writes:** Keep **Allow writes and method calls** off if Claude must only read the PLCs.
 When this setting is off, the server refuses and logs all parameter writes, method calls, and file uploads.
 
+**GitOps mode:** Turn on **GitOps mode** if a person must review each change before it goes to a PLC.
+Then Claude does not write to the PLC. It returns a YAML file for a pull request in your config repository.
+This setting has an effect only when **Allow writes and method calls** is on.
+For more information, see [GitOps write-gate](#gitops-write-gate).
+
 ### Step 3 - Ask a question
 
 Save the form. Then ask Claude in plain English:
@@ -790,6 +795,9 @@ GITOPS_MODE=0   # default: write directly (still fully audit-logged)
 # every returned YAML fragment's next_step points the agent at this repo.
 WAGO_GITOPS_REPO=wago-plc-config
 ```
+
+In the Claude Desktop extension, use the **GitOps mode** checkbox and the **GitOps config repository** field.
+Also turn on **Allow writes and method calls**, because a read-only PLC refuses the request before GitOps mode applies.
 
 > [!IMPORTANT]
 > The agent gets the config repository name only from `WAGO_GITOPS_REPO`. There is no auto-discovery.

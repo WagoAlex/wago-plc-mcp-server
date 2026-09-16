@@ -67,7 +67,7 @@ FIND_LIMIT_DEFAULT = 20
 _AGENT_ID: str = "unknown"
 _AUDIT_PREV_HASH: str = GENESIS  # seeded from last log line on startup
 _GITOPS_MODE: bool = os.getenv("GITOPS_MODE", "").lower() in {"1", "true"}
-_GITOPS_REPO: str = os.getenv("WAGO_GITOPS_REPO", "wago-plc-config")
+_GITOPS_REPO: str = os.getenv("WAGO_GITOPS_REPO") or "wago-plc-config"
 
 # ───────────────────────── Safety gates ─────────────────────────
 # See safety.py + docs/gitops/README.md "Safety model". Read-only hosts merge the
