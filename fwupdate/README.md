@@ -13,8 +13,16 @@ approval committed to git.
 
 ## Quick start
 
+The image is published on Docker Hub as
+[`wagoalex/wago-plc-mcp-server-fwupdate`](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server-fwupdate),
+with the same version tags as the MCP server. You need this folder (for
+`docker-compose.yml` and `_env`), not a Python install:
+
 ```bash
+git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
+cd wago-plc-mcp-server/fwupdate
 cp _env .env
+docker compose pull
 ```
 
 Fill in four things:
@@ -31,14 +39,17 @@ Then, always in this order:
 ```bash
 # 1. Rehearse. Uploads and verifies the image, then cancels.
 #    Start is never called - nothing is flashed.
-DRY_RUN=true docker compose up --build
+DRY_RUN=true docker compose up
 
 # 2. One device, for real
-docker compose up --build
+docker compose up
 
 # 3. Or every device your policy approves, one at a time
 docker compose run --rm fleet
 ```
+
+Changed the source in this checkout? Add `--build` to `docker compose up` to
+use your local build instead of the published image.
 
 A run takes roughly 5-15 minutes per device, most of it upload and the
 device's own reboot.
@@ -173,7 +184,7 @@ Mount the checkout **including its `.git`** - that is what proves the approval
 was committed - and point `FW_POLICY_FILE` at the file:
 
 ```bash
-POLICY_HOST_DIR=/path/to/wago-plc-config docker compose up --build
+POLICY_HOST_DIR=/path/to/wago-plc-config docker compose up
 ```
 
 `DRY_RUN=true` skips the gate on purpose: a dry run never calls `Start`, so
@@ -319,7 +330,7 @@ you have). The container:
 cp _env .env
 # edit .env: PLC_IP, PLC_PASSWORD, FIRMWARE_HOST_DIR (a directory of .wup files)
 
-docker compose up --build
+docker compose up
 ```
 
 Example resolution output (real, from a live PFC300 that had never been
@@ -337,7 +348,7 @@ a device at an older release while others move ahead. It takes the exact
 revision string a bundle declares (run `build_catalog.py <dir>` to see
 what's available):
 ```bash
-TARGET_VERSION=4.9.1 docker compose up --build
+TARGET_VERSION=4.9.1 docker compose up
 ```
 
 ## Manual mode - bypass the catalog
@@ -346,7 +357,7 @@ Set `WUP_PATH` to an exact file (a path *inside* the container, under
 `/firmware/`) to skip catalog resolution entirely and use exactly that
 bundle, no compatibility checks beyond what the device itself enforces:
 ```bash
-WUP_PATH=/firmware/WP400-Linux_update_V040901_31_r9d0900aaed.wup docker compose up --build
+WUP_PATH=/firmware/WP400-Linux_update_V040901_31_r9d0900aaed.wup docker compose up
 ```
 
 ## What a run looks like
@@ -404,6 +415,7 @@ FATAL: update failed - device reports Error (7)
 | `PLC_USERNAME` | no | `admin` | |
 | `FIRMWARE_SOURCE` | no | `/firmware` | Where bundles come from: a path, `file://`, `s3://` or `https://` (see above) |
 | `FIRMWARE_HOST_DIR` | yes for the default mounted-directory source | - | **Host** directory of `.wup` files, used by the compose volume mount |
+| `FWUPDATE_VERSION` | no | `latest` | Image tag to pull, e.g. `2.4.0` to pin a release |
 | `FIRMWARE_CACHE` | no | `/firmware-cache` | Where remote sources are synced to |
 | `FIRMWARE_SOURCE_TOKEN` | no | unset | Bearer token for an HTTPS source behind auth |
 | `POLICY_HOST_DIR` | yes unless `FW_AUTHZ=off` | `.` | **Host** path of the git checkout holding the policy, mounted at `/policy` |

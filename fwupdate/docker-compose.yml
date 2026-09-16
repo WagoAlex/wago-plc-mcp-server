@@ -1,8 +1,12 @@
 services:
   fwupdate:
+    # Published with every release. `docker compose pull` gets it; add --build
+    # to `up` only when you changed the source in this checkout.
+    image: wagoalex/wago-plc-mcp-server-fwupdate:${FWUPDATE_VERSION:-latest}
     build:
       context: ..
       dockerfile: fwupdate/Dockerfile
+      target: base
     container_name: wago-fwupdate
     network_mode: host
     environment:

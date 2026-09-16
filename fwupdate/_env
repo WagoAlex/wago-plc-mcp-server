@@ -1,5 +1,7 @@
 # Copy to .env and fill in. .env is gitignored at the project root.
-PLC_IP=192.168.2.217
+# Pin the published image to a release instead of latest (optional):
+#FWUPDATE_VERSION=2.4.0
+PLC_IP=192.168.1.10
 PLC_USERNAME=admin
 PLC_PASSWORD=changeme
 
@@ -16,7 +18,8 @@ PLC_PASSWORD=changeme
 FIRMWARE_SOURCE=/firmware
 
 # Host directory mounted read-only at /firmware. Used by the default source.
-FIRMWARE_HOST_DIR=/home/wago/Documents/mcp/fw
+# Relative paths start from this folder (fwupdate/). ./firmware is gitignored.
+FIRMWARE_HOST_DIR=./firmware
 
 # Bearer token for an HTTPS source behind auth (SharePoint, Artifactory, ...)
 #FIRMWARE_SOURCE_TOKEN=
@@ -32,7 +35,8 @@ FIRMWARE_HOST_DIR=/home/wago/Documents/mcp/fw
 # device + revision. POLICY_HOST_DIR is the host path of the git checkout
 # holding it - the .git directory must come along, that is what proves the
 # approval is committed. See firmware-policy.example.yaml.
-POLICY_HOST_DIR=/home/wago/Documents/mcp/wago-plc-config
+# Default: a wago-plc-config clone next to this repository.
+POLICY_HOST_DIR=../../wago-plc-config
 FW_POLICY_FILE=/policy/firmware-policy.yaml
 
 # Also require a valid signature on HEAD
