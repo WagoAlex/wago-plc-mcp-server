@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "wago-plc-mcp-server",
   "display_name": "WAGO PLC",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Read and monitor WAGO PLC parameters over the WDA REST API. Read-only unless you allow writes.",
   "long_description": "Connects Claude Desktop to WAGO controllers (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network through the native WDA REST API over HTTPS.\n\n**Read-only by default.** Parameter writes, method calls and file uploads are refused until you tick *Allow writes and method calls*. Reboot, factory reset and firmware methods stay blocked even then.\n\nThis bundle is for a single user and a handful of PLCs. For a shared or production fleet, run the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
   "author": {
