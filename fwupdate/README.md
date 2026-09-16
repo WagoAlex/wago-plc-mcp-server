@@ -18,6 +18,10 @@ The image is published on Docker Hub as
 with the same version tags as the MCP server. You need this folder (for
 `docker-compose.yml` and `_env`), not a Python install:
 
+For a step-by-step procedure on a Windows or Linux laptop, see
+[Update firmware from a Windows or Linux laptop](../README.md#update-firmware-from-a-windows-or-linux-laptop).
+The commands below work the same in PowerShell and in a Linux shell.
+
 ```bash
 git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
 cd wago-plc-mcp-server/fwupdate
@@ -39,16 +43,17 @@ Then, always in this order:
 ```bash
 # 1. Rehearse. Uploads and verifies the image, then cancels.
 #    Start is never called - nothing is flashed.
-DRY_RUN=true docker compose up
+docker compose run --rm -e DRY_RUN=true fwupdate
 
 # 2. One device, for real
-docker compose up
+docker compose run --rm fwupdate
 
 # 3. Or every device your policy approves, one at a time
+docker compose run --rm -e DRY_RUN=true fleet
 docker compose run --rm fleet
 ```
 
-Changed the source in this checkout? Add `--build` to `docker compose up` to
+Changed the source in this checkout? Add `--build` to the `docker compose run` command to
 use your local build instead of the published image.
 
 A run takes roughly 5-15 minutes per device, most of it upload and the
@@ -183,8 +188,9 @@ bundle is 4.9.50. Commit a policy change if 4.9.50 is what you want.
 Mount the checkout **including its `.git`** - that is what proves the approval
 was committed - and point `FW_POLICY_FILE` at the file:
 
-```bash
-POLICY_HOST_DIR=/path/to/wago-plc-config docker compose up
+```env
+# .env - a host path, so set it here, not with -e
+POLICY_HOST_DIR=/path/to/wago-plc-config
 ```
 
 `DRY_RUN=true` skips the gate on purpose: a dry run never calls `Start`, so
@@ -244,8 +250,8 @@ so the chain stays verifiable over exactly what is stored.
 **sequentially**, one child process per device:
 
 ```bash
-DRY_RUN=true docker compose run --rm fleet   # rehearse the whole fleet
-docker compose run --rm fleet                # then run it for real
+docker compose run --rm -e DRY_RUN=true fleet   # rehearse the whole fleet
+docker compose run --rm fleet                   # then run it for real
 ```
 
 Sequential is deliberate: firmware updates hit device-specific quirks (the
@@ -330,7 +336,7 @@ you have). The container:
 cp _env .env
 # edit .env: PLC_IP, PLC_PASSWORD, FIRMWARE_HOST_DIR (a directory of .wup files)
 
-docker compose up
+docker compose run --rm fwupdate
 ```
 
 Example resolution output (real, from a live PFC300 that had never been
@@ -348,7 +354,7 @@ a device at an older release while others move ahead. It takes the exact
 revision string a bundle declares (run `build_catalog.py <dir>` to see
 what's available):
 ```bash
-TARGET_VERSION=4.9.1 docker compose up
+docker compose run --rm -e TARGET_VERSION=4.9.1 fwupdate
 ```
 
 ## Manual mode - bypass the catalog
@@ -357,7 +363,7 @@ Set `WUP_PATH` to an exact file (a path *inside* the container, under
 `/firmware/`) to skip catalog resolution entirely and use exactly that
 bundle, no compatibility checks beyond what the device itself enforces:
 ```bash
-WUP_PATH=/firmware/WP400-Linux_update_V040901_31_r9d0900aaed.wup docker compose up
+docker compose run --rm -e WUP_PATH=/firmware/WP400-Linux_update_V040901_31_r9d0900aaed.wup fwupdate
 ```
 
 ## What a run looks like
