@@ -14,3 +14,7 @@ approvals:
   192.168.42.119: "4.9.1"    # PFC300
   192.168.2.136:  "4.9.1"    # WP400
   192.168.2.174:  "4.9.1"    # TP600
+
+  # Yocto firmware (CC100-IEC62443, 0751-9412): a signed .zip bundle, not a
+  # .wup. Use the bundle's version string exactly, leading zeros included.
+  192.168.2.85:   "02.00.13" # CC100-IEC62443

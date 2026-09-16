@@ -238,20 +238,9 @@ def get_identity(c):
 
 def resolve_wup_path(c):
     """Catalog mode: identify the device, build the catalog from
-    FIRMWARE_DIR, and pick the correct bundle. Returns a Path."""
+    FIRMWARE_DIR, and pick the correct bundle. Returns (path, revision, format)."""
     order_number, current_version, current_build = get_identity(c)
     show(f"==> Device identity: order={order_number}  current firmware={current_version}({current_build})")
-
-    # Hardware-specific floor, separate from the bundle's own declared range: a
-    # device below it needs an intermediate update first, and finding that out
-    # after Start has already written flash is the expensive way to learn it.
-    try:
-        check_minimum_build(order_number, current_build)
-    except ValueError as e:
-        show(f"FATAL: {e}")
-        audit_record(f"refused: {e}", order_number=order_number, current_build=current_build,
-                     minimum_build=minimum_build_for(order_number))
-        sys.exit(1)
 
     show(f"==> Firmware source: {FIRMWARE_SOURCE}")
     try:
@@ -263,7 +252,7 @@ def resolve_wup_path(c):
     show(f"==> Building catalog from {firmware_dir}")
     catalog = build_catalog(firmware_dir)
     if not catalog["bundles"]:
-        show(f"FATAL: no .wup files found in {firmware_dir}")
+        show(f"FATAL: no firmware bundles (.wup, or .zip with bundle-config.json) found in {firmware_dir}")
         sys.exit(1)
     show(f"    {len(catalog['bundles'])} bundle(s) found")
 
@@ -275,11 +264,24 @@ def resolve_wup_path(c):
         show(f"FATAL: {e}")
         sys.exit(1)
 
-    show(
-        f"==> Resolved: {bundle['wup_file']} "
-        f"({direction} {current_version} -> {bundle['revision']}, build {bundle['release_index']})"
-    )
-    return firmware_dir / bundle["wup_file"], bundle["revision"]
+    build = f", build {bundle['release_index']}" if bundle["release_index"] else ""
+    show(f"==> Resolved: {bundle['wup_file']} ({direction} {current_version} -> {bundle['revision']}{build})")
+
+    # Hardware-specific floor for the .wup line, separate from the bundle's own
+    # declared range: a device below it needs an intermediate update first, and
+    # finding that out after Start has already written flash is the expensive way
+    # to learn it. Checked after resolution because it is a property of that line:
+    # the CC100-IEC62443 (.zip line) numbers its builds differently (02.00.13(04)).
+    if bundle["format"] == "wup":
+        try:
+            check_minimum_build(order_number, current_build)
+        except ValueError as e:
+            show(f"FATAL: {e}")
+            audit_record(f"refused: {e}", order_number=order_number, current_build=current_build,
+                         minimum_build=minimum_build_for(order_number))
+            sys.exit(1)
+
+    return firmware_dir / bundle["wup_file"], bundle["revision"], bundle["format"]
 
 
 def check_authorization(revision):
@@ -484,6 +486,119 @@ def clear(c):
     show(f"WARNING: clear did not succeed within 60s: {json.dumps(resp)}")
 
 
+# --- CC100-IEC62443 (.zip bundles, WDA "Update" feature) --------------------
+# Verified against 192.168.2.85 (751-9412, FW 02.00.13, WDA 1.9.1) and the WDM
+# model (WAGO.bundle.wdm 1.38.0): CreateUpdateFile(Name) -> UpdateFile + Instance,
+# upload the whole .zip to that file ID, then Update/Start(Source=Instance).
+
+UPDATE_STATUS_READY, UPDATE_STATUS_IN_PROGRESS, UPDATE_STATUS_ERROR = 0, 1, 2
+
+# Update/Start and Update/StartWithPassword status codes, from the WDM model.
+UPDATE_START_ERRORS = {
+    1: "WrongOrMissingPassword",
+    2: "InvalidSignature",
+    3: "UpdateIncompatible",
+    4: "UpdateAlreadyInProgress",
+    5: "UpdateNotFound",
+    6: "UpdateNotReadable",
+    7: "UpdateProtectionInvalid",
+    8: "UpdateStructureInvalid",
+}
+
+
+def _domain_code(resp):
+    return resp.get("data", {}).get("attributes", {}).get("domainSpecificStatusCode")
+
+
+def create_update_file(c, bundle_path):
+    # The name must be unique on the device (status NameNotUnique), and an
+    # aborted run can leave its source behind - so add a timestamp.
+    name = f"{bundle_path.stem}-{int(time.time())}{bundle_path.suffix}"
+    resp = run_method(c, "0-0-update-createupdatefile", {"Name": {"value": name}})
+    if not method_ok(resp):
+        show(f"FATAL: CreateUpdateFile failed (domain code {_domain_code(resp)}): {json.dumps(resp)}")
+        sys.exit(1)
+    out = resp["data"]["attributes"]["outArgs"]
+    return out["UpdateFile"]["value"], out["Instance"]["value"]
+
+
+def remove_source(c, instance):
+    resp = run_method(c, "0-0-update-removesource", {"Source": {"value": instance}})
+    return method_ok(resp)
+
+
+def start_zip_update(c, instance):
+    show("==> Starting update")
+    resp = run_method(c, "0-0-update-start",
+                      {"Source": {"value": instance}, "ExpectStatusRequest": {"value": False}})
+    if method_ok(resp):
+        return
+    code = _domain_code(resp)
+    reason = UPDATE_START_ERRORS.get(int(code), "Unknown") if str(code).isdigit() else "Unknown"
+    show(f"FATAL: start refused by the device: {reason} ({code}): {json.dumps(resp)}")
+    audit_record(f"failed: start refused: {reason} ({code})")
+    remove_source(c, instance)
+    sys.exit(1)
+
+
+def wait_for_zip_update(c):
+    """Poll Update/Status through the install and the reboot. Done means status
+    ReadyOrDone after the device was seen busy or unreachable - a 0 before that
+    is the idle state from before Start, not a finished update."""
+    show("==> Waiting for install + reboot (connection drops during the reboot - this is normal)")
+    deadline = time.time() + POLL_TIMEOUT
+    seen_active = False
+    last = None
+    while time.time() < deadline:
+        time.sleep(POLL_INTERVAL)
+        try:
+            status = get_param(c, "0-0-update-status")
+        except (httpx.RequestError, httpx.HTTPStatusError, KeyError, json.JSONDecodeError):
+            if last != "down":
+                show("    [device unreachable - likely mid-reboot]")
+            seen_active, last = True, "down"
+            continue
+        if status != last:
+            show(f"    update status: {status}")
+            last = status
+        if status == UPDATE_STATUS_IN_PROGRESS:
+            seen_active = True
+        elif status == UPDATE_STATUS_ERROR:
+            show("FATAL: update failed - device reports Error (2)")
+            audit_record("failed: device reports Error", status="Error")
+            sys.exit(1)
+        elif status == UPDATE_STATUS_READY and seen_active:
+            return
+    show("FATAL: timed out waiting for the update to finish")
+    audit_record("failed: timed out waiting for the update to finish", poll_timeout=POLL_TIMEOUT,
+                 last_seen=str(last))
+    sys.exit(1)
+
+
+def flash_zip(c, bundle_path, revision):
+    """Upload a .zip bundle and, unless DRY_RUN, start it. Authorization is the
+    caller's job and must already have passed."""
+    show("==> Creating update source")
+    file_id, instance = create_update_file(c, bundle_path)
+    show(f"    file_id={file_id}  source={instance}")
+    upload_chunks(c, file_id, bundle_path)
+
+    if DRY_RUN:
+        show("==> DRY_RUN=true: stopping here. Removing the uploaded update source.")
+        if not remove_source(c, instance):
+            show(f"    WARNING: RemoveSource failed - remove source {instance} on the device")
+        show("==> Dry run complete. Upload pipeline verified; Start was never called.")
+        audit_record("dry run ok (not flashed)", revision=revision, bundle=bundle_path.name)
+        return
+
+    start_zip_update(c, instance)
+    wait_for_zip_update(c)
+    remove_source(c, instance)  # best effort: the source may not survive the reboot
+    fw_version = get_param(c, "0-0-version-firmwareversion")
+    show(f"==> Done. firmware version: {fw_version}")
+    audit_record("ok", revision=revision, bundle=bundle_path.name, firmware_version=fw_version)
+
+
 def main():
     show(f"WDA firmware update -> {PLC_IP}")
     if DRY_RUN:
@@ -497,13 +612,18 @@ def main():
             if not wup_path.is_file():
                 show(f"FATAL: {wup_path} not found (check the volume mount)")
                 sys.exit(1)
-            revision = read_bundle_metadata(wup_path)["revision"]
+            meta = read_bundle_metadata(wup_path)
+            revision, bundle_format = meta["revision"], meta["format"]
             bundle_file = wup_path.name
         else:
-            wup_path, revision = resolve_wup_path(c)
+            wup_path, revision, bundle_format = resolve_wup_path(c)
             bundle_file = wup_path.name
 
         check_authorization(revision)
+
+        if bundle_format == "zip":
+            flash_zip(c, wup_path, revision)
+            return
 
         with work_dir() as work:
             show("==> Extracting .raucb bundle")

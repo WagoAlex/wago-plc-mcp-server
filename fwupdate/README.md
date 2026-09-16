@@ -98,6 +98,10 @@ FATAL: 0750-8302 is at build 28, below the minimum 30 for this update path.
        Update it to build 30 first.
 ```
 
+The check applies to `.wup` bundles only, and runs after the tool finds the
+bundle. The CC100-IEC62443 uses a different build scheme (`02.00.13(04)`), so
+its `.zip` bundles skip it.
+
 An unreadable build is refused too, rather than assumed good. Which class needs
 what is a fleet fact, so it lives with the fleet:
 [wago-plc-config → Minimum firmware before updating](https://github.com/WagoAlex/wago-plc-config#minimum-firmware-before-updating).
@@ -356,6 +360,30 @@ what's available):
 ```bash
 docker compose run --rm -e TARGET_VERSION=4.9.1 fwupdate
 ```
+
+## CC100-IEC62443 - `.zip` bundles
+
+The CC100-IEC62443 (`751-9412`, FW 02.x) does not use `.wup` files. Its firmware
+is a signed `.zip`, for example `wago-image-wago-cc100-02.00.13-fw-bundle.zip`,
+with a `bundle-config.json` that names the version and the supported order
+numbers. Put it in the same firmware folder. The catalog reads both formats and
+ignores other `.zip` files.
+
+The tool uses the WDA `Update` feature for these devices, not `FirmwareUpdate`:
+
+| Step | WDA call |
+|---|---|
+| 1. Create an update source | `0-0-update-createupdatefile` (`Name`) -> `UpdateFile` (file ID) + `Instance` |
+| 2. Upload the whole `.zip` | `PATCH /files/{file_id}`, ~4 MB chunks |
+| 3a. Dry run: remove the source | `0-0-update-removesource` (`Source`) |
+| 3b. Real run: start | `0-0-update-start` (`Source`, `ExpectStatusRequest=false`) |
+| 4. Wait | Poll `0-0-update-status` (0 ReadyOrDone, 1 InProgress, 2 Error) through the reboot |
+
+Differences from `.wup` bundles:
+
+- The approval in `firmware-policy.yaml` uses the bundle's version string exactly: `192.168.2.85: { allowed: ["02.00.13"] }`.
+- The bundle declares no upgrade or downgrade range. The device checks the signature and compatibility itself. A refusal names the reason, for example `InvalidSignature` or `UpdateIncompatible`.
+- There is no minimum-build check (see above).
 
 ## Manual mode - bypass the catalog
 
