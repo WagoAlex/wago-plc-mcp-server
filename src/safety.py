@@ -1,7 +1,7 @@
 """Guardrails against autonomous dangerous actions on production PLCs.
 
 Three independent gates (see docs/gitops/README.md "Safety model"):
-  1. Dangerous-method denylist — block reboot/reset/firmware unless allowlisted.
+  1. Dangerous-method denylist — block reboot/reset/firmware/update unless allowlisted.
   2. Per-PLC read-only         — freeze production PLCs in every mode.
   3. apply.py human-gate       — require approved_by + audit log on apply.
 
@@ -27,6 +27,15 @@ DANGEROUS_METHOD_ROOTS = (
     "format",    # sdcard-format, etc.
 )
 
+# Whole WDA features whose every method is dangerous, matched against the feature
+# segment of "<device>-<instance>-<feature>-<method>" exactly. The CC100-IEC62443
+# (FW 02.x) flashes firmware through "Update" (update-start, update-createupdatefile)
+# instead of "FirmwareUpdate", and none of its method segments hit a root above.
+# Exact feature match, so "ntpclient-updatetime" and "aide-update" are not caught.
+DANGEROUS_FEATURES = (
+    "update",
+)
+
 _SPLIT = re.compile(r"[^a-z0-9]+")
 
 
@@ -40,6 +49,8 @@ def is_dangerous_method(method_id: str) -> bool:
         return False
     ascii_id = method_id.encode("ascii", "ignore").decode().lower()
     segments = _SPLIT.split(ascii_id)
+    if len(segments) > 2 and segments[2] in DANGEROUS_FEATURES:
+        return True
     return any(seg.startswith(root) for seg in segments for root in DANGEROUS_METHOD_ROOTS)
 
 
