@@ -43,8 +43,10 @@ Env vars:
 import json
 import os
 import sys
+import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -318,16 +320,24 @@ def check_authorization(revision):
     return sha
 
 
-def extract_raucb(wup_path):
-    workdir = Path("/tmp/fwupdate_work")
-    workdir.mkdir(exist_ok=True)
+@contextmanager
+def work_dir():
+    """A new directory for each run, deleted afterwards. A fixed /tmp path kept
+    the .raucb of an earlier bundle on a reused host (self-hosted CI runner), and
+    the glob could then pick that file instead of the one for this run."""
+    with tempfile.TemporaryDirectory(prefix="fwupdate_") as d:
+        yield Path(d)
+
+
+def extract_raucb(wup_path, workdir):
+    # Extract only the one top-level .raucb: nothing else is uploaded, and a
+    # member name with "/" can never write outside workdir.
     with zipfile.ZipFile(wup_path) as zf:
-        zf.extractall(workdir)
-    raucb_files = list(workdir.glob("*.raucb"))
-    if not raucb_files:
-        show(f"FATAL: no .raucb bundle found inside {wup_path}")
-        sys.exit(1)
-    return raucb_files[0]
+        names = [n for n in zf.namelist() if n.endswith(".raucb") and "/" not in n]
+        if len(names) != 1:
+            show(f"FATAL: expected one .raucb bundle inside {wup_path}, found {len(names)}")
+            sys.exit(1)
+        return Path(zf.extract(names[0], workdir))
 
 
 def upload_chunks(c, file_id, raucb_path):
@@ -495,14 +505,15 @@ def main():
 
         check_authorization(revision)
 
-        show("==> Extracting .raucb bundle")
-        raucb_path = extract_raucb(wup_path)
-        show(f"    {raucb_path.name} ({raucb_path.stat().st_size} bytes)")
+        with work_dir() as work:
+            show("==> Extracting .raucb bundle")
+            raucb_path = extract_raucb(wup_path, work)
+            show(f"    {raucb_path.name} ({raucb_path.stat().st_size} bytes)")
 
-        activate(c)
-        file_id = get_upload_id(c, raucb_path.name)
-        show(f"    file_id={file_id}")
-        upload_chunks(c, file_id, raucb_path)
+            activate(c)
+            file_id = get_upload_id(c, raucb_path.name)
+            show(f"    file_id={file_id}")
+            upload_chunks(c, file_id, raucb_path)
 
         if DRY_RUN:
             show("==> DRY_RUN=true: stopping here. Cancelling the reserved update session.")
