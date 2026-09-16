@@ -24,11 +24,11 @@ def check_security_profile() -> None:
 
     Mirrors auth._check_key_entropy's fail-loud pattern: log the specific
     gap, then SystemExit(1) rather than starting in a state that contradicts
-    the requested profile. Default profile (unset) is untouched — today's
+    the requested profile. Default profile (unset) is untouched - today's
     warn-and-continue TLS behavior stays the default so existing deployments
     don't break on upgrade. This is Phase 1 of
     .claude/plans/iec62443-4-2-hardening.plan.md (FR4, transport
-    confidentiality) — it only gates whether TLS is *configured*, not
+    confidentiality) - it only gates whether TLS is *configured*, not
     whether it's trustworthy; a bad cert still starts today, hardened or not.
     """
     if os.getenv("SECURITY_PROFILE", "").strip().lower() != "hardened":
@@ -57,7 +57,7 @@ def check_security_profile() -> None:
 def resolve_tls_verify() -> bool | str:
     """Resolve WDA TLS verification from WAGO_TLS_CA env var.
 
-    Not set / 'false' / '0' → False  (verification disabled — warns at startup)
+    Not set / 'false' / '0' → False  (verification disabled - warns at startup)
     'true' / '1'            → True   (system trust store)
     Any other value         → path to CA bundle (PEM file or directory)
     Per-PLC override: Docker Secret plc_cert_<ip_underscored> (resolved in PLCManager.register)
@@ -65,7 +65,7 @@ def resolve_tls_verify() -> bool | str:
     val = os.getenv("WAGO_TLS_CA", "").strip()
     if not val or val.lower() in {"false", "0"}:
         logger.warning(
-            "[tls] WDA TLS verification DISABLED — connections to PLCs are not verified. "
+            "[tls] WDA TLS verification DISABLED - connections to PLCs are not verified. "
             "Set WAGO_TLS_CA=true (system CA) or WAGO_TLS_CA=/path/to/ca.pem to enable."
         )
         return False
@@ -98,7 +98,7 @@ def _parse_password_overrides(blob: str) -> dict[str, str]:
     """Parse 'ip=pwd' pairs, comma- or newline-separated, into {ip: password}.
 
     Comma form is PLC_PASSWORDS (one .mcpb text field); newline form is the
-    contents of PLC_PASSWORDS_FILE (one .mcpb file picker) — a masked
+    contents of PLC_PASSWORDS_FILE (one .mcpb file picker) - a masked
     single-line field stops being usable once there are more than a handful
     of overrides, so a plain file with one 'ip=password' per line is the
     scale-up path, mirroring WAGO_PLC_HOSTS_FILE for the host list itself.
@@ -141,7 +141,7 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
     )
     if default_pwd in {"wago", "admin", "password", "123456", ""}:
         logger.warning(
-            "[config] DEFAULT_PLC_PASSWORD is a known factory default — "
+            "[config] DEFAULT_PLC_PASSWORD is a known factory default - "
             "set a strong password via Docker Secret (plc_default_password) or env var"
         )
     password_overrides = _parse_password_overrides(os.getenv("PLC_PASSWORDS", ""))
@@ -151,7 +151,7 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
         if p.exists():
             password_overrides = {**password_overrides, **_parse_password_overrides(p.read_text())}
         else:
-            logger.warning(f"[config] PLC_PASSWORDS_FILE={overrides_file} not found — skipping")
+            logger.warning(f"[config] PLC_PASSWORDS_FILE={overrides_file} not found - skipping")
     per_plc_secrets = {**password_overrides, **_load_per_plc_secrets()}
     plcs: dict[str, tuple[str, str]] = {}
 
@@ -170,7 +170,7 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
                 if ip:
                     plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
         else:
-            logger.warning(f"[config] WAGO_PLC_HOSTS_FILE={hosts_file} not found — skipping")
+            logger.warning(f"[config] WAGO_PLC_HOSTS_FILE={hosts_file} not found - skipping")
 
     for key, val in os.environ.items():
         m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)

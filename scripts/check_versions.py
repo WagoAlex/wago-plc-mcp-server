@@ -6,6 +6,7 @@ version. build.sh stamps them all on a bump; this catches hand edits in CI.
     python3 scripts/check_versions.py
 """
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -15,10 +16,13 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def found_versions() -> dict[str, str]:
     server = json.loads((ROOT / "server.json").read_text())
+    skill_md = (ROOT / "wago-plc-skill" / "SKILL.md").read_text()
+    skill_version = re.search(r'^  version: "([^"]+)"', skill_md, re.MULTILINE)
     found = {
         "pyproject.toml": tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"],
         "integrations/mcpb/manifest.json": json.loads((ROOT / "integrations/mcpb/manifest.json").read_text())["version"],
         "server.json": server["version"],
+        "wago-plc-skill/SKILL.md metadata.version": skill_version.group(1) if skill_version else "MISSING",
     }
     for pkg in server["packages"]:
         oci = pkg["registryType"] == "oci"

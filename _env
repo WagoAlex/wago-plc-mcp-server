@@ -15,7 +15,7 @@ WAGO_PLC_HOSTS=192.168.2.17,192.168.42.42
 # PLC_PASSWORDS_10_0_0_2=secret_b
 # PLC_PASSWORDS_10_0_0_3=secret_c
 
-# Format 3b — same thing, one field (bulk list; also extends the host list).
+# Format 3b - same thing, one field (bulk list; also extends the host list).
 # This is what the .mcpb install form's "Per-PLC passwords" field writes.
 # PLC_PASSWORDS=10.0.0.1=secret_a,10.0.0.2=secret_b,10.0.0.3=secret_c
 

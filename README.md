@@ -761,6 +761,27 @@ Two skills ship with this repo - install the one that matches your use case:
 | [`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) | **Claude Desktop / Claude Code end users, and autonomous agents / pipelines** - plain-English interaction, safety guidance, troubleshooting, device-generation recognition (PTXdist vs. Yocto), tool I/O contracts, error shapes, retry rules, watchlist lifecycle | `cp -r wago-plc-skill ~/.claude/skills/` |
 | [`wago-quickref/SKILL.md`](wago-quickref/SKILL.md) | **Contributors to this repo** - raw WDA HTTP behaviour, pagination encoding, payload shapes | `cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server` |
 
+`wago-plc-skill` uses only the six frontmatter fields the
+[Agent Skills standard](https://agentskills.io) allows (`name`, `description`,
+`license`, `compatibility`, `allowed-tools`, `metadata`) - no Claude
+Code-only extensions - so it installs the same way everywhere the standard
+applies:
+
+- **Claude Code / Claude plugins**: `cp -r wago-plc-skill ~/.claude/skills/` (above).
+- **claude.ai / Claude Developer Platform (Skills API)**: package it into a
+  `.skill` file and upload it as a Capability/Skill:
+  ```bash
+  python package_skill.py wago-plc-skill
+  ```
+  (`package_skill.py` ships in [anthropics/skills](https://github.com/anthropics/skills);
+  any tool that zips the folder works too - there's nothing Claude Code-specific inside).
+- **Agent SDK**: reference the packaged `.skill` (or the folder) the same way
+  as any other skill in your SDK configuration.
+
+Either way, the `wago-plc` MCP server itself still needs to be reachable
+from wherever the skill runs - see [Deployment options](#deployment-options)
+for Claude Code, Claude Desktop (`.mcpb`), and remote/API paths.
+
 ---
 
 ## GitOps write-gate

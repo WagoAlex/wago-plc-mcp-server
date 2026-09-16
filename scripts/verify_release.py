@@ -54,9 +54,9 @@ def check_registry(version: str) -> None:
 def check_release_asset(version: str) -> None:
     release = fetch_json(f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/v{version}")
     names = {asset["name"] for asset in release["assets"]}
-    wanted = f"{PACKAGE}-{version}.mcpb"
-    if wanted not in names:
-        raise AssertionError(f"{wanted} missing, assets: {sorted(names)}")
+    for wanted in (f"{PACKAGE}-{version}.mcpb", f"wago-plc-skill-{version}.skill"):
+        if wanted not in names:
+            raise AssertionError(f"{wanted} missing, assets: {sorted(names)}")
 
 
 def check_uvx_initialize(version: str) -> None:
@@ -88,7 +88,7 @@ CHECKS = [
     ("PyPI", check_pypi),
     ("Docker Hub", check_docker_hub),
     ("MCP Registry", check_registry),
-    ("GitHub Release .mcpb", check_release_asset),
+    ("GitHub Release assets (.mcpb + .skill)", check_release_asset),
     ("uvx from PyPI", check_uvx_initialize),
 ]
 

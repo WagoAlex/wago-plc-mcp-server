@@ -66,10 +66,12 @@ docs/.obsidian/
 docs/media/*.mp4
 
 # Connector/integration sketches - local only until ready to publish.
-# Published artifacts (the .mcpb bundle source) are tracked.
+# Published artifacts (the .mcpb/.skill bundle sources) are tracked.
 /integrations/*
 !/integrations/mcpb/
 /integrations/mcpb/*.mcpb
+!/integrations/skill/
+/integrations/skill/*.skill
 
 claude_desktop_config.json
 .firecrawl/

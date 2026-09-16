@@ -47,7 +47,7 @@ wago-quickref/
   SKILL.md                         Contributor skill — WDA HTTP behaviour
   references/wda-api-reference.md  Full WDA endpoint and payload reference
 
-wago-plc-skill/SKILL.md            End-user + agent skill — natural-language tool mapping,
+wago-plc-skill/SKILL.md            End-user + agent skill - natural-language tool mapping,
                                     tool contracts, error shapes, PTXdist vs. Yocto recognition
 ```
 

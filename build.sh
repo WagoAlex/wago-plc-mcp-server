@@ -80,6 +80,10 @@ for path in ("server.json", "integrations/mcpb/manifest.json"):
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
 PY
+  # wago-plc-skill's metadata.version is informational only (Claude Code
+  # ignores metadata contents) but keeping it in sync avoids a stale number
+  # sitting in a released .skill bundle.
+  sed -i "s/^  version: \".*\"/  version: \"${VERSION}\"/" wago-plc-skill/SKILL.md
   echo "▶ bumped to ${VERSION}"
 fi
 
@@ -133,7 +137,7 @@ fi
 # ── git release (commit + tag) ────────────────────────────────────────────────
 if $DO_RELEASE; then
   if [[ -n "$BUMP" ]]; then
-    git add version.txt pyproject.toml server.json integrations/mcpb/manifest.json
+    git add version.txt pyproject.toml server.json integrations/mcpb/manifest.json wago-plc-skill/SKILL.md
     git commit -m "chore: release v${VERSION}"
   fi
 
