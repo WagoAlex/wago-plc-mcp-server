@@ -18,7 +18,7 @@
 
 | I am a... | I want to... | Start here |
 |-----------|-------------|------------|
-| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) → [What can I ask it?](#what-can-i-ask-it), or the one-file [Claude Desktop extension](#claude-desktop-extension-mcpb) |
+| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) (one file, no install) → [What can I ask it?](#what-can-i-ask-it) |
 | **Automation / OT engineer** | Understand what this does to my PLCs and whether it's safe | **Part 2** → [What this does and doesn't do](#what-this-does-and-doesnt-do) |
 | **Software / DevOps engineer** | Deploy this in production with GitOps, TLS, and audit logging | **Part 3** → [Production deployment](#production-deployment) → [GitOps write-gate](#gitops-write-gate) |
 
@@ -194,152 +194,98 @@ compliance sweep that would otherwise require manual access to each device.
 
 ## Quick Start
 
-### 1. Clone and configure
+The easiest way to connect Claude Desktop to your WAGO PLCs: one file, no
+terminal, no Docker, no code. This is the recommended path for most users.
+Setting this up as a shared service for a team, or a production fleet
+instead? Skip to [Production deployment](#production-deployment).
 
-```bash
-git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
-cd wago-plc-mcp-server
-cp _env .env
-```
+### 1. Install the extension
 
-Edit `.env`:
+1. Download `wago-plc-mcp-server-<version>.mcpb` from the
+   [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
+2. Open Claude Desktop → **Settings → Extensions**, then drag the `.mcpb`
+   file onto the window (or double-click the file itself).
 
-```env
-WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
-DEFAULT_PLC_USERNAME=admin
-PORT=6042
-WAGO_TIMEOUT_SECONDS=45
-```
+![Installing the WAGO PLC extension in Claude Desktop](docs/media/demo-mcpb-install.gif)
 
-`WAGO_TIMEOUT_SECONDS` applies to every PLC in the fleet - set it to the
-slowest device class you're onboarding, not the average. CC100 needs 45+;
-most classes are fine at 15. IEC 62443-4-2-hardened units (see below) expose
-roughly 3x the parameters of their base class and have not been timing-tuned
-yet - if one fails registration with a timeout at 45s, that's a real open
-question for this project, not a typo in this guide.
+> [!NOTE]
+> On some Windows builds, drag-and-drop or double-click doesn't trigger the
+> installer - a known Claude Desktop bug, not specific to this extension.
+> If that happens: unzip the `.mcpb` file, then use **Settings → Extensions
+> → Advanced settings → Install Unpacked Extension** on the extracted
+> folder instead.
 
-> [!TIP]
-> For large fleets, use `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt` - one IP
-> per line, `#` comments supported. Both can be set together; IPs are merged.
+### 2. Fill in the install form
 
-### 2. Set PLC passwords
+At minimum you need: your PLC's IP address, the WBM username (usually
+`admin`), and its password. Everything else has a sensible default.
 
-Every device class onboards the same way: register its IP in step 1, then
-give it credentials here. Two patterns, combinable:
+**A handful of PLCs, same password:** fill in **PLC IP addresses** and
+**Default PLC password**, comma-separating IPs if there's more than one -
+e.g. `192.168.1.10,192.168.1.11`.
 
-**Shared password** (fleets where every PLC uses the same login):
-```bash
-mkdir -p secrets
-echo "your-plc-password" > secrets/plc_default_password.txt
-chmod 600 secrets/plc_default_password.txt
-```
-
-**Per-PLC password** (any unit with its own login - common for hardened or
-customer-managed devices): add a secret named for its IP, then uncomment the
-matching lines in `docker-compose.yml` (`secrets:` block and the service's
-`secrets:` list):
-```bash
-echo "that-unit-password" > secrets/plc_password_192_168_2_85.txt
-chmod 600 secrets/plc_password_192_168_2_85.txt
-```
-Per-PLC secrets take priority over the shared default for a matching IP, so a
-mixed fleet just needs one of these per unit that doesn't share the default
-login - everything else falls back to `plc_default_password.txt`.
-
-> [!IMPORTANT]
-> **Onboarding IEC 62443-4-2-hardened units (CC100-IEC62443, and the planned
-> PFC400 family).** These register and behave like any other PLC - same WDA
-> API, same tools - but almost always ship with their own credentials, so
-> they need the per-PLC pattern above, not the shared default.
-> - **CC100-IEC62443** (order no. `751-9412`) is a hardened CC100 variant:
->   registers under `device_class: "CC100"` (same order-number prefix), but
->   exposes roughly 1056 WDA parameters instead of the base unit's 360 -
->   additional security-config groups (firewall rules, certificates, account
->   management), not a different device or a bigger baseline to expect from
->   plain CC100s.
-> - **PFC400** (order no. `750-8400`) is not yet available to us - the code
->   recognizes its order-number prefix so it registers under its own
->   `device_class: "PFC400"` instead of falling through unclassified, but
->   nothing about its onboarding, parameter set, or I/O model is verified.
->   [Likely] it will share most of the CC100-IEC62443 security surface once
->   real hardware exists to confirm that. It's also referenced elsewhere as
->   order series `751-941x`, which overlaps with 751-9412 above - until a
->   real unit is on hand to disambiguate, this server does **not** guess: any
->   `0751-9412`-class order number classifies as CC100, not PFC400.
-> - Neither variant is described as "IEC 62443 compliant" or "certified"
->   anywhere in this project - that's a formal third-party assessment of the
->   *device*, not something this server's code can claim on WAGO's behalf.
-
-### 3. Start
-
-```bash
-docker compose up -d
-docker logs wmcp -f
-```
-
-On first boot the server generates an API key and announces its fingerprint
-(the key itself is never written to container logs). Retrieve it with:
-
-```bash
-docker exec wmcp cat /app/data/mcp_api_key
-```
-
-> [!TIP]
-> Once you're past initial testing, provision the key as a Docker Secret
-> instead (see [API key management](#api-key-management)) - then retrieve it
-> with `cat secrets/mcp_api_key.txt` directly on the host, no `docker exec`
-> required.
+**Many PLCs, or a few with different passwords:** use the file fields
+instead of typing everything into one box. Save a plain text file
+somewhere on your machine, e.g. `~/.wago-plc-mcp/plc_hosts.txt`:
 
 ```
-════════════════════════════════════════════════════════════════════════
-  NEW MCP API KEY GENERATED  (fingerprint: 7290f42b…)
-
-  Stored in ./data/mcp_api_key - retrieve it with:
-    docker exec wmcp cat /app/data/mcp_api_key
-
-  .mcp.json:
-    "headers": {"Authorization": "Bearer <key>"}
-
-  Regenerate:  docker exec wmcp python src/mcp_keygen.py
-════════════════════════════════════════════════════════════════════════
-
-Registration: 3/3 ready
-MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
+# One IP per line. Lines starting with '#' are comments.
+192.168.1.10   # PFC200 - packaging line
+192.168.1.11   # PFC200 - packaging line
+192.168.1.12   # CC100 - utility room
+192.168.1.20   # Edge Controller - line 2
+192.168.1.21   # Edge Controller - line 2
 ```
 
-### 4. Connect your AI client
+And, only for units whose password differs from the default, a second file
+such as `~/.wago-plc-mcp/plc_passwords.txt`:
 
-**Claude Code** (one command):
-```bash
-claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc http://localhost:6042/mcp
+```
+# One 'ip=password' pair per line. Only list PLCs that differ from the
+# "Default PLC password" field above - everything else uses that instead.
+192.168.1.12=a-different-password-for-this-one
 ```
 
-**Claude Desktop** - add to `%APPDATA%\Claude\claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "wago-plc": {
-      "type": "http",
-      "url": "http://localhost:6042/mcp",
-      "headers": { "Authorization": "Bearer <your-api-key>" }
-    }
-  }
-}
-```
-Fully quit and relaunch Claude Desktop. You should see a hammer icon with 29 tools:
+Point **PLC IP list file** and **Per-PLC passwords file** at those files with
+the **Browse...** buttons. The IP field and file merge, so you can use both
+together. The IPs and passwords above are examples only - replace them with
+your own, and never commit a filled-in copy of either file anywhere public.
 
-![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
+Leave **Allow writes and method calls** off unless Claude should be able to
+change these controllers, not just read them. Off, every PLC stays
+read-only: parameter writes, method calls, and file uploads are refused and
+logged.
 
-### 5. Install the WAGO skill (recommended)
+### 3. Ask it something
 
-The bundled skill teaches the assistant the WAGO parameter names, how to
-operate safely, and how the tools actually behave. It's the difference
-between a vague answer and one that lands on the right parameter first try.
+Once the form is saved, just ask Claude, in plain English:
+
+> "List my PLCs"
+> "What firmware is running on 192.168.1.10?"
+> "Check NTP status across the fleet"
+
+See [What can I ask it?](#what-can-i-ask-it) for more examples.
+
+### 4. Install the WAGO skill (recommended)
+
+The bundled skill teaches Claude the WAGO parameter names, how to operate
+safely, and how the tools actually behave - the difference between a vague
+answer and one that lands on the right parameter first try.
+
+Claude Desktop has its own **Settings → Skills** page where you can add
+the packaged skill the same way you added the extension above - download
+`wago-plc-skill-<version>.skill` from the
+[latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest)
+and add it there. On Claude Code, or to do it by hand:
 
 ```bash
 mkdir -p ~/.claude/skills
 cp -r wago-plc-skill ~/.claude/skills/
 ```
+
+It also works outside Claude Desktop entirely (claude.ai, the Claude
+Developer Platform, Agent SDK) - see
+[Skills - install the right one](#skills---install-the-right-one).
 
 ---
 
@@ -516,13 +462,17 @@ the full tool/config reference.
 
 ### Deployment options
 
+The [Quick Start](#quick-start) above (the `.mcpb` extension) is the
+default for most people: one engineer, a handful of PLCs, no server to run
+or maintain. Everything below is for a **shared** setup - one server that
+several people or clients connect to at once.
+
 | Path | Best for | Requires |
 |---|---|---|
 | [Docker](#docker-recommended) | Plant server, shared multi-user fleet | Docker host on the OT network |
 | [Portainer](#portainer) | Docker host managed remotely through Portainer's UI | Portainer pointed at that Docker host |
-| [Claude Desktop extension](#claude-desktop-extension-mcpb) | One engineer, a handful of PLCs, no Docker | Claude Desktop |
 | [MCP Registry](#mcp-registry) | Clients that install servers from the official registry | `uv` or Docker |
-| [Windows .exe](#windows-exe) | OT engineer laptop, air-gapped Windows | Nothing - zero dependencies |
+| [Windows .exe](#windows-exe) | Workaround for an air-gapped Windows box, or a Claude Desktop version too old for `.mcpb`/remote MCP | Nothing - zero dependencies |
 | [uvx / PyPI](#uvx--pypi) | Developer machine, any OS | `uv` installed |
 | [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed |
 | [HTTP remote](#http-remote-chatgpt-api-n8n-openai) | ChatGPT, OpenAI API, n8n | Running server reachable over network |
@@ -536,13 +486,30 @@ Config file examples for every path: [`deploy/configs/`](deploy/configs/)
 One server, many clients. PLCs register once at startup and stay connected.
 
 ```bash
-cp _env .env          # edit PLC IPs, password, API key
-docker compose up -d
+git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
+cd wago-plc-mcp-server
+cp _env .env
 ```
 
-Connect any client to `http://<host>:6042/mcp` with `Authorization: Bearer <key>`.
+Edit `.env`:
 
-**Large fleet - host file:**
+```env
+WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
+DEFAULT_PLC_USERNAME=admin
+PORT=6042
+WAGO_TIMEOUT_SECONDS=45
+```
+
+`WAGO_TIMEOUT_SECONDS` applies to every PLC in the fleet - set it to the
+slowest device class you're onboarding, not the average. CC100 needs 45+;
+most classes are fine at 15. IEC 62443-4-2-hardened units (see below) expose
+roughly 3x the parameters of their base class and have not been timing-tuned
+yet - if one fails registration with a timeout at 45s, that's a real open
+question for this project, not a typo in this guide.
+
+> [!TIP]
+> For large fleets, use `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt` - one IP
+> per line, `#` comments supported. Both can be set together; IPs are merged.
 
 ```
 # data/fleet.txt
@@ -555,12 +522,115 @@ Connect any client to `http://<host>:6042/mcp` with `Authorization: Bearer <key>
 # 192.168.2.11   decommissioned
 ```
 
-```env
-WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt
-```
-
 Fleet changes require editing the file and restarting the container. The
 audit log persists across restarts on the `./data` volume.
+
+**Set PLC passwords.** Every device class onboards the same way: register
+its IP above, then give it credentials here. Two patterns, combinable:
+
+Shared password (fleets where every PLC uses the same login):
+```bash
+mkdir -p secrets
+echo "your-plc-password" > secrets/plc_default_password.txt
+chmod 600 secrets/plc_default_password.txt
+```
+
+Per-PLC password (any unit with its own login - common for hardened or
+customer-managed devices): add a secret named for its IP, then uncomment the
+matching lines in `docker-compose.yml` (`secrets:` block and the service's
+`secrets:` list):
+```bash
+echo "that-unit-password" > secrets/plc_password_192_168_2_85.txt
+chmod 600 secrets/plc_password_192_168_2_85.txt
+```
+Per-PLC secrets take priority over the shared default for a matching IP, so a
+mixed fleet just needs one of these per unit that doesn't share the default
+login - everything else falls back to `plc_default_password.txt`.
+
+> [!IMPORTANT]
+> **Onboarding IEC 62443-4-2-hardened units (CC100-IEC62443, and the planned
+> PFC400 family).** These register and behave like any other PLC - same WDA
+> API, same tools - but almost always ship with their own credentials, so
+> they need the per-PLC pattern above, not the shared default.
+> - **CC100-IEC62443** (order no. `751-9412`) is a hardened CC100 variant:
+>   registers under `device_class: "CC100"` (same order-number prefix), but
+>   exposes roughly 1056 WDA parameters instead of the base unit's 360 -
+>   additional security-config groups (firewall rules, certificates, account
+>   management), not a different device or a bigger baseline to expect from
+>   plain CC100s.
+> - **PFC400** (order no. `750-8400`) is not yet available to us - the code
+>   recognizes its order-number prefix so it registers under its own
+>   `device_class: "PFC400"` instead of falling through unclassified, but
+>   nothing about its onboarding, parameter set, or I/O model is verified.
+>   [Likely] it will share most of the CC100-IEC62443 security surface once
+>   real hardware exists to confirm that. It's also referenced elsewhere as
+>   order series `751-941x`, which overlaps with 751-9412 above - until a
+>   real unit is on hand to disambiguate, this server does **not** guess: any
+>   `0751-9412`-class order number classifies as CC100, not PFC400.
+> - Neither variant is described as "IEC 62443 compliant" or "certified"
+>   anywhere in this project - that's a formal third-party assessment of the
+>   *device*, not something this server's code can claim on WAGO's behalf.
+
+**Start it:**
+
+```bash
+docker compose up -d
+docker logs wmcp -f
+```
+
+On first boot the server generates an API key and announces its fingerprint
+(the key itself is never written to container logs). Retrieve it with:
+
+```bash
+docker exec wmcp cat /app/data/mcp_api_key
+```
+
+> [!TIP]
+> Once you're past initial testing, provision the key as a Docker Secret
+> instead (see [API key management](#api-key-management)) - then retrieve it
+> with `cat secrets/mcp_api_key.txt` directly on the host, no `docker exec`
+> required.
+
+```
+════════════════════════════════════════════════════════════════════════
+  NEW MCP API KEY GENERATED  (fingerprint: 7290f42b…)
+
+  Stored in ./data/mcp_api_key - retrieve it with:
+    docker exec wmcp cat /app/data/mcp_api_key
+
+  .mcp.json:
+    "headers": {"Authorization": "Bearer <key>"}
+
+  Regenerate:  docker exec wmcp python src/mcp_keygen.py
+════════════════════════════════════════════════════════════════════════
+
+Registration: 3/3 ready
+MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
+```
+
+**Connect a client** to `http://<host>:6042/mcp` with
+`Authorization: Bearer <key>`.
+
+**Claude Code** (one command):
+```bash
+claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc http://localhost:6042/mcp
+```
+
+**Claude Desktop** - add to `%APPDATA%\Claude\claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "wago-plc": {
+      "type": "http",
+      "url": "http://localhost:6042/mcp",
+      "headers": { "Authorization": "Bearer <your-api-key>" }
+    }
+  }
+}
+```
+Fully quit and relaunch Claude Desktop. You should see a hammer icon with 29 tools:
+
+![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
 ---
 
@@ -593,6 +663,15 @@ compose file for why).
 
 ### Windows .exe
 
+> [!NOTE]
+> **This is a workaround, not the default.** It exists for a Claude Desktop
+> version too old to speak remote MCP directly, or a fully air-gapped
+> Windows machine. If you can install a `.mcpb` file at all (any current
+> Claude Desktop), use [Quick Start](#quick-start) instead - it needs no
+> separate proxy process. `wago-proxy.exe` below is a compiled build of
+> [`wago_proxy.py`](wago_proxy.py), a small stdio<->HTTP bridge kept only
+> for this legacy path.
+
 Self-contained bundle - no Python, no package manager.
 
 ```bat
@@ -624,31 +703,14 @@ deploy\windows\setup.bat        # configure .env and get the Claude Desktop JSON
 
 <img src="docs/media/wago-plc-illustration.png" alt="WAGO controller illustration" width="320" align="right">
 
-One file, no Docker and no Python install: Claude Desktop runs the server
-itself. Meant for one engineer and a handful of controllers; use
-[Docker](#docker-recommended) for a shared or production fleet.
-
-1. Download `wago-plc-mcp-server-<version>.mcpb` from the
-   [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
-2. Open it with Claude Desktop: double-click the file, or drag it onto the
-   Claude Desktop window.
-3. Fill in the install form: PLC IP addresses, username, password and request
-   timeout. Claude Desktop keeps passwords in its secure storage.
-4. Leave **Allow writes and method calls** unticked unless Claude should change
-   these controllers. Unticked, every PLC is read-only: parameter writes,
-   method calls and file uploads are refused and logged.
-
-Different password per PLC (same username everywhere - WDA has no per-PLC
-username): fill **Per-PLC passwords** with `ip=password` pairs, comma-separated,
-e.g. `192.168.1.11=secretB,192.168.1.12=secretC`. Any IP listed there that
-isn't in the main IP field gets added automatically.
-
-The form also exposes the same tuning knobs as `.env` for Docker: bulk-read
-page size, parallel registration/read limits, forcing specific PLCs read-only,
-PLC TLS certificate verification, and log verbosity.
-
-Writes and refusals are recorded in `~/.wago-plc-mcp/audit.log`. Reboot,
-factory reset and firmware methods stay blocked even with writes allowed.
+This is the **default, recommended way** to use this server - see
+[Quick Start](#quick-start) at the top of this README for the full
+walkthrough (install, the config form, per-PLC password files, the WAGO
+skill). It's listed here too so it sits next to the other deployment
+options for comparison: one file, no Docker, no Python install - Claude
+Desktop runs the server itself. Meant for one engineer and a handful of
+controllers; use [Docker](#docker-recommended) instead for a shared or
+production fleet.
 
 <br clear="right">
 
