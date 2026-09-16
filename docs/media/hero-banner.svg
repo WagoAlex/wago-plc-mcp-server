@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" aria-label="wago-plc-mcp-server — Bridge WAGO PLCs to AI agents" data-type-key="hero-banner">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" aria-label="wago-plc-mcp-server - Bridge WAGO PLCs to AI agents" data-type-key="hero-banner">
   
   <rect x="0" y="0" width="1200" height="300" fill="#1F2837" data-type-key="rect1"/>
   
@@ -31,5 +31,5 @@
   <text x="600" y="210" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#A5A8AF" data-type-key="text4">Bridge WAGO PLCs to AI agents - read · write · monitor. No custom code.</text>
 
   
-  <text x="600" y="252" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#616A73" data-type-key="text5">MCP Server · Docker · MPL-2.0</text>
+  <text x="600" y="252" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#616A73" data-type-key="text5">MCP Server · Claude Desktop extension · Docker · PyPI · 29 tools · MPL-2.0</text>
 </svg>
