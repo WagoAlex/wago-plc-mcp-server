@@ -406,7 +406,7 @@ The default configuration is live mode with no read-only hosts.
 - **Reads:** The server always allows reads. Reads have no side effects.
 - **Parameter writes:** The server allows a write if the parameter is writeable. It checks this in its cache before it sends a request to the PLC.
 - **Safe methods:** The server runs all methods that are not on the dangerous list.
-- **Dangerous methods:** The server refuses method IDs that start with `reboot`, `restart`, `factory`, `firmware`, or `format`. To allow one, add its exact ID to `WAGO_ALLOW_METHODS`.
+- **Dangerous methods:** The server refuses method IDs that start with `reboot`, `restart`, `factory`, `firmware`, or `format`. It also refuses all methods of the `update` feature (`0-0-update-*`), which the CC100-IEC62443 uses to flash firmware. To allow one, add its exact ID to `WAGO_ALLOW_METHODS`.
 
 ### Decision table
 
@@ -430,7 +430,7 @@ The server enforces these gates in code. **The agent cannot override them.**
 |------|--------------|-----------|
 | **Read-only PLCs** | The listed PLCs refuse all writes, method calls, and file uploads in all modes. | `WAGO_READONLY_HOSTS=ip,ip`, or `# readonly` on the line in the fleet file |
 | **Fleet-wide write switch** | Makes all PLCs read-only. If the variable is not set, writes are possible. Any value other than `true` blocks writes, so a typo fails closed. The Claude Desktop extension sets this from its "Allow writes" checkbox, which is off by default. | `WAGO_ALLOW_WRITES=true` allows writes. `WAGO_ALLOW_WRITES=false` blocks them. |
-| **Dangerous-method denylist** | In live mode, the server refuses reboot, restart, factory reset, firmware, and format methods. | `WAGO_ALLOW_METHODS=<exact-method-id>` allows one method |
+| **Dangerous-method denylist** | In live mode, the server refuses reboot, restart, factory reset, firmware, and format methods, and all `0-0-update-*` methods. | `WAGO_ALLOW_METHODS=<exact-method-id>` allows one method |
 | **Human approval for dangerous operations** | In GitOps mode, these operations become a pull request with `requires_human: CRITICAL`. `apply.py` does not run until a person sets `approved_by`. | Set `approved_by` during the review, or set `WAGO_APPROVED_BY` in CI |
 
 For a high-consequence action, use a pull request that a person reviews. The audit log records it.
