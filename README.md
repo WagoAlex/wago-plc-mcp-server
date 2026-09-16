@@ -2,33 +2,62 @@
 
 <!-- mcp-name: io.github.WagoAlex/wago-plc-mcp-server -->
 
-[![Docker Hub](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
-[![PyPI](https://img.shields.io/pypi/v/wago-plc-mcp-server?color=6EC800)](https://pypi.org/project/wago-plc-mcp-server/)
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-6EC800.svg)](LICENSE)
-[![MCP Tools](https://img.shields.io/badge/MCP_tools-29-1F2837.svg)](#tool-reference)
-[![Fleet tested](https://img.shields.io/badge/fleet_tested-16_PLCs-1F2837.svg)](#supported-hardware)
+[![Docker pulls](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?label=Docker%20pulls&color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
+[![PyPI](https://img.shields.io/pypi/v/wago-plc-mcp-server?label=PyPI&color=6EC800)](https://pypi.org/project/wago-plc-mcp-server/)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-6EC800.svg)](LICENSE)
+[![MCP tools: 29](https://img.shields.io/badge/MCP%20tools-29-1F2837.svg)](#tool-reference)
+[![Fleet tested: 16 PLCs](https://img.shields.io/badge/fleet%20tested-16%20PLCs-1F2837.svg)](#supported-hardware)
+[![Devices: CC100, PFC100, PFC200, PFC300, Edge Controller, WP400, TP600](https://img.shields.io/badge/devices-CC100%20%C2%B7%20PFC100%20%C2%B7%20PFC200%20%C2%B7%20PFC300%20%C2%B7%20Edge%20Controller%20%C2%B7%20WP400%20%C2%B7%20TP600-1F2837.svg)](#supported-hardware)
 
 # wago-plc-mcp-server
 
-> Talk to your WAGO PLC fleet the way you'd talk to a colleague. Ask an AI assistant to read, configure, and monitor your controllers in plain English - no scripts, no parameter IDs to memorize.
+An MCP server that connects AI assistants to a fleet of WAGO PLCs.
+Ask the assistant in plain English to read, configure, and monitor your controllers.
+You do not need scripts or parameter IDs.
 
----
+The server uses the WAGO WDA REST API. It gives the assistant 29 tools.
+It has bearer authentication, a hash-chained audit log, and write gates that the agent cannot override.
 
-## Choose your path
+## Contents
 
-| I am a... | I want to... | Start here |
-|-----------|-------------|------------|
-| **Claude Desktop / Claude Code user** | Connect my AI assistant to WAGO PLCs and start asking questions | **Part 1** → [Quick Start](#quick-start) (one file, no install) → [What can I ask it?](#what-can-i-ask-it) |
-| **Automation / OT engineer** | Understand what this does to my PLCs and whether it's safe | **Part 2** → [What this does and doesn't do](#what-this-does-and-doesnt-do) |
-| **Software / DevOps engineer** | Deploy this in production with GitOps, TLS, and audit logging | **Part 3** → [Production deployment](#production-deployment) → [GitOps write-gate](#gitops-write-gate) |
+| I am a... | I want to... | Go to |
+|---|---|---|
+| **Claude Desktop / Claude Code user** | Connect my assistant to WAGO PLCs and ask questions | [Part 1](#part-1---claude-desktop-and-claude-code-users) |
+| **Automation / OT engineer** | Know what this does to my PLCs and if it is safe | [Part 2](#part-2---automation-and-ot-engineers) |
+| **Software / DevOps engineer** | Deploy it for a team with GitOps, TLS, and audit logging | [Part 3](#part-3---software-and-devops-engineers) |
 
-Each part is self-contained top to bottom - a Claude Desktop user never needs
-to read the GitOps internals, and a DevOps engineer never needs the chat
-examples. [Reference](#frequently-asked-questions) at the end covers
-cross-cutting material (FAQ, raw curl access, CRA compliance) that applies
-regardless of persona.
+Each part is complete. You do not need to read the other parts.
+The [Reference](#reference) section at the end has the FAQ, compliance documents, and the license.
 
----
+<details>
+<summary><strong>Full table of contents</strong></summary>
+
+- [Architecture](#architecture)
+- [Part 1 - Claude Desktop and Claude Code users](#part-1---claude-desktop-and-claude-code-users)
+  - [Quick start](#quick-start)
+  - [Example questions](#example-questions)
+  - [Demos](#demos)
+- [Part 2 - Automation and OT engineers](#part-2---automation-and-ot-engineers)
+  - [What this does and does not do](#what-this-does-and-does-not-do)
+  - [Values you can monitor](#values-you-can-monitor)
+  - [Supported hardware](#supported-hardware)
+  - [Read and write rules](#read-and-write-rules)
+  - [Safety gates](#safety-gates)
+  - [Firmware updates](#firmware-updates)
+- [Part 3 - Software and DevOps engineers](#part-3---software-and-devops-engineers)
+  - [Deployment options](#deployment-options)
+  - [WAGO skill](#wago-skill)
+  - [GitOps write-gate](#gitops-write-gate)
+  - [Security](#security)
+  - [Tool reference](#tool-reference)
+  - [Configuration reference](#configuration-reference)
+  - [Raw WDA access with curl](#raw-wda-access-with-curl)
+- [Reference](#reference)
+  - [FAQ](#faq)
+  - [Security and CRA compliance](#security-and-cra-compliance)
+  - [License](#license)
+
+</details>
 
 ## Architecture
 
@@ -82,7 +111,7 @@ flowchart TB
     end
     %% PFC400 (750-8400) omitted from this diagram - not yet in hand, see Supported hardware
 
-    subgraph FW["fwupdate - separate tool, human-run only (v2.3.0)"]
+    subgraph FW["fwupdate - separate tool, human-run only"]
         direction LR
         Op("Operator<br/>(maintenance window)") --> Az("Git-gated approval<br/>(policy committed + reviewed)")
         Az --> Flash("Firmware flash<br/>over WDA REST")
@@ -92,97 +121,203 @@ flowchart TB
     Flash -. shares the hash-chained audit log .-> Guard
 ```
 
-Demoed end to end with **16 PLCs** of mixed device class on a single rack.
-The parallel fan-out model has no architectural ceiling below **100+**.
+We tested the server with **16 PLCs** of different device classes on one rack.
+The parallel fan-out design has no known limit below **100+** PLCs.
 
-Firmware updates are deliberately **not** an MCP tool - the server refuses
-every firmware method so an agent can never flash a controller. `fwupdate/`
-is a separate container a person runs by hand, and it refuses to start
-without an approval already committed and reviewed in a git-tracked policy
-file. See [`fwupdate/README.md`](fwupdate/README.md) for the full
-authorization model.
+Firmware updates are not an MCP tool. See [Firmware updates](#firmware-updates).
 
 ---
 
-# Part 1 - For Claude Desktop / Claude Code users
+# Part 1 - Claude Desktop and Claude Code users
 
-Everything to get connected and start asking questions in plain English.
-
-## Demo
-
-These are short screen recordings of the server driving real WAGO
-controllers from Claude Desktop, start to finish - no edited-out steps.
-
-### Overview - connecting Claude Desktop and a first interaction
+This part shows how to connect Claude to your PLCs and what you can ask.
 
 ![Overview demo](docs/media/demo-overview.gif)
 
-<details>
-<summary><strong>Use case 1 - fleet-wide health report across all 16 PLCs</strong></summary>
+## Quick start
 
-Asks the agent to reconcile a "health report" across the fleet - listing all
-PLCs, bulk-fetching firmware versions, and probing device types to figure
-out what's actually running where before trusting any conclusions.
+The Claude Desktop extension is the recommended path for one engineer and a small number of PLCs.
+You do not need a terminal, Docker, or Python.
+For a shared server, go to [Deployment options](#deployment-options).
+
+### Step 1 - Install the extension
+
+1. Download `wago-plc-mcp-server-<version>.mcpb` from the [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
+2. Open Claude Desktop and go to **Settings → Extensions**.
+3. Drag the `.mcpb` file onto the window. You can also double-click the file.
+
+![Installing the WAGO PLC extension in Claude Desktop](docs/media/demo-mcpb-install.gif)
+
+> [!NOTE]
+> Some Windows builds of Claude Desktop do not start the installer from drag-and-drop or double-click.
+> This is a Claude Desktop bug. If this occurs, do these steps:
+> 1. Unzip the `.mcpb` file.
+> 2. Go to **Settings → Extensions → Advanced settings → Install Unpacked Extension**.
+> 3. Select the unzipped folder.
+
+### Step 2 - Fill in the install form
+
+You must supply the PLC IP address, the WBM username (usually `admin`), and the password.
+All other fields have default values.
+
+**A small number of PLCs with the same password:**
+
+1. Type the IPs in **PLC IP addresses**. Use commas between IPs, for example `192.168.1.10,192.168.1.11`.
+2. Type the password in **Default PLC password**.
+
+**Many PLCs, or PLCs with different passwords:**
+
+1. Make a text file with one IP on each line, for example `~/.wago-plc-mcp/plc_hosts.txt`:
+
+   ```
+   # One IP per line. Lines starting with '#' are comments.
+   192.168.1.10   # PFC200 - packaging line
+   192.168.1.11   # PFC200 - packaging line
+   192.168.1.12   # CC100 - utility room
+   192.168.1.20   # Edge Controller - line 2
+   192.168.1.21   # Edge Controller - line 2
+   ```
+
+2. If some PLCs use a different password, make a second file, for example `~/.wago-plc-mcp/plc_passwords.txt`:
+
+   ```
+   # One 'ip=password' pair per line. Only list PLCs that differ from the
+   # "Default PLC password" field above - everything else uses that instead.
+   192.168.1.12=a-different-password-for-this-one
+   ```
+
+3. Select the files with the **Browse...** buttons next to **PLC IP list file** and **Per-PLC passwords file**.
+
+The server merges the IP field and the IP file. You can use both.
+
+> [!WARNING]
+> The IPs and passwords above are examples. Replace them with your values.
+> Do not commit a filled-in password file to a public location.
+
+**Writes:** Keep **Allow writes and method calls** off if Claude must only read the PLCs.
+When this setting is off, the server refuses and logs all parameter writes, method calls, and file uploads.
+
+### Step 3 - Ask a question
+
+Save the form. Then ask Claude in plain English:
+
+> "List my PLCs"
+> "What firmware is running on 192.168.1.10?"
+> "Check NTP status across the fleet"
+
+### Step 4 - Install the WAGO skill (recommended)
+
+The skill tells Claude the WAGO parameter names, the safe operating rules, and how the tools behave.
+With the skill, Claude finds the correct parameter faster.
+
+1. Download `wago-plc-skill-<version>.skill` from the [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
+2. In Claude Desktop, go to **Settings → Skills**.
+3. Add the downloaded file.
+
+For Claude Code, claude.ai, and the Agent SDK, see [WAGO skill](#wago-skill).
+
+## Example questions
+
+You do not need parameter IDs or WDA API knowledge.
+The assistant selects the tools and sends the REST calls.
+
+### Fleet-wide checks
+
+| You type | The assistant does this |
+|---|---|
+| "Which PLCs are running firmware older than build 31?" | Reads the firmware version from all controllers in parallel and lists the old ones |
+| "Are NTP and Docker running on all Edge Controllers?" | Reads the service running flags across the fleet and shows stopped services |
+| "Show the diagnostic LED states on all PLCs" | Reads the SYS, RUN, and fieldbus LED text from all units |
+| "Is any controller showing a fault or error state?" | Compares LED text and error parameters across the fleet |
+
+### Diagnostics on one controller
+
+| You type | The assistant does this |
+|---|---|
+| "What firmware version is running on 192.168.1.14?" | Reads the firmware version parameter |
+| "List all network settings on Edge Controller .19" | Searches parameters by keyword and returns names and values |
+| "Is the CODESYS program loaded and running on PFC300 .22?" | Reads the CODESYS runtime state parameter |
+| "What NTP server is configured on PLC .10?" | Reads the NTP client configuration |
+
+### Configuration changes and remote actions
+
+| You type | The assistant does this |
+|---|---|
+| "Set the NTP server to 192.168.0.1 on all PLCs in building A" | Writes the NTP address after you confirm. The audit log records each write. |
+| "Trigger an NTP time sync on the three controllers that showed clock drift" | Starts the NTP sync method only on the affected units |
+| "Enable SSH on controller .14 for remote maintenance access" | Finds the SSH enable parameter and writes it after you confirm |
+
+### Monitoring
+
+| You type | The assistant does this |
+|---|---|
+| "Set up a health monitor for the packaging line PLCs" | Makes a watchlist on each PLC with LED states, service flags, and cloud status. Each poll is one HTTP request. |
+| "Track the firmware update progress on all 12 PLCs" | Polls the update status and progress across the fleet |
+
+> [!NOTE]
+> The assistant asks for your confirmation before it writes a value to a controller.
+
+## Demos
+
+These screen recordings show Claude Desktop with real WAGO controllers. We did not remove steps.
+
+<details>
+<summary><strong>Fleet health report across 16 PLCs</strong></summary>
+
+The agent lists all PLCs, reads the firmware versions in bulk, and checks the device types.
+It confirms what runs where before it gives conclusions.
 
 ![Use case 1 demo](docs/media/demo-use-case-1.gif)
 
 </details>
 
 <details>
-<summary><strong>Use case 2 - Edge Controller: building a CPU/LED health watchlist</strong></summary>
+<summary><strong>CPU and LED health watchlist on an Edge Controller</strong></summary>
 
-Asks the agent to set up a watchlist monitoring CPU/service health and LED
-diagnostic state on the Edge Controllers, then read it back - including the
-agent pushing back to clarify ambiguous requirements before touching
-anything, and discovering the actual parameter IDs via `find_parameters`
-rather than guessing.
+The agent makes a watchlist for CPU, service health, and LED state, then reads it.
+The agent asks questions about unclear requirements before it changes anything.
+It finds the parameter IDs with `find_parameters` and does not guess them.
 
 ![Use case 2 Edge Controller demo](docs/media/demo-use-case-2-edge-controller.gif)
 
 </details>
 
 <details>
-<summary><strong>Use case 2 - PFC300: building a CPU/LED health watchlist</strong></summary>
+<summary><strong>CPU and LED health watchlist on a PFC300</strong></summary>
 
-The same health-watchlist workflow as above, run against a PFC300 instead -
-shows the same parameter-discovery process landing on different actual
-parameter names for an equivalent capability.
+This is the same workflow on a PFC300.
+The agent finds different parameter names for the same function.
 
 ![Use case 2 PFC300 demo](docs/media/demo-use-case-2-pfc300.gif)
 
 </details>
 
 <details>
-<summary><strong>Use case 3 - detecting and fixing NTP drift fleet-wide</strong></summary>
+<summary><strong>Find and fix NTP drift across the fleet</strong></summary>
 
-Asks the agent to sync NTP time on any PLC that's drifted. The agent checks
-NTP status across the entire fleet first, identifies which PLCs are
-actually affected (stuck clocks, wrong timezone offsets), and only then
-invokes the time-sync method on the specific units that need it.
+The agent first checks the NTP status on all PLCs.
+It finds the affected units, for example clocks that stopped or wrong timezone offsets.
+Then it starts the time sync only on those units.
 
 ![Use case 3 demo](docs/media/demo-use-case-3.gif)
 
 </details>
 
 <details>
-<summary><strong>Use case 4 - which PLCs are reachable and what firmware are they running?</strong></summary>
+<summary><strong>Reachability and firmware versions</strong></summary>
 
-Asks the agent to sweep the entire fleet, check reachability, and report
-firmware versions - all in one shot. The agent calls `list_plcs`, then
-`describe_plc` in parallel across every registered controller, and returns
-a clean table of what's alive, what model it is, and which firmware build it
-carries.
+The agent calls `list_plcs`, then `describe_plc` on all controllers in parallel.
+It returns a table with the status, model, and firmware build of each PLC.
 
 ![Use case 4 demo](docs/media/demo-use-case-4.gif)
 
 </details>
 
 <details>
-<summary><strong>Use case 5 - which devices still have the default NTP server configured?</strong></summary>
+<summary><strong>Find devices with the default NTP server</strong></summary>
 
-Asks the agent to audit NTP configuration across the fleet and flag any
-controller still pointing at the factory-default time server. The kind of
-compliance sweep that would otherwise require manual access to each device.
+The agent checks the NTP configuration on all PLCs.
+It shows each controller that still uses the factory-default time server.
 
 ![Use case 5 demo](docs/media/demo-use-case-5.gif)
 
@@ -190,297 +325,173 @@ compliance sweep that would otherwise require manual access to each device.
 
 ---
 
-## Quick Start
+# Part 2 - Automation and OT engineers
 
-The easiest way to connect Claude Desktop to your WAGO PLCs: one file, no
-terminal, no Docker, no code. This is the recommended path for most users.
-Setting this up as a shared service for a team, or a production fleet
-instead? Skip to [Production deployment](#production-deployment).
+This part tells you what the server does on your PLCs and when it allows or refuses a write.
 
-### 1. Install the extension
+## What this does and does not do
 
-1. Download `wago-plc-mcp-server-<version>.mcpb` from the
-   [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
-2. Open Claude Desktop → **Settings → Extensions**, then drag the `.mcpb`
-   file onto the window (or double-click the file itself).
+**WDA (WDx):** Each WAGO controller has a REST API called WDA (WAGO Device Access).
+WDA is for **system and diagnostic management**: firmware version, network settings, service health, status LEDs, reboot, and firmware update.
+It is similar to *Online & Diagnostics* in TIA Portal or *Controller Properties* in Studio 5000.
+WDA is **not** a fieldbus, **not** OPC UA, and gives **no** access to the I/O data of your control program.
 
-![Installing the WAGO PLC extension in Claude Desktop](docs/media/demo-mcpb-install.gif)
+**MCP:** A standard protocol that lets an AI assistant call a fixed set of tools on a system.
+This server changes the WDA REST API into 29 tools.
 
-> [!NOTE]
-> On some Windows builds, drag-and-drop or double-click doesn't trigger the
-> installer - a known Claude Desktop bug, not specific to this extension.
-> If that happens: unzip the `.mcpb` file, then use **Settings → Extensions
-> → Advanced settings → Install Unpacked Extension** on the extracted
-> folder instead.
-
-### 2. Fill in the install form
-
-At minimum you need: your PLC's IP address, the WBM username (usually
-`admin`), and its password. Everything else has a sensible default.
-
-**A handful of PLCs, same password:** fill in **PLC IP addresses** and
-**Default PLC password**, comma-separating IPs if there's more than one -
-e.g. `192.168.1.10,192.168.1.11`.
-
-**Many PLCs, or a few with different passwords:** use the file fields
-instead of typing everything into one box. Save a plain text file
-somewhere on your machine, e.g. `~/.wago-plc-mcp/plc_hosts.txt`:
-
-```
-# One IP per line. Lines starting with '#' are comments.
-192.168.1.10   # PFC200 - packaging line
-192.168.1.11   # PFC200 - packaging line
-192.168.1.12   # CC100 - utility room
-192.168.1.20   # Edge Controller - line 2
-192.168.1.21   # Edge Controller - line 2
-```
-
-And, only for units whose password differs from the default, a second file
-such as `~/.wago-plc-mcp/plc_passwords.txt`:
-
-```
-# One 'ip=password' pair per line. Only list PLCs that differ from the
-# "Default PLC password" field above - everything else uses that instead.
-192.168.1.12=a-different-password-for-this-one
-```
-
-Point **PLC IP list file** and **Per-PLC passwords file** at those files with
-the **Browse...** buttons. The IP field and file merge, so you can use both
-together. The IPs and passwords above are examples only - replace them with
-your own, and never commit a filled-in copy of either file anywhere public.
-
-Leave **Allow writes and method calls** off unless Claude should be able to
-change these controllers, not just read them. Off, every PLC stays
-read-only: parameter writes, method calls, and file uploads are refused and
-logged.
-
-### 3. Ask it something
-
-Once the form is saved, just ask Claude, in plain English:
-
-> "List my PLCs"
-> "What firmware is running on 192.168.1.10?"
-> "Check NTP status across the fleet"
-
-See [What can I ask it?](#what-can-i-ask-it) for more examples.
-
-### 4. Install the WAGO skill (recommended)
-
-The bundled skill teaches Claude the WAGO parameter names, how to operate
-safely, and how the tools actually behave - the difference between a vague
-answer and one that lands on the right parameter first try.
-
-Claude Desktop has its own **Settings → Skills** page where you can add
-the packaged skill the same way you added the extension above - download
-`wago-plc-skill-<version>.skill` from the
-[latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest)
-and add it there. On Claude Code, or to do it by hand:
-
-```bash
-mkdir -p ~/.claude/skills
-cp -r wago-plc-skill ~/.claude/skills/
-```
-
-It also works outside Claude Desktop entirely (claude.ai, the Claude
-Developer Platform, Agent SDK) - see
-[Skills - install the right one](#skills---install-the-right-one).
-
----
-
-## What can I ask it?
-
-You don't need to know any parameter IDs or anything about the WDA API. Just
-ask for what you want; the assistant works out which tools to call and deals
-with the REST plumbing for you.
-
-### Fleet-wide checks
-
-| What you type | What happens |
-|---|---|
-| "Which PLCs are running firmware older than build 31?" | Reads firmware version from every controller in parallel and lists the ones behind |
-| "Are NTP and Docker running on all Edge Controllers?" | Reads service running-flags across the fleet, highlights stopped services |
-| "Show the diagnostic LED states on all PLCs" | Reads SYS, RUN, and fieldbus LED text strings from every unit |
-| "Is any controller showing a fault or error state?" | Cross-checks LED strings and error parameters fleet-wide |
-
-### Single-controller diagnostics
-
-| What you type | What happens |
-|---|---|
-| "What firmware version is running on 192.168.1.14?" | Reads the firmware version parameter |
-| "List all network settings on Edge Controller .19" | Searches parameters by keyword, returns names + current values |
-| "Is the CODESYS program loaded and running on PFC300 .22?" | Reads the CODESYS runtime state parameter |
-| "What NTP server is configured on PLC .10?" | Reads NTP client configuration |
-
-### Configuration changes and remote actions
-
-| What you type | What happens |
-|---|---|
-| "Set the NTP server to 192.168.0.1 on all PLCs in building A" | Writes NTP address after your confirmation; every write is recorded in the audit log |
-| "Trigger an NTP time sync on the three controllers that showed clock drift" | Invokes the NTP sync action only on affected units |
-| "Enable SSH on controller .14 for remote maintenance access" | Finds the SSH enable parameter and writes it after confirmation |
-
-### Ongoing monitoring
-
-| What you type | What happens |
-|---|---|
-| "Set up a health monitor for the packaging line PLCs" | Creates a server-side watchlist combining LED states, service flags, and cloud status - one HTTP request per poll cycle |
-| "Track the firmware update progress on all 12 PLCs" | Polls update status and progress across the fleet |
-
-> [!NOTE]
-> The assistant asks for confirmation before writing any value to a controller.
-
----
-
-# Part 2 - For automation / OT engineers
-
-What this actually touches on your PLCs, in terms you already know, and
-exactly when a write or method call is allowed versus refused.
-
-## What this does and doesn't do
-
-### For automation and OT engineers
-
-You know PLCs - TIA Portal, Studio 5000, EcoStruxure, ladder logic. Here's
-the 60-second translation.
-
-**What WDA/WDx is:** Every WAGO controller exposes a REST API called WDA
-(WAGO Device Access) for **system and diagnostic management** - firmware
-version, network config, service health, status LEDs, reboot and
-firmware-update control. Think of it as the machine-readable equivalent of
-TIA Portal's *Online & Diagnostics* view or Studio 5000's *Controller
-Properties* - **not** a fieldbus, **not** OPC-UA, and **not** access to
-your control program's I/O data.
-
-**What MCP is:** A standard protocol that lets an AI assistant call a fixed
-set of defined tools against a system, instead of you writing custom
-integration code for every request. This server turns the WDA REST API into
-29 tools an AI assistant can call directly.
-
-| Term | Plain meaning | Closest thing you already know |
+| Term | Meaning | Similar item you know |
 |---|---|---|
-| WDA / WDx | WAGO's REST API for system/diagnostic management | TIA Portal *Online & Diagnostics*, Studio 5000 *Controller Properties* |
-| MCP | Protocol letting an AI assistant call a fixed set of "tools" | A structured API contract invoked by an LLM instead of your own code |
-| Parameter | A single named system value (firmware version, LED state, service flag) | A diagnostic/status tag - not a control-program I/O tag |
-| Method | A remote action you can trigger (NTP sync, reboot, firmware update) | An RPC / "execute" command, similar to an online action in TIA/Studio 5000 |
-| Watchlist | A server-side list of parameters the PLC keeps open for cheap repeated reads | Closest analog: a Watch Table (TIA) or Trend window (Studio 5000) - polled by an agent |
+| WDA / WDx | The WAGO REST API for system and diagnostic management | TIA Portal *Online & Diagnostics*, Studio 5000 *Controller Properties* |
+| MCP | A protocol that lets an AI assistant call a fixed set of tools | An API contract that an LLM calls instead of your code |
+| Parameter | One named system value, for example firmware version, LED state, or service flag | A diagnostic or status tag, not a control-program I/O tag |
+| Method | A remote action, for example NTP sync, reboot, or firmware update | An online action or "execute" command in TIA Portal or Studio 5000 |
+| Watchlist | A list of parameters that the PLC keeps open for fast repeated reads | A Watch Table (TIA Portal) or Trend window (Studio 5000) |
 
 > [!IMPORTANT]
-> **What this does NOT do:**
-> - It is **WAGO-only** - no Siemens S7, Rockwell Logix, or Schneider Modicon.
-> - It does **not** read or write your control program's I/O tags, real-time
->   process values, or PLC memory. Field I/O still goes through OPC-UA,
->   Modbus TCP, or WAGO I/O-Check.
-> - It is **not** an HMI/SCADA replacement - no graphical front end, just
->   tool calls an AI assistant makes on your behalf.
+> **Limits:**
+> - The server supports **WAGO only**. It does not support Siemens S7, Rockwell Logix, or Schneider Modicon.
+> - The server does **not** read or write control-program I/O tags, real-time process values, or PLC memory. Use OPC UA, Modbus TCP, or WAGO I/O-Check for field I/O.
+> - The server is **not** an HMI or SCADA system. It has no graphical interface.
 
-### What values can actually be monitored
+## Values you can monitor
 
-WDA exposes the **system management layer**, not the real-time process image.
-What it *does* expose as live, poll-worthy values:
+WDA gives access to the system management layer, not to the real-time process image.
+These values are live and are useful to poll:
 
-| Category | Example parameters | Typical use |
+| Category | Example parameters | Use |
 |---|---|---|
-| **Service health** | `0-0-ntpclient-isrunning`, `0-0-docker-isrunning`, `0-0-ssh-isrunning`, `0-0-openvpn-isrunning` | Detect silently stopped services |
-| **LED & fault state** | `0-0-ledstates-1-diagnosticinformation` (SYS), `0-0-ledstates-4-diagnosticinformation` (RUN) | Mirror physical status LEDs; surface diagnostic text without physical access |
-| **Firmware update** | `0-0-firmwareupdate-status`, `0-0-firmwareupdate-progress` | Track OTA update progress across a fleet |
-| **CODESYS runtime** | `0-0-codesys3-applications` | Confirm a PLC program is loaded and running |
-| **Cloud connectivity** | `0-0-cloudconnections-1-status-connected`, `0-0-cloudconnections-1-status-filllevel` | Monitor MQTT broker reachability and queue depth |
-| **System time** | `0-0-systemtime-now` | Verify clock synchronisation after NTP updates |
+| **Service health** | `0-0-ntpclient-isrunning`, `0-0-docker-isrunning`, `0-0-ssh-isrunning`, `0-0-openvpn-isrunning` | Find services that stopped |
+| **LED and fault state** | `0-0-ledstates-1-diagnosticinformation` (SYS), `0-0-ledstates-4-diagnosticinformation` (RUN) | Read the status LEDs and diagnostic text without physical access |
+| **Firmware update** | `0-0-firmwareupdate-status`, `0-0-firmwareupdate-progress` | Monitor update progress across a fleet |
+| **CODESYS runtime** | `0-0-codesys3-applications` | Make sure a PLC program is loaded and running |
+| **Cloud connectivity** | `0-0-cloudconnections-1-status-connected`, `0-0-cloudconnections-1-status-filllevel` | Monitor MQTT broker connection and queue level |
+| **System time** | `0-0-systemtime-now` | Make sure the clock is correct after an NTP update |
 
-### Supported hardware
+## Supported hardware
 
-| Device | Article Numbers | Notes |
+| Device | Article numbers | Notes |
 |--------|----------------|-------|
-| CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU - set `WAGO_TIMEOUT_SECONDS=45` |
-| CC100-IEC62443 | `751-9412` | Hardened variant of CC100, same order-number prefix and class - ~1056 WDA params (additional security feature groups) vs. the base unit's 360 |
+| CC100 | `751-9301` · `751-9401` · `751-9402` · `751-9403` | Slow ARM CPU. Set `WAGO_TIMEOUT_SECONDS=45`. |
+| CC100-IEC62443 | `751-9412` | Hardened CC100 variant. Same device class. Approximately 1056 WDA parameters instead of 360, because of additional security feature groups. |
 | PFC100 Gen 2 | `750-8110` · `750-8111` · `750-8112` · `750-8112/025-000` | |
 | PFC200 Gen 2 | `750-8210` · `750-8211` · `750-8212` · `750-8216` · `750-8217` | |
 | PFC300 | `750-8302` | |
-| PFC400 | `750-8400` | **Not yet in hand** - order-number prefix is recognized so it registers under its own class, but nothing about it is verified against real hardware |
-| Edge Controller | `752-8303/8000-0002` | Exposes CODESYS runtime state via `0-0-plcruntime-*` |
-| WP400 | `762-34xx` | Web panel only - 189 WDA params, no CODESYS. HMI params: display brightness/orientation/screensaver, integrated browser startpage, touch cleaning mode |
-| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | Full PLC+HMI - 410 WDA params. CODESYS3, BACnet, cloud, serial, all WP400 HMI params plus front LED and acoustic feedback |
+| PFC400 | `750-8400` | **Not tested.** The server identifies the device class, but we have no hardware to verify it. |
+| Edge Controller | `752-8303/8000-0002` | Gives the CODESYS runtime state in `0-0-plcruntime-*` |
+| WP400 | `762-34xx` | Web panel only. 189 WDA parameters, no CODESYS. HMI parameters: display brightness, orientation, screensaver, browser start page, touch cleaning mode. |
+| TP600 | `762-42xx` · `762-43xx` · `762-52xx` · `762-53xx` · `762-62xx` · `762-63xx` | PLC and HMI. 410 WDA parameters. CODESYS 3, BACnet, cloud, serial, all WP400 HMI parameters, front LED, and acoustic feedback. |
 
-Requires firmware **build ≥ 28 (FW28)**. Tested up to **04.09.01 (FW31)**.
+**Firmware:** Build 28 (FW28) or higher is necessary. We tested up to 04.09.01 (FW31).
 
----
+## Read and write rules
 
-## How reads and writes work
+Each agent operation is in one of three classes. There are no other classes.
 
-Every operation an agent can perform falls into exactly one of three classes.
-These are mutually exclusive and cover everything the server can do - there is
-no fourth kind of action.
-
-| Class | Tools | Changes the PLC? |
+| Class | Tools | Changes the PLC |
 |---|---|---|
 | **Read** | `list_plcs`, `describe_plc`, `find_parameters`, `get_parameter`, `get_parameters_bulk`, `find_methods`, `get_method`, `get_method_run`, `create_watchlist`, `read_watchlist`, `delete_watchlist`, `get_plc_audit_log` | No |
-| **Write a parameter** | `set_parameters` | Yes - changes a stored config value |
-| **Invoke a method** | `invoke_method` | Yes - triggers an action (NTP sync, reboot, firmware update, ...) |
+| **Write a parameter** | `set_parameters` | Yes. It changes a stored configuration value. |
+| **Start a method** | `invoke_method` | Yes. It starts an action, for example NTP sync, reboot, or firmware update. |
 
-### Standard behavior (default config: live mode, no read-only hosts)
+### Default behavior
 
-- **Reads are always allowed.** They have no side effects and are never gated.
-- **Parameter writes are allowed when the parameter is writeable.** The server
-  pre-checks writeability from its cache and refuses values the firmware marks
-  read-only for that device/firmware, before any HTTP call reaches the PLC.
-- **Safe method calls are allowed.** Anything that is not on the dangerous list
-  below runs directly.
-- **Dangerous methods are denied.** Method IDs whose segments start with
-  `reboot`, `restart`, `factory`, `firmware`, or `format` are refused unless you
-  explicitly allowlist the exact ID.
+The default configuration is live mode with no read-only hosts.
 
-### When a write or method call is allowed
+- **Reads:** The server always allows reads. Reads have no side effects.
+- **Parameter writes:** The server allows a write if the parameter is writeable. It checks this in its cache before it sends a request to the PLC.
+- **Safe methods:** The server runs all methods that are not on the dangerous list.
+- **Dangerous methods:** The server refuses method IDs that start with `reboot`, `restart`, `factory`, `firmware`, or `format`. To allow one, add its exact ID to `WAGO_ALLOW_METHODS`.
 
-The outcome is decided by three independent conditions. Read-only status takes
-precedence over everything else; otherwise the server mode decides.
+### Decision table
+
+Three conditions control the result. Read-only status has priority. If the PLC is not read-only, the server mode controls the result.
 
 | Condition | Read | `set_parameters` | Safe `invoke_method` | Dangerous `invoke_method` |
 |---|---|---|---|---|
-| **Read-only PLC** (`WAGO_ALLOW_WRITES` set but not `true`, `WAGO_READONLY_HOSTS`, or fleet `# readonly`) - any mode | Allowed | **Refused** | **Refused** | **Refused** |
-| **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Denied** unless ID in `WAGO_ALLOW_METHODS` |
-| **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a PR YAML fragment (no direct write) | Returns a PR YAML fragment | Returns a PR YAML flagged `requires_human: CRITICAL`; `apply.py` refuses to run it until a human sets `approved_by` |
+| **Read-only PLC** (`WAGO_ALLOW_WRITES` set but not `true`, `WAGO_READONLY_HOSTS`, or `# readonly` in the fleet file), all modes | Allowed | **Refused** | **Refused** | **Refused** |
+| **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Refused** if the ID is not in `WAGO_ALLOW_METHODS` |
+| **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a YAML fragment for a pull request. No direct write. | Returns a YAML fragment | Returns a YAML fragment with `requires_human: CRITICAL`. `apply.py` does not run it until a person sets `approved_by`. |
 
-Read it top-down: if the PLC is read-only, stop there - nothing is written. If
-not, the active mode determines whether a write happens directly (live) or
-becomes a reviewed pull request (GitOps).
+The [audit log](#audit-log) records each write and each method call, also when the server refuses it.
 
-Every write and every method call - allowed, refused, or denied - is recorded
-in the tamper-evident [audit log](#audit-log). For the rationale behind the
-dangerous-method and read-only gates, see
-[Safety gates](#safety-gates---guarding-against-a-rogue-agent).
+## Safety gates
+
+An AI agent can go off-script because of hallucination, prompt injection, or a bug.
+On a production line, an unwanted configuration change or reboot can cause equipment damage.
+The server enforces these gates in code. **The agent cannot override them.**
+
+| Gate | Function | Configuration |
+|------|--------------|-----------|
+| **Read-only PLCs** | The listed PLCs refuse all writes, method calls, and file uploads in all modes. | `WAGO_READONLY_HOSTS=ip,ip`, or `# readonly` on the line in the fleet file |
+| **Fleet-wide write switch** | Makes all PLCs read-only. If the variable is not set, writes are possible. Any value other than `true` blocks writes, so a typo fails closed. The Claude Desktop extension sets this from its "Allow writes" checkbox, which is off by default. | `WAGO_ALLOW_WRITES=true` allows writes. `WAGO_ALLOW_WRITES=false` blocks them. |
+| **Dangerous-method denylist** | In live mode, the server refuses reboot, restart, factory reset, firmware, and format methods. | `WAGO_ALLOW_METHODS=<exact-method-id>` allows one method |
+| **Human approval for dangerous operations** | In GitOps mode, these operations become a pull request with `requires_human: CRITICAL`. `apply.py` does not run until a person sets `approved_by`. | Set `approved_by` during the review, or set `WAGO_APPROVED_BY` in CI |
+
+For a high-consequence action, use a pull request that a person reviews. The audit log records it.
+A refusal is correct behavior, not a failure.
+For more details and a dry-run example, see [`docs/gitops/README.md` → Safety model](docs/gitops/README.md#safety-model--three-independent-gates).
+
+## Firmware updates
+
+You cannot undo a firmware update with a new commit. For this reason, the agent cannot start one.
+
+`invoke_method` refuses all `firmware*` methods in live mode on all devices. The audit log records each refusal.
+Do not change this setting.
+
+```
+> Update the firmware on 192.168.42.121
+
+Method '0-0-firmwareupdate-activate' is denied by safety policy
+(dangerous; not in WAGO_ALLOW_METHODS).
+```
+
+A person does firmware updates with a separate tool, [`fwupdate/`](fwupdate/README.md), during a maintenance window.
+The agent cannot access this tool.
+The tool does not start if the config repository has no committed approval for that device and firmware revision.
+
+The tool writes to the **same hash-chained audit log** as `set_parameters` and `invoke_method`.
+It records the approval, each refusal, success, device failure, timeout, and abort.
+Each record names the approver and the source of the approval, for example the pull request and its reviewers.
+
+```bash
+docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
+# [PASS] Chain intact - 13 entries verified
+
+git show 18d2cbf        # who approved it, and when
+```
+
+| Question | Document |
+|---|---|
+| Who approves an update, and how do I require two approvers? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
+| How do I run an update, and what do I do if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
+| What do the REST calls do? | [`docs/wda-firmware-update.md`](docs/wda-firmware-update.md) |
+| I know GitHub but not CI/CD. Where do I start? | [`docs/plc-change-control.html`](docs/plc-change-control.html) |
 
 ---
 
-# Part 3 - For software / DevOps engineers
+# Part 3 - Software and DevOps engineers
 
-Deploying this in production, wiring up GitOps, securing the endpoint, and
-the full tool/config reference.
+This part covers deployment, GitOps, security, and the full tool and configuration reference.
 
-## Production deployment
+## Deployment options
 
-### Deployment options
-
-The [Quick Start](#quick-start) above (the `.mcpb` extension) is the
-default for most people: one engineer, a handful of PLCs, no server to run
-or maintain. Everything below is for a **shared** setup - one server that
-several people or clients connect to at once.
-
-| Path | Best for | Requires |
+| Path | Use for | Requirements |
 |---|---|---|
-| [Docker](#docker-recommended) | Plant server, shared multi-user fleet | Docker host on the OT network |
-| [Portainer](#portainer) | Docker host managed remotely through Portainer's UI | Portainer pointed at that Docker host |
+| [Claude Desktop extension](#quick-start) | One engineer, a small number of PLCs | Claude Desktop |
+| [Docker](#docker-recommended-for-teams) | A plant server that many users share | Docker host on the OT network |
+| [Portainer](#portainer) | A Docker host that you manage in Portainer | Portainer connected to the Docker host |
 | [MCP Registry](#mcp-registry) | Clients that install servers from the official registry | `uv` or Docker |
-| [uvx / PyPI](#uvx--pypi) | Developer machine, any OS | `uv` installed |
-| [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed |
-| [HTTP remote](#http-remote-chatgpt-api-n8n-openai) | ChatGPT, OpenAI API, n8n | Running server reachable over network |
+| [uvx / PyPI](#uvx--pypi) | A developer computer on any OS | `uv` |
+| [IDE](#ide-cursor-and-vs-code) | Cursor, VS Code with Copilot | `uv` |
+| [HTTP remote](#http-remote-openai-and-n8n) | ChatGPT, OpenAI API, n8n | A server that the client can reach on the network |
 
-Config file examples for every path: [`deploy/configs/`](deploy/configs/)
+The [`deploy/configs/`](deploy/configs/) folder has a configuration example for each path.
 
----
+### Docker (recommended for teams)
 
-### Docker (recommended)
+One server supports many clients. The PLCs register one time at startup and stay connected.
 
-One server, many clients. PLCs register once at startup and stay connected.
+**1. Clone the repository and make the `.env` file:**
 
 ```bash
 git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
@@ -488,7 +499,7 @@ cd wago-plc-mcp-server
 cp _env .env
 ```
 
-Edit `.env`:
+**2. Edit `.env`:**
 
 ```env
 WAGO_PLC_HOSTS=192.168.1.10,192.168.1.11,192.168.1.12
@@ -497,16 +508,14 @@ PORT=6042
 WAGO_TIMEOUT_SECONDS=45
 ```
 
-`WAGO_TIMEOUT_SECONDS` applies to every PLC in the fleet - set it to the
-slowest device class you're onboarding, not the average. CC100 needs 45+;
-most classes are fine at 15. IEC 62443-4-2-hardened units (see below) expose
-roughly 3x the parameters of their base class and have not been timing-tuned
-yet - if one fails registration with a timeout at 45s, that's a real open
-question for this project, not a typo in this guide.
+`WAGO_TIMEOUT_SECONDS` applies to all PLCs. Set it for the slowest device class in the fleet.
+CC100 needs 45 or more. Most other classes work with 15.
+IEC 62443 hardened units have approximately 3 times more parameters, and we did not tune their timeout.
+If registration of such a unit times out at 45 seconds, please open an issue.
 
 > [!TIP]
-> For large fleets, use `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt` - one IP
-> per line, `#` comments supported. Both can be set together; IPs are merged.
+> For a large fleet, set `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt`. The file has one IP per line and supports `#` comments.
+> You can also use `WAGO_PLC_HOSTS` at the same time. The server merges the IPs.
 
 ```
 # data/fleet.txt
@@ -519,74 +528,46 @@ question for this project, not a typo in this guide.
 # 192.168.2.11   decommissioned
 ```
 
-Fleet changes require editing the file and restarting the container. The
-audit log persists across restarts on the `./data` volume.
+To change the fleet, edit the file and restart the container.
+The audit log stays on the `./data` volume after a restart.
 
-**Set PLC passwords.** Every device class onboards the same way: register
-its IP above, then give it credentials here. Two patterns, combinable:
+**3. Set the PLC passwords.** You can use the two methods together.
 
-Shared password (fleets where every PLC uses the same login):
+For one shared password:
+
 ```bash
 mkdir -p secrets
 echo "your-plc-password" > secrets/plc_default_password.txt
 chmod 600 secrets/plc_default_password.txt
 ```
 
-Per-PLC password (any unit with its own login - common for hardened or
-customer-managed devices): add a secret named for its IP, then uncomment the
-matching lines in `docker-compose.yml` (`secrets:` block and the service's
-`secrets:` list):
+For a PLC with its own password, add a secret with its IP in the name.
+Then remove the comment marks from the related lines in `docker-compose.yml` (the `secrets:` block and the `secrets:` list of the service).
+
 ```bash
 echo "that-unit-password" > secrets/plc_password_192_168_2_85.txt
 chmod 600 secrets/plc_password_192_168_2_85.txt
 ```
-Per-PLC secrets take priority over the shared default for a matching IP, so a
-mixed fleet just needs one of these per unit that doesn't share the default
-login - everything else falls back to `plc_default_password.txt`.
+
+A per-PLC secret has priority over the shared password. All other PLCs use `plc_default_password.txt`.
 
 > [!IMPORTANT]
-> **Onboarding IEC 62443-4-2-hardened units (CC100-IEC62443, and the planned
-> PFC400 family).** These register and behave like any other PLC - same WDA
-> API, same tools - but almost always ship with their own credentials, so
-> they need the per-PLC pattern above, not the shared default.
-> - **CC100-IEC62443** (order no. `751-9412`) is a hardened CC100 variant:
->   registers under `device_class: "CC100"` (same order-number prefix), but
->   exposes roughly 1056 WDA parameters instead of the base unit's 360 -
->   additional security-config groups (firewall rules, certificates, account
->   management), not a different device or a bigger baseline to expect from
->   plain CC100s.
-> - **PFC400** (order no. `750-8400`) is not yet available to us - the code
->   recognizes its order-number prefix so it registers under its own
->   `device_class: "PFC400"` instead of falling through unclassified, but
->   nothing about its onboarding, parameter set, or I/O model is verified.
->   [Likely] it will share most of the CC100-IEC62443 security surface once
->   real hardware exists to confirm that. It's also referenced elsewhere as
->   order series `751-941x`, which overlaps with 751-9412 above - until a
->   real unit is on hand to disambiguate, this server does **not** guess: any
->   `0751-9412`-class order number classifies as CC100, not PFC400.
-> - Neither variant is described as "IEC 62443 compliant" or "certified"
->   anywhere in this project - that's a formal third-party assessment of the
->   *device*, not something this server's code can claim on WAGO's behalf.
+> **IEC 62443-4-2 hardened units (CC100-IEC62443, and later PFC400)**
+> - These units use the same WDA API and the same tools as other PLCs.
+> - They usually have their own credentials. Use a per-PLC secret, not the shared password.
+> - **CC100-IEC62443** (`751-9412`) registers as `device_class: "CC100"`. It has approximately 1056 parameters, not 360. The additional parameters are security groups, for example firewall rules, certificates, and accounts.
+> - **PFC400** (`750-8400`) registers as `device_class: "PFC400"`. We did not verify it on real hardware.
+> - This project does not state that these devices are "IEC 62443 compliant" or "certified". Only a third-party assessment of the device can make that statement.
 
-**Start it:**
+**4. Start the server:**
 
 ```bash
 docker compose up -d
 docker logs wmcp -f
 ```
 
-On first boot the server generates an API key and announces its fingerprint
-(the key itself is never written to container logs). Retrieve it with:
-
-```bash
-docker exec wmcp cat /app/data/mcp_api_key
-```
-
-> [!TIP]
-> Once you're past initial testing, provision the key as a Docker Secret
-> instead (see [API key management](#api-key-management)) - then retrieve it
-> with `cat secrets/mcp_api_key.txt` directly on the host, no `docker exec`
-> required.
+At the first start, the server makes an API key and shows its fingerprint.
+The server does not write the key to the container logs.
 
 ```
 ════════════════════════════════════════════════════════════════════════
@@ -605,15 +586,25 @@ Registration: 3/3 ready
 MCP server listening on http://0.0.0.0:6042/mcp (Streamable HTTP)
 ```
 
-**Connect a client** to `http://<host>:6042/mcp` with
-`Authorization: Bearer <key>`.
+**5. Get the API key:**
 
-**Claude Code** (one command):
+```bash
+docker exec wmcp cat /app/data/mcp_api_key
+```
+
+> [!TIP]
+> For production, supply the key as a Docker Secret. See [API key management](#api-key-management).
+
+**6. Connect a client** to `http://<host>:6042/mcp` with the header `Authorization: Bearer <key>`.
+
+Claude Code:
+
 ```bash
 claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc http://localhost:6042/mcp
 ```
 
-**Claude Desktop** - add to `%APPDATA%\Claude\claude_desktop_config.json`:
+Claude Desktop: add this to `%APPDATA%\Claude\claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
@@ -625,79 +616,50 @@ claude mcp add --transport http --header "Authorization: Bearer <key>" wago-plc 
   }
 }
 ```
-Fully quit and relaunch Claude Desktop. You should see a hammer icon with 29 tools:
+
+Quit Claude Desktop fully and start it again. Claude Desktop shows 29 tools:
 
 ![wago-plc connected in Claude Desktop](docs/media/claude-desktop-connected.png)
 
----
-
 ### Portainer
 
-Same image, deployed and managed from Portainer's UI instead of the CLI -
-useful when Portainer is remote from the Docker host and can't see its
-filesystem (no `env_file`, no Docker Secrets - see the comment block in the
-compose file for why).
+This path uses the same image. You deploy and manage it in the Portainer UI.
+Use it when Portainer runs on a different machine and cannot access the Docker host file system.
+In this setup, `env_file` and Docker Secrets are not available. The compose file header tells why.
 
-1. **Edit the volume path first.** [`docker-compose.portainer.yml`](docker-compose.portainer.yml)
-   bind-mounts `./data` as an *absolute* host path
-   (`/home/wago/Documents/mcp/wago-plc-mcp-server/data`) because Portainer
-   resolves relative paths against its own stack folder, not your checkout.
-   Change that path to match wherever this repo lives on the target Docker
-   host before deploying - otherwise the audit log and API key land in the
-   wrong place.
-2. **Portainer → Stacks → Add stack**, paste the (edited) compose file.
-3. **Environment variables** panel: fill in the values listed in the
-   compose file's header comment, or upload
-   [`portainer.env.example`](portainer.env.example) via *Load variables from
-   a .env file* and edit from there. `MCP_API_KEY` here replaces the Docker
-   Secret (`secrets/mcp_api_key.txt`) that `docker-compose.yml` uses - it
-   lives in Portainer's database instead of a file, which is a real
-   trade-off against the CRA-hardening secrets setup, not a drop-in
-   equivalent.
-4. Deploy the stack. Same `http://<host>:6042/mcp` endpoint as the CLI path.
+1. Edit the volume path in [`docker-compose.portainer.yml`](docker-compose.portainer.yml).
+   The file uses the absolute path `/home/wago/Documents/mcp/wago-plc-mcp-server/data`, because Portainer does not resolve relative paths from your checkout.
+   Change it to the repository location on the Docker host.
+   If you do not change it, the audit log and API key go to the wrong location.
+2. In Portainer, go to **Stacks → Add stack** and paste the edited compose file.
+3. In the **Environment variables** panel, set the values from the compose file header.
+   You can also load [`portainer.env.example`](portainer.env.example) with *Load variables from a .env file*.
+4. Deploy the stack. The endpoint is `http://<host>:6042/mcp`.
 
----
-
-### Claude Desktop extension (.mcpb)
-
-<img src="docs/media/wago-plc-illustration.png" alt="WAGO controller illustration" width="320" align="right">
-
-This is the **default, recommended way** to use this server - see
-[Quick Start](#quick-start) at the top of this README for the full
-walkthrough (install, the config form, per-PLC password files, the WAGO
-skill). It's listed here too so it sits next to the other deployment
-options for comparison: one file, no Docker, no Python install - Claude
-Desktop runs the server itself. Meant for one engineer and a handful of
-controllers; use [Docker](#docker-recommended) instead for a shared or
-production fleet.
-
-<br clear="right">
-
----
+> [!NOTE]
+> In Portainer, `MCP_API_KEY` replaces the Docker Secret `secrets/mcp_api_key.txt`.
+> Portainer stores the key in its database, not in a file. This is less secure than the Docker Secret.
 
 ### MCP Registry
 
-Listed in the official [MCP Registry](https://registry.modelcontextprotocol.io)
-as `io.github.WagoAlex/wago-plc-mcp-server`. Clients that install servers from
-the registry offer two packages. Both ask for the PLC IPs and password, and for
-`WAGO_ALLOW_WRITES`, which defaults to `false` (every PLC read-only).
+The server is in the official [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.WagoAlex/wago-plc-mcp-server`.
+Registry clients offer two packages.
+Both packages ask for the PLC IPs, the password, and `WAGO_ALLOW_WRITES`. The default is `false`, so all PLCs are read-only.
 
-| Package | Runs as | Needs |
+| Package | Runs as | Requirements |
 |---|---|---|
 | PyPI `wago-plc-mcp-server` | `uvx wago-plc-mcp-server` over stdio | [`uv`](https://docs.astral.sh/uv/getting-started/installation/) |
-| Docker `wagoalex/wago-plc-mcp-server` | `docker run -i --network host ...` over stdio | Docker on a machine that reaches the PLCs |
-
----
+| Docker `wagoalex/wago-plc-mcp-server` | `docker run -i --network host ...` over stdio | Docker on a machine that can reach the PLCs |
 
 ### uvx / PyPI
 
-Runs the full server locally in stdio mode - no Docker, no proxy, no
-persistent process. Starts fresh each Claude session (PLCs re-register on
-connect, adds a few seconds).
+This path runs the full server locally in stdio mode. You do not need Docker or a background process.
+The server starts again for each Claude session, and the PLCs register again. This adds a few seconds.
+For more than 20 PLCs, use Docker.
 
-**Requires:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+**Requirement:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
 
-**`%APPDATA%\Claude\claude_desktop_config.json`:**
+Add this to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
@@ -718,16 +680,12 @@ connect, adds a few seconds).
 }
 ```
 
-Prefer Docker for fleets > 20 PLCs to avoid per-session re-registration.
+To make all PLCs read-only, add `"WAGO_ALLOW_WRITES": "false"` to `env`. See [Safety gates](#safety-gates).
 
-To keep every PLC read-only, add `"WAGO_ALLOW_WRITES": "false"` to `env`
-(see [Safety gates](#safety-gates---guarding-against-a-rogue-agent)).
+### IDE (Cursor and VS Code)
 
----
-
-### IDE (Cursor, VS Code)
-
-**Cursor** - `.cursor/mcp.json` in the project root:
+Cursor: add this to `.cursor/mcp.json` in the project root.
+VS Code with Copilot: use the same structure in `.vscode/mcp.json`.
 
 ```json
 {
@@ -746,17 +704,12 @@ To keep every PLC read-only, add `"WAGO_ALLOW_WRITES": "false"` to `env`
 }
 ```
 
-**VS Code + Copilot** - `.vscode/mcp.json`, same structure.
+### HTTP remote (OpenAI and n8n)
 
----
+A client that supports MCP over HTTP connects to `http://<host>:6042/mcp` with `Authorization: Bearer <key>`.
+For an old SSE client, set `TRANSPORT=sse` in `.env` and use `/sse`.
 
-### HTTP remote (ChatGPT API, n8n, OpenAI)
-
-Any client that supports MCP over HTTP connects to `http://<host>:6042/mcp`
-with `Authorization: Bearer <key>`. For legacy SSE clients set
-`TRANSPORT=sse` in `.env` and point at `/sse`.
-
-**OpenAI Responses API:**
+OpenAI Responses API:
 
 ```python
 response = client.responses.create(
@@ -771,49 +724,31 @@ response = client.responses.create(
 )
 ```
 
----
+## WAGO skill
 
-### Skills - install the one that ships with this repo
+[`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) is for two audiences:
 
-[`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) works for both
-**Claude Desktop / Claude Code end users** (plain-English interaction,
-safety guidance, troubleshooting, device-generation recognition - PTXdist
-vs. Yocto) and **autonomous agents / pipelines** (tool I/O contracts, error
-shapes, retry rules, watchlist lifecycle):
+- **Users of Claude Desktop and Claude Code:** plain-English use, safety rules, troubleshooting, and device generations (PTXdist and Yocto).
+- **Autonomous agents and pipelines:** tool input and output contracts, error shapes, retry rules, and the watchlist lifecycle.
 
-```bash
-mkdir -p ~/.claude/skills
-cp -r wago-plc-skill ~/.claude/skills/
-```
+The skill uses only the frontmatter fields of the [Agent Skills standard](https://agentskills.io).
+You install it the same way on all platforms that support the standard:
 
-It uses only the six frontmatter fields the
-[Agent Skills standard](https://agentskills.io) allows (`name`, `description`,
-`license`, `compatibility`, `allowed-tools`, `metadata`) - no Claude
-Code-only extensions - so it installs the same way everywhere the standard
-applies:
+| Platform | Installation |
+|---|---|
+| Claude Desktop | Add the `.skill` file from the release in **Settings → Skills**. |
+| Claude Code / Claude plugins | `mkdir -p ~/.claude/skills && cp -r wago-plc-skill ~/.claude/skills/` |
+| claude.ai / Claude Developer Platform (Skills API) | Run `python package_skill.py wago-plc-skill`, then upload the `.skill` file. |
+| Agent SDK | Add the `.skill` file or the folder to your SDK configuration. |
 
-- **Claude Code / Claude plugins**: `cp -r wago-plc-skill ~/.claude/skills/` (above).
-- **claude.ai / Claude Developer Platform (Skills API)**: package it into a
-  `.skill` file and upload it as a Capability/Skill:
-  ```bash
-  python package_skill.py wago-plc-skill
-  ```
-  (`package_skill.py` ships in [anthropics/skills](https://github.com/anthropics/skills);
-  any tool that zips the folder works too - there's nothing Claude Code-specific inside).
-- **Agent SDK**: reference the packaged `.skill` (or the folder) the same way
-  as any other skill in your SDK configuration.
+`package_skill.py` is in [anthropics/skills](https://github.com/anthropics/skills). Any tool that zips the folder also works.
 
-Either way, the `wago-plc` MCP server itself still needs to be reachable
-from wherever the skill runs - see [Deployment options](#deployment-options)
-for Claude Code, Claude Desktop (`.mcpb`), and remote/API paths.
-
----
+The skill needs access to a running `wago-plc` MCP server. See [Deployment options](#deployment-options).
 
 ## GitOps write-gate
 
-For production environments where every PLC configuration change needs a
-human-reviewed audit trail before it reaches hardware - an ArgoCD-style
-pattern applied to PLCs.
+Use GitOps mode when a person must review each PLC configuration change before it goes to the hardware.
+The pattern is similar to ArgoCD.
 
 ### How it works
 
@@ -836,18 +771,16 @@ CI runs: python scripts/apply.py plcs/192.168.1.10.yaml --execute
 Live PLC updated - ops files self-delete on success
 ```
 
-The CI step is a GitHub Actions workflow living in the config repo, not here -
-it decides dry-run vs. execute purely from the triggering event, never from a
-flag you set: a pull request always dry-runs (prints drift, touches nothing),
-and only a push to `main` (i.e. a merge) executes. It runs on a **self-hosted
-runner** because GitHub-hosted runners have no route to the PLC subnet, and it
-borrows `scripts/apply.py` from this repo via sparse-checkout on every run - a
-fix here is picked up there without a version bump. Full mechanics (trigger
-table, checkout steps, secrets, why `contents: write` is needed for the
-ops-file-cleanup commit): [wago-plc-config README - How the GitHub Actions
-workflow works](https://github.com/WagoAlex/wago-plc-config#how-the-github-actions-workflow-works).
+A GitHub Actions workflow in the config repository runs the CI step. The trigger event sets the mode:
 
-### Enable
+- A pull request always does a dry run. It shows the drift and changes nothing.
+- A push to `main` (a merge) applies the change.
+
+The workflow uses a **self-hosted runner**, because GitHub-hosted runners cannot reach the PLC subnet.
+Each run gets `scripts/apply.py` from this repository with a sparse checkout. A fix here applies there without a version change.
+For the full workflow, see [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#how-the-github-actions-workflow-works).
+
+### Enable GitOps mode
 
 ```env
 GITOPS_MODE=1   # intercept writes; return YAML fragments for PR
@@ -859,15 +792,13 @@ WAGO_GITOPS_REPO=wago-plc-config
 ```
 
 > [!IMPORTANT]
-> Without `WAGO_GITOPS_REPO` set correctly, the agent has no other way to know
-> where to commit the YAML fragment - the repo name comes from this variable,
-> not from any auto-discovery. If you fork or rename the config repo, set this
-> or the returned `next_step` instructions will point at the wrong (or a
-> nonexistent) repo.
+> The agent gets the config repository name only from `WAGO_GITOPS_REPO`. There is no auto-discovery.
+> If you fork or rename the config repository, set this variable.
+> If you do not, the `next_step` instructions point to the wrong repository.
 
-### Config YAML - two file types
+### Config YAML files
 
-**`plcs/<ip>.yaml` - desired steady state**
+**`plcs/<ip>.yaml`** sets the desired state:
 
 ```yaml
 plc_ip: 192.168.1.10
@@ -880,10 +811,10 @@ managed_parameters:
   0-0-snmp-location: Building-A-Panel-3
 ```
 
-`apply.py` reads the live PLC, diffs it against this file, and patches only
-parameters that have drifted. Idempotent - safe to run in CI on every merge.
+`apply.py` reads the live PLC, compares it with this file, and writes only the parameters that are different.
+You can run it again with the same result, so CI can run it on each merge.
 
-**`ops/<id>.yaml` - one-shot action (self-deletes on success)**
+**`ops/<id>.yaml`** is a one-time action. `apply.py` deletes the file after success.
 
 ```yaml
 id: b7d3e1f9
@@ -895,7 +826,7 @@ method_id: 0-0-ntpclient-updatetime
 arguments: {}
 ```
 
-### Apply manually
+### Run apply.py manually
 
 ```bash
 # Show what would change - no writes
@@ -908,9 +839,9 @@ python scripts/apply.py plcs/192.168.1.10.yaml --execute
 python scripts/apply.py ops/b7d3e1f9.yaml --execute
 ```
 
-### Supported subsystems (parameter IDs)
+### Supported subsystems
 
-| Subsystem | Key parameters | Helper |
+| Subsystem | Parameters | Helper |
 |-----------|---------------|--------|
 | Cloud / MQTT | `0-0-cloudconnections-1-*` | `gitops.cloud_params()` |
 | NTP | `0-0-ntpclient-enabled/configuredtimeservers/updateinterval` | `gitops.ntp_params()` |
@@ -923,121 +854,35 @@ python scripts/apply.py ops/b7d3e1f9.yaml --execute
 | Docker | `0-0-docker-enabled` | direct |
 | CODESYS 3 webserver | `0-0-codesys3-webserver-enabled` | direct |
 
-Full parameter ID reference with YAML examples for every subsystem:
-[`docs/gitops/README.md`](docs/gitops/README.md)
-
-The config repo that receives these YAML fragments and runs `apply.py` via CI:
-[github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
-
-### Safety gates - guarding against a rogue agent
-
-The risk with giving an AI agent write access to industrial controllers is not
-just "it might delete something" - it's that an agent can go off-script
-(hallucination, prompt injection, a bug) and take a high-consequence action you
-never wanted. On a production line, a config change with side effects or a
-badly-timed reboot can mean equipment damage or worse. These gates are enforced
-in code and **cannot be overridden by the agent**:
-
-| Gate | What it does | Configure |
-|------|--------------|-----------|
-| **Read-only PLCs** | Listed controllers reject *all* writes, method calls and file uploads, in every mode | `WAGO_READONLY_HOSTS=ip,ip` or a `# readonly` tag per line in the fleet file |
-| **Fleet-wide write switch** | Freezes *every* PLC the same way. Unset keeps writes possible; any value other than `true` blocks them, so a missing or mistyped value fails closed. The Claude Desktop extension sets it from its "Allow writes" checkbox, off by default | `WAGO_ALLOW_WRITES=true` to allow, e.g. `false` to freeze all |
-| **Dangerous-method denylist** | Reboot / restart / factory-reset / firmware / format are denied in live mode unless explicitly allowlisted | `WAGO_ALLOW_METHODS=<exact-method-id>` to re-enable one |
-| **Human approval for dangerous ops** | In GitOps mode these become a PR flagged `requires_human: CRITICAL`; `apply.py` refuses to run until a human sets `approved_by` | set `approved_by` during PR review, or inject `WAGO_APPROVED_BY` from CI |
-
-The intended path for any high-consequence action is therefore a **human-reviewed
-PR plus an audit-log entry** - not an autonomous tool call. A denial is the
-system working as designed. Full details and a dry-run walkthrough:
-[`docs/gitops/README.md` → Safety model](docs/gitops/README.md#safety-model--three-independent-gates)
-
-Step-by-step guide for reviewers (GitHub UI and CLI):
-[github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
-
----
-
-## Firmware updates
-
-Firmware is the one change on a controller that a follow-up commit cannot undo.
-This project therefore splits it across three places, each owning one question:
-
-| Question | Where it is answered |
-|---|---|
-| Can the agent do it? | Here - no, and the section below explains why |
-| Who approves it, who counts as an approver, and how do I require two people? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
-| How do I run it, how does the tool resolve the approver, what if it fails? | [`fwupdate/README.md`](fwupdate/README.md) |
-| What does the audit chain contain and how do I verify it? | Here, below |
-| What do the REST calls actually do? | [`docs/wda-firmware-update.md`](docs/wda-firmware-update.md) |
-| I know GitHub as a repository but not CI/CD - walk me through it | [`docs/plc-change-control.html`](docs/plc-change-control.html) |
-
-### The agent cannot flash a controller
-
-`invoke_method` refuses every `firmware*` method in live mode, on every device,
-and records the refusal in the audit log. This is not configuration you are
-expected to relax:
-
-```
-> Update the firmware on 192.168.42.121
-
-Method '0-0-firmwareupdate-activate' is denied by safety policy
-(dangerous; not in WAGO_ALLOW_METHODS).
-```
-
-Firmware updates are performed by a separate tool in this repository,
-[`fwupdate/`](fwupdate/README.md), which a person runs during a maintenance
-window. It is not reachable by the agent, and it refuses to start unless an
-approval for that exact device and revision is committed to your config
-repository. The same "a human commits, the machine applies" shape as the
-GitOps write-gate above - with the human step made mandatory rather than
-optional.
-
-### It shares this server's audit chain
-
-A firmware run is not a side channel. Authorization, every refusal, success,
-device-reported failure, timeout, and an abort mid-flash are appended to the
-**same tamper-evident hash chain** as `set_parameters` and `invoke_method`, by
-the same `src/audit.py`, on the same volume.
-
-Each record names who approved the change and how that was established - the
-pull request and its reviewers where there was one, and whether it was
-self-approved. Nobody types their own name into a file:
-
-```bash
-docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
-# [PASS] Chain intact - 13 entries verified
-
-git show 18d2cbf        # who approved it, and when
-```
-
----
+- Parameter IDs and YAML examples for all subsystems: [`docs/gitops/README.md`](docs/gitops/README.md)
+- Config repository and review guide: [github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
 
 ## Security
 
 ### API key management
 
-The server resolves the MCP API key in priority order:
+The server gets the MCP API key from the first source that exists:
 
-1. **Docker Secret** `/run/secrets/mcp_api_key` - recommended for production
-2. **Env var** `MCP_API_KEY`
-3. **Persisted file** `./data/mcp_api_key` - auto-generated on first boot, survives container recreations
-4. **Auto-generate** - new key if none of the above exist
+1. **Docker Secret** `/run/secrets/mcp_api_key`. Recommended for production.
+2. **Environment variable** `MCP_API_KEY`.
+3. **Persisted file** `./data/mcp_api_key`. The server makes this file at the first start. The file stays after you recreate the container.
+4. **New key.** The server makes a new key if no other source exists.
 
-> [!TIP]
-> Retrieving the key differs by source. With a Docker Secret (path 1), read
-> `secrets/mcp_api_key.txt` directly on the host - no `docker exec` needed, so
-> the key never crosses the container boundary or touches any container-side
-> log path:
-> ```bash
-> cat secrets/mcp_api_key.txt
-> ```
-> With the auto-generated key (path 3/4), it only exists inside the
-> container's `/app/data` volume:
-> ```bash
-> docker exec wmcp cat /app/data/mcp_api_key
-> ```
-> Prefer the Docker Secret path once you've moved past initial testing - it's
-> both more auditable (key lifecycle lives in a file you control, not a
-> volume the server writes to) and keeps the key out of any container-exec
-> trail entirely.
+To read the key from a Docker Secret, use the file on the host. The key does not go through the container:
+
+```bash
+cat secrets/mcp_api_key.txt
+```
+
+To read an auto-generated key (source 3 or 4), use the container volume:
+
+```bash
+docker exec wmcp cat /app/data/mcp_api_key
+```
+
+Use the Docker Secret after initial tests. You control the key file, and the key stays out of container exec history.
+
+To make a new auto-generated key:
 
 ```bash
 # Regenerate (only affects the auto-generated/persisted key - has no effect
@@ -1048,10 +893,9 @@ docker restart wmcp
 
 ### TLS configuration
 
-Both TLS legs are opt-in. The server starts without TLS and logs a startup
-warning for each disabled leg.
+TLS is off by default on both connections. At startup, the server logs a warning for each connection without TLS.
 
-**WDA connections (server → PLC) - three options:**
+**Server to PLC (WDA).** Select one option:
 
 ```bash
 # Option A: Per-PLC cert pinning (recommended for self-signed certs)
@@ -1066,7 +910,7 @@ WAGO_TLS_CA=/run/secrets/wago_ca.pem
 WAGO_TLS_CA=true
 ```
 
-**MCP endpoint (client → server):**
+**Client to server (MCP endpoint):**
 
 ```bash
 openssl req -x509 -newkey rsa:4096 \
@@ -1080,23 +924,23 @@ MCP_TLS_CERT=/run/secrets/mcp_tls_cert
 MCP_TLS_KEY=/run/secrets/mcp_tls_key
 ```
 
-**Enforcing both legs are actually configured:**
+**Require TLS on both connections:**
 
 ```env
 SECURITY_PROFILE=hardened
 ```
 
-Opt-in, default is unset. When set, the server refuses to start
-(`SystemExit(1)`, before contacting any PLC) unless `WAGO_TLS_CA` is a real
-CA/cert path (not unset/`false`/`0`) **and** both `MCP_TLS_CERT`/`MCP_TLS_KEY`
-are set - i.e. it turns the two startup warnings above into a hard stop. It
-only checks that TLS is *configured*, not that the cert is otherwise trustworthy
-- a self-signed cert you point `MCP_TLS_CERT` at still starts hardened.
+With this setting, the server stops at startup (`SystemExit(1)`) before it connects to a PLC, if one of these conditions is true:
+
+- `WAGO_TLS_CA` is not set, or is `false` or `0`.
+- `MCP_TLS_CERT` or `MCP_TLS_KEY` is not set.
+
+The check makes sure that TLS is configured. It does not check if the certificate is trusted. A self-signed certificate passes.
 
 ### Audit log
 
-Every `set_parameters` and `invoke_method` call is appended to a
-tamper-evident hash-chained JSON-lines log:
+The server adds each `set_parameters` and `invoke_method` call to a hash-chained JSON Lines log.
+Each entry contains the hash of the previous entry, so you can find changes to the file.
 
 ```
 Entry 1  {"ts":"…","action":"set_parameters",…,"prev":"0000…0000"}  ← genesis
@@ -1104,37 +948,35 @@ Entry 2  {"ts":"…","action":"invoke_method",…,"prev":"a3f1…c2d8"}
 Entry 3  {"ts":"…","action":"set_parameters",…,"prev":"7b2e…91fa"}
 ```
 
-Each entry includes timestamp, PLC IP, parameter IDs + values, and
-`key-<first 8 chars of API key>` for per-engineer traceability.
+Each entry has the timestamp, PLC IP, parameter IDs and values, and `key-<first 8 characters of the API key>`.
+With one key for each engineer, you can see who made each change.
 
 ```bash
 # Tail live log
-docker exec wmcp tail -f /app/audit.log
+docker exec wmcp tail -f /app/data/audit.log
 
 # Verify chain integrity
-docker exec wmcp python src/audit_verify.py
-# → [PASS] Chain intact - 42 entries verified (/app/audit.log)
+docker exec wmcp python src/audit_verify.py --log /app/data/audit.log
+# → [PASS] Chain intact - 42 entries verified (/app/data/audit.log)
 ```
 
-### Security feature summary
+To send each record to a syslog collector outside the host, set `AUDIT_SYSLOG=udp://<collector>:514` or `tcp://<collector>:514`.
+
+### Security features
 
 | Feature | Status |
 |---------|--------|
-| Bearer auth on `/mcp` | ✅ Auto-generated key; Docker Secret + env override; `/health` exempt |
-| Rate limiting | ✅ 60 req/60 s per source IP; `429` with `Retry-After` |
-| Auth failure alerts | ✅ WARNING per failure; ERROR at 10 consecutive from same IP |
-| WDA Bearer token auth | ✅ Credentials sent once; cached token refreshed on 401 |
-| Hash-chained audit log | ✅ Tamper-evident JSON-lines on `./data` volume |
-| Default password warning | ✅ Startup WARNING if factory default password detected |
-| TLS - WDA connections | ⚙️ Off by default; enable with `WAGO_TLS_CA` or per-PLC Docker Secret |
-| TLS - MCP endpoint | ⚙️ Off by default; enable with `MCP_TLS_CERT` + `MCP_TLS_KEY` |
-| CycloneDX SBOM | ✅ Published alongside every release image |
-| Docker Secrets | ✅ PLC passwords, MCP key, TLS certs all mountable as secrets |
-| CVE scanning | ✅ Weekly grype scan on SBOM; HIGH/CRITICAL fails CI |
-
-For the vulnerability disclosure policy, patch SLA, and support lifetime see [SECURITY.md](SECURITY.md).
-
----
+| Bearer auth on `/mcp` | ✅ Auto-generated key, Docker Secret or environment override. `/health` is exempt. |
+| Rate limiting | ✅ 60 requests in 60 s for each source IP. Returns `429` with `Retry-After`. |
+| Auth failure alerts | ✅ WARNING for each failure. ERROR after 10 failures in sequence from one IP. |
+| WDA Bearer token auth | ✅ The server sends credentials one time and refreshes the cached token on 401. |
+| Hash-chained audit log | ✅ JSON Lines on the `./data` volume |
+| Default password warning | ✅ WARNING at startup if a PLC uses the factory default password |
+| TLS - WDA connections | ⚙️ Off by default. Enable with `WAGO_TLS_CA` or a per-PLC Docker Secret. |
+| TLS - MCP endpoint | ⚙️ Off by default. Enable with `MCP_TLS_CERT` and `MCP_TLS_KEY`. |
+| CycloneDX SBOM | ✅ Published with each release image |
+| Docker Secrets | ✅ For PLC passwords, the MCP key, and TLS certificates |
+| CVE scanning | ✅ Weekly grype scan of the SBOM. HIGH or CRITICAL findings fail CI. |
 
 ## Tool reference
 
@@ -1142,65 +984,68 @@ For the vulnerability disclosure policy, patch SLA, and support lifetime see [SE
 
 | Tool | Description |
 |------|-------------|
-| `list_plcs` | List all registered PLC IPs |
-| `describe_plc(plc_ip)` | Capability counts + feature names + `device_class`, `expected_parameter_count`, `parameter_count_ok` |
-| `get_plc_audit_log(plc_ip, action, limit)` | Read recent tamper-evident audit log entries; filter by PLC and/or action, newest first (max 500) |
-| `get_device(plc_ip, device_id)` | Device resource plus the features it exposes |
-| `get_feature(plc_ip, feature_id)` | Feature plus nested features, contained parameter/method definitions |
-| `get_enum_definition(plc_ip, enum_id)` | An enum's full case list (value → stringValue) |
-| `get_parameter_definition(plc_ip, parameter_id)` | writeable/userSetting/dataType/enum link, without reading a value |
+| `list_plcs` | Lists the IPs of all registered PLCs |
+| `describe_plc(plc_ip)` | Returns capability counts, feature names, `device_class`, `expected_parameter_count`, and `parameter_count_ok` |
+| `get_plc_audit_log(plc_ip, action, limit)` | Reads recent audit log entries, newest first (max 500). Filters by PLC and action. |
+| `get_device(plc_ip, device_id)` | Returns a device and its features |
+| `get_feature(plc_ip, feature_id)` | Returns a feature with nested features and parameter and method definitions |
+| `get_enum_definition(plc_ip, enum_id)` | Returns all cases of an enum (value → stringValue) |
+| `get_parameter_definition(plc_ip, parameter_id)` | Returns writeable, userSetting, dataType, and enum link without reading the value |
 
 ### Parameters
 
 | Tool | Description |
 |------|-------------|
-| `find_parameters(plc_ip, query, writeable_only, user_settings_only, limit)` | Search by keyword (default 20 results, max 255) |
-| `get_parameter(plc_ip, parameter_id)` | Read one value, enum labels resolved |
-| `get_parameters_bulk(requests)` | Read one param from N PLCs in parallel |
-| `set_parameters(plc_ip, parameters)` | Write one or more parameters (bulk PATCH) |
-| `set_parameter(plc_ip, parameter_id, value)` | Write a single parameter |
-| `get_parameter_referenced_instances(plc_ip, parameter_id)` | Instances referencing an `instance_identity_ref` parameter |
-| `list_parameter_instances(plc_ip, parameter_id)` | Instance numbers of a class-typed parameter |
-| `get_parameter_instance(plc_ip, parameter_id, instance_no)` | One instance: its device, own parameters, and methods |
+| `find_parameters(plc_ip, query, writeable_only, user_settings_only, limit)` | Searches by keyword (default 20 results, max 255) |
+| `get_parameter(plc_ip, parameter_id)` | Reads one value with enum labels |
+| `get_parameters_bulk(requests)` | Reads one parameter from many PLCs in parallel |
+| `set_parameters(plc_ip, parameters)` | Writes one or more parameters (bulk PATCH) |
+| `set_parameter(plc_ip, parameter_id, value)` | Writes one parameter |
+| `get_parameter_referenced_instances(plc_ip, parameter_id)` | Returns the instances that an `instance_identity_ref` parameter refers to |
+| `list_parameter_instances(plc_ip, parameter_id)` | Returns the instance numbers of a class-typed parameter |
+| `get_parameter_instance(plc_ip, parameter_id, instance_no)` | Returns one instance with its device, parameters, and methods |
 
 ### Methods
 
 | Tool | Description |
 |------|-------------|
-| `find_methods(plc_ip, query, limit)` | Search by keyword |
-| `get_method(plc_ip, method_id)` | Fetch inArgs/outArgs schema |
-| `invoke_method(plc_ip, method_id, arguments, wait)` | Execute sync or async |
-| `get_method_run(plc_ip, method_id, run_id)` | Poll async run status |
-| `list_method_runs(plc_ip, method_id)` | Past runs still held server-side |
-| `delete_method_run(plc_ip, method_id, run_id)` | Free a server-side run result early |
+| `find_methods(plc_ip, query, limit)` | Searches by keyword |
+| `get_method(plc_ip, method_id)` | Returns the inArgs and outArgs schema |
+| `invoke_method(plc_ip, method_id, arguments, wait)` | Runs a method synchronously or asynchronously |
+| `get_method_run(plc_ip, method_id, run_id)` | Returns the status of an asynchronous run |
+| `list_method_runs(plc_ip, method_id)` | Lists the runs that the PLC still keeps |
+| `delete_method_run(plc_ip, method_id, run_id)` | Deletes a run result on the PLC |
 
 ### Watchlists
 
 | Tool | Description |
 |------|-------------|
-| `list_watchlists(plc_ip)` | Watchlist IDs still active server-side |
-| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Register a server-side monitoring list on the PLC |
-| `read_watchlist(plc_ip, watchlist_id)` | Return current values for all watched parameters (one HTTP request) |
-| `delete_watchlist(plc_ip, watchlist_id)` | Release the watchlist immediately |
+| `list_watchlists(plc_ip)` | Lists the active watchlist IDs on the PLC |
+| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Makes a monitoring list on the PLC |
+| `read_watchlist(plc_ip, watchlist_id)` | Returns the values of all parameters in the list in one HTTP request |
+| `delete_watchlist(plc_ip, watchlist_id)` | Deletes the watchlist immediately |
 
-### Files (file_id-typed parameters)
+**Why watchlists:** Each `get_parameter` call opens a new HTTPS connection.
+For 10 parameters on 15 PLCs every 30 seconds, that is 150 HTTPS requests in each cycle.
+One `read_watchlist` call returns all values in one request.
+
+### Files (file_id parameters)
 
 | Tool | Description |
 |------|-------------|
-| `create_file(plc_ip, context_parameter_id)` | Allocate a file_id for upload |
-| `upload_file(plc_ip, file_id, content_base64, content_type)` | Upload whole file content (base64) |
-| `download_file(plc_ip, file_id)` | Download file content as base64 |
-| `get_file_metadata(plc_ip, file_id)` | Size/type without downloading the body |
+| `create_file(plc_ip, context_parameter_id)` | Gets a file_id for an upload |
+| `upload_file(plc_ip, file_id, content_base64, content_type)` | Uploads the full file content (base64) |
+| `download_file(plc_ip, file_id)` | Downloads the file content as base64 |
+| `get_file_metadata(plc_ip, file_id)` | Returns size and type without the file content |
 
-> Class-instance and file tools are implemented against the WDA spec but have not been
-> exercised against real hardware - no `instantiations`- or `file_id`-typed parameter has
-> shown up on any device in our test fleet yet. See `docs/functional-test-status.md`.
-
-**Why watchlists exist:** Every `get_parameter` call opens a new HTTPS connection. For repeated polling of a fixed set across a fleet, the overhead compounds: 10 parameters × 15 PLCs every 30 seconds = 150 HTTPS round-trips per cycle. Watchlists solve this - one `read_watchlist` returns all current values in a single request.
+> [!NOTE]
+> The class-instance and file tools follow the WDA specification, but we did not test them on real hardware.
+> No device in our test fleet has an `instantiations` or `file_id` parameter. See `docs/functional-test-status.md`.
 
 ### Example workflows
 
-**Read firmware version from all PLCs in one call:**
+**Read the firmware version from many PLCs in one call:**
+
 ```
 get_parameters_bulk([
   {"plc_ip": "192.168.1.10", "parameter_id": "0-0-version-firmwareversion"},
@@ -1208,7 +1053,8 @@ get_parameters_bulk([
 ])
 ```
 
-**Sync NTP time on a PLC:**
+**Start an NTP time sync on one PLC:**
+
 ```
 find_methods("192.168.1.10", "ntp")
 → ["0-0-ntpclient-updatetime"]
@@ -1217,7 +1063,8 @@ invoke_method("192.168.1.10", "0-0-ntpclient-updatetime", wait=True)
 → {"status": "done", "run_id": "1", "out_args": {}}
 ```
 
-**Poll operational health with a watchlist:**
+**Monitor health with a watchlist:**
+
 ```
 create_watchlist("192.168.1.10", [
   "0-0-ledstates-1-diagnosticinformation",
@@ -1231,106 +1078,50 @@ read_watchlist("192.168.1.10", "1")   # call every 30 s
 delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 ```
 
----
-
 ## Configuration reference
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WAGO_PLC_HOSTS` | - | Comma-separated PLC IPs |
-| `WAGO_PLC_HOSTS_FILE` | - | Path to host file (one IP per line) |
+| `WAGO_PLC_HOSTS` | - | PLC IPs, separated by commas |
+| `WAGO_PLC_HOSTS_FILE` | - | Path to a file with one IP per line |
 | `DEFAULT_PLC_USERNAME` | `admin` | Shared username |
-| `DEFAULT_PLC_PASSWORD` | `wago` | Shared password (use Docker Secret instead) |
-| `PLC_PASSWORDS_<ip_underscores>` | - | Per-PLC password override |
-| `MCP_API_KEY` | - | Bearer token for `/mcp`; auto-generated if absent |
-| `GITOPS_MODE` | `0` | `1` = intercept writes, return YAML fragments |
-| `WAGO_GITOPS_REPO` | `wago-plc-config` | Config repo name/path shown in the returned YAML's `next_step` - point this at a fork or a differently-named repo |
-| `WAGO_READONLY_HOSTS` | - | Comma-separated PLC IPs that refuse `set_parameters`/`invoke_method`/file uploads in every mode |
-| `WAGO_ALLOW_WRITES` | - (writes allowed) | Fleet-wide switch: `true` allows writes; any other value (`false`, empty) makes **all** PLCs read-only |
-| `WAGO_ALLOW_METHODS` | - | Comma-separated exact method IDs to re-allow from the dangerous-method denylist in live mode |
-| `WAGO_TLS_CA` | - | WDA TLS: `false` (off), `true` (system CA), or path |
-| `MCP_TLS_CERT` | - | Path to TLS cert for MCP endpoint |
-| `MCP_TLS_KEY` | - | Path to TLS private key for MCP endpoint |
-| `MCP_TLS_KEY_PASSWORD` | - | Password for encrypted TLS private key (optional) |
-| `SECURITY_PROFILE` | - | `hardened` refuses to start unless `WAGO_TLS_CA` + `MCP_TLS_CERT`/`MCP_TLS_KEY` are all set - turns the TLS-disabled warnings into a startup failure |
-| `AUDIT_LOG_FILE` | `/app/audit.log` | Audit log path inside container |
-| `SYSLOG_HOST` | - | Syslog/SIEM receiver hostname; enables audit forwarding |
-| `SYSLOG_PORT` | `514` | Syslog receiver port |
+| `DEFAULT_PLC_PASSWORD` | `wago` | Shared password. Use a Docker Secret instead. |
+| `PLC_PASSWORDS` | - | Per-PLC passwords as `ip=pwd,ip=pwd` |
+| `PLC_PASSWORDS_FILE` | - | Path to a file with one `ip=pwd` per line (`#` comments) |
+| `PLC_PASSWORDS_<ip_underscores>` | - | Password for one PLC |
+| `MCP_API_KEY` | - | Bearer token for `/mcp`. The server makes one if this is not set. |
+| `GITOPS_MODE` | `0` | `1` returns YAML fragments instead of writes |
+| `WAGO_GITOPS_REPO` | `wago-plc-config` | Config repository name in the `next_step` of the returned YAML. Set it for a fork or a renamed repository. |
+| `WAGO_READONLY_HOSTS` | - | PLC IPs, separated by commas, that refuse `set_parameters`, `invoke_method`, and file uploads in all modes |
+| `WAGO_ALLOW_WRITES` | - (writes allowed) | Fleet-wide switch. `true` allows writes. All other values (`false`, empty) make **all** PLCs read-only. |
+| `WAGO_ALLOW_METHODS` | - | Exact method IDs, separated by commas, that live mode allows from the dangerous-method list |
+| `WAGO_TLS_CA` | - | WDA TLS: `false` (off), `true` (system CA), or a path |
+| `MCP_TLS_CERT` | - | Path to the TLS certificate for the MCP endpoint |
+| `MCP_TLS_KEY` | - | Path to the TLS private key for the MCP endpoint |
+| `MCP_TLS_KEY_PASSWORD` | - | Password for an encrypted TLS private key |
+| `SECURITY_PROFILE` | - | `hardened` stops the server at startup if `WAGO_TLS_CA`, `MCP_TLS_CERT`, or `MCP_TLS_KEY` is not set |
+| `AUDIT_LOG_FILE` | `/app/data/audit.log` | Audit log path in the container |
+| `AUDIT_SYSLOG` | - | Sends audit records to syslog, for example `udp://10.0.0.5:514` or `tcp://...` |
+| `SYSLOG_HOST` | - | Syslog or SIEM host for the server log |
+| `SYSLOG_PORT` | `514` | Syslog port |
 | `SYSLOG_TCP` | `false` | `true` = TCP (reliable), `false` = UDP |
-| `TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
+| `TRANSPORT` | `streamable-http` | `streamable-http`, `sse`, or `stdio` |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `6042` | Listen port |
-| `WAGO_TIMEOUT_SECONDS` | `45` | Per-PLC HTTP timeout (CC100 needs 45+) |
-| `WAGO_PAGE_LIMIT` | `500` | WDA pagination page size |
-| `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Parallel PLC init limit |
-| `WAGO_MAX_CONCURRENT_READS` | `10` | Parallel PLC request limit inside `get_parameters_bulk` |
-| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `LOG_FILE` | `/app/mcp_server.log` | Debug log path inside container |
+| `WAGO_TIMEOUT_SECONDS` | `45` | HTTP timeout for each PLC. CC100 needs 45 or more. |
+| `WAGO_PAGE_LIMIT` | `500` | WDA page size |
+| `WAGO_MAX_CONCURRENT_REGISTRATIONS` | `5` | Maximum PLC registrations in parallel |
+| `WAGO_MAX_CONCURRENT_READS` | `10` | Maximum PLC requests in parallel in `get_parameters_bulk` |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
+| `LOG_FILE` | `/app/mcp_server.log` | Debug log path in the container |
 
----
+## Raw WDA access with curl
 
-# Reference
+Use curl for bulk exports, debugging, or test cassettes. This bypasses the MCP layer.
 
-Cross-cutting material that isn't specific to any one persona - come back to
-these as needed.
-
-## Frequently asked questions
-
-### Can the AI modify my control program or process I/O values?
-
-**No.** The WDA REST API has no access to the CODESYS runtime, PLC variables,
-fieldbus I/O, or anything in your control program. Field I/O still goes
-through OPC-UA, Modbus TCP, or WAGO I/O-Check.
-
-### What if the AI writes a wrong value?
-
-Every write is recorded in the tamper-evident audit log with timestamp,
-parameter ID, value written, and which API key made the change. For most WDA
-parameters a wrong value is correctable by writing the correct value again.
-For disruptive actions like firmware update or reboot, the assistant asks for
-explicit confirmation before executing.
-
-### Does the server need internet access after initial setup?
-
-No. All traffic is local: AI client → MCP server (port 6042) → PLCs (port
-443 HTTPS). No cloud calls, no telemetry. Suitable for air-gapped OT networks
-once the Docker image has been transferred to the host.
-
-### Our PLCs have different passwords. How do we configure that?
-
-```env
-DEFAULT_PLC_PASSWORD=wago             # applied to all PLCs unless overridden
-PLC_PASSWORDS_192_168_1_11=secret     # override for this unit (IP with underscores)
-```
-
-### What firewall rules does IT need to open?
-
-| Direction | Source | Destination | Port | Protocol |
-|---|---|---|---|---|
-| Inbound | Engineer workstations | MCP server host | 6042 | TCP |
-| Outbound | MCP server host | WAGO PLC IPs | 443 | TCP (HTTPS) |
-
-### Can multiple engineers share one server?
-
-Yes. Deploy one container on a host reachable from the OT network. Each
-engineer connects their own client to `http://<server>:6042/mcp`. Use a
-shared API key, or provision individual keys per engineer for per-person
-traceability in the audit log.
-
-### Which firmware version is required?
-
-Firmware build **≥ 28** (`04.xx.xx(28)` or later). Check the build number in
-the controller's web interface under *Device Information*, or ask the
-assistant: *"What firmware version is PLC 192.168.x.x running?"*
-
----
-
-## Fetching raw parameter data (curl)
-
-For bulk exports, debugging, or building contract-test cassettes, bypass the
-MCP layer and query WDA directly. WDA hard-caps at 255 entries per page -
-most device classes need two pages. Always include
-`parameter-errors-as-data-attributes=true`.
+- WDA returns a maximum of 255 entries on each page. Most device classes need two pages.
+- Always include `parameter-errors-as-data-attributes=true`.
+- Send `page[limit]` and `page[offset]` with `--data-urlencode`. If you put the brackets directly in the URL, WDA ignores them and the loop never ends.
 
 ```bash
 IP=192.168.1.10
@@ -1352,40 +1143,94 @@ OUT=wda-parameters-${IP}.json
 echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
 ```
 
-`page[limit]` and `page[offset]` **must** be passed via `--data-urlencode` - embedding literal brackets in the URL string is silently ignored and causes an infinite page-0 loop.
-
 ---
 
-## Requirements
+# Reference
 
-- Docker 24+ with Compose v2
-- WAGO PLC with WDx/WDA REST API enabled (firmware build ≥ 28)
-- Network route from Docker host to PLC subnets
+## FAQ
 
-Claude Desktop connects directly over HTTP - no proxy or bridge process
-needed on the client machine.
+<details>
+<summary><strong>Can the AI change my control program or process I/O values?</strong></summary>
 
----
+**No.** The WDA REST API has no access to the CODESYS runtime, PLC variables, fieldbus I/O, or your control program.
+Field I/O uses OPC UA, Modbus TCP, or WAGO I/O-Check.
 
-## Security & CRA compliance
+</details>
+
+<details>
+<summary><strong>What if the AI writes a wrong value?</strong></summary>
+
+The audit log records each write with the timestamp, parameter ID, value, and API key.
+For most WDA parameters, you can write the correct value again.
+Before a disruptive action, for example a reboot, the assistant asks for your confirmation.
+The server refuses firmware updates from the agent. See [Firmware updates](#firmware-updates).
+
+</details>
+
+<details>
+<summary><strong>Does the server need internet access?</strong></summary>
+
+No. All traffic is local: AI client → MCP server (port 6042) → PLCs (port 443, HTTPS).
+The server makes no cloud calls and sends no telemetry.
+You can use it on an air-gapped OT network after you copy the Docker image to the host.
+
+</details>
+
+<details>
+<summary><strong>Our PLCs have different passwords. How do we configure this?</strong></summary>
+
+```env
+DEFAULT_PLC_PASSWORD=wago                         # applied to all PLCs unless overridden
+PLC_PASSWORDS=192.168.1.11=secret,192.168.1.12=other
+PLC_PASSWORDS_FILE=/app/data/passwords.txt        # one ip=password per line, for many units
+```
+
+In Docker, use per-PLC secrets (`secrets/plc_password_<ip_underscores>.txt`). They have priority over all the variables above.
+In the Claude Desktop extension, use the **Per-PLC passwords file** field.
+
+</details>
+
+<details>
+<summary><strong>Which firewall rules does IT need to open?</strong></summary>
+
+| Direction | Source | Destination | Port | Protocol |
+|---|---|---|---|---|
+| Inbound | Engineer workstations | MCP server host | 6042 | TCP |
+| Outbound | MCP server host | WAGO PLC IPs | 443 | TCP (HTTPS) |
+
+</details>
+
+<details>
+<summary><strong>Can many engineers use one server?</strong></summary>
+
+Yes. Deploy one container on a host that can reach the OT network.
+Each engineer connects a client to `http://<server>:6042/mcp`.
+You can use one shared API key. For traceability in the audit log, give each engineer a different key.
+
+</details>
+
+<details>
+<summary><strong>Which firmware version is necessary?</strong></summary>
+
+Firmware build **28 or higher** (`04.xx.xx(28)` or later).
+Find the build number in the web interface of the controller under *Device Information*.
+You can also ask the assistant: *"What firmware version is PLC 192.168.x.x running?"*
+
+</details>
+
+## Security and CRA compliance
 
 This project targets compliance with the EU Cyber Resilience Act (Regulation 2024/2847).
 
-| Document | Purpose |
+| Document | Content |
 |----------|---------|
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting, patch SLA, support lifetime |
+| [SECURITY.md](SECURITY.md) | Vulnerability reports, patch SLA, support lifetime |
 | [docs/threat-model.md](docs/threat-model.md) | STRIDE risk assessment |
-| [docs/cra-compliance-matrix.md](docs/cra-compliance-matrix.md) | Annex I requirements → evidence mapping |
+| [docs/cra-compliance-matrix.md](docs/cra-compliance-matrix.md) | Annex I requirements mapped to evidence |
 | [docs/eu-declaration-of-conformity.md](docs/eu-declaration-of-conformity.md) | CRA Article 28 self-declaration |
 | [docs/technical-file.md](docs/technical-file.md) | CRA Article 31 technical file index |
 
----
-
-## Releases
-
-Pre-built images on [Docker Hub](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server). A CycloneDX SBOM is published alongside every release. `docker compose up -d` pulls the latest automatically.
-
----
+To report a vulnerability, follow [SECURITY.md](SECURITY.md). Do not open a public issue.
 
 ## License
 
