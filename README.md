@@ -754,12 +754,11 @@ response = client.responses.create(
 
 ### Skills - install the right one
 
-Three skills ship with this repo - install the one that matches your use case:
+Two skills ship with this repo - install the one that matches your use case:
 
 | Skill | For | Install |
 |---|---|---|
-| [`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) | **Claude Desktop / Claude Code end users** - plain-English interaction, safety guidance, troubleshooting | `cp -r wago-plc-skill ~/.claude/skills/` |
-| [`wago-plc-agent-skill/SKILL.md`](wago-plc-agent-skill/SKILL.md) | **Autonomous agents / pipelines** - tool I/O contracts, error shapes, retry rules, watchlist lifecycle | `cp -r wago-plc-agent-skill ~/.claude/skills/` |
+| [`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) | **Claude Desktop / Claude Code end users, and autonomous agents / pipelines** - plain-English interaction, safety guidance, troubleshooting, device-generation recognition (PTXdist vs. Yocto), tool I/O contracts, error shapes, retry rules, watchlist lifecycle | `cp -r wago-plc-skill ~/.claude/skills/` |
 | [`wago-quickref/SKILL.md`](wago-quickref/SKILL.md) | **Contributors to this repo** - raw WDA HTTP behaviour, pagination encoding, payload shapes | `cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server` |
 
 ---
