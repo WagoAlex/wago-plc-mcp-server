@@ -13,7 +13,7 @@ description: >-
   same concept - the same request can need a different path per device. Use
   even without the words WAGO or PLC if the conversation is about an
   industrial controller or factory-floor device by IP. Does not cover raw
-  WDA REST/HTTP (see wago-quickref/SKILL.md) - this is the MCP tool layer.
+  WDA REST/HTTP internals - this is the MCP tool layer, not the protocol.
 license: MPL-2.0
 compatibility: >-
   Requires the wago-plc-mcp-server MCP server connected and reachable to

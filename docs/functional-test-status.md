@@ -218,7 +218,7 @@ A class "passes" only when **all reachable units across all firmware** pass.
 
 ## WDA function coverage matrix — "all current WDA functions"
 
-Every endpoint in `wago-quickref/references/wda-api-reference.md` mapped to its
+Every WDA REST endpoint this server calls (see `src/wda_client.py`) mapped to its
 `WDAClient` method, the MCP tool that surfaces it, the test layer, and per-class
 expectation. This is the authoritative answer to "are all WDA functions covered?"
 

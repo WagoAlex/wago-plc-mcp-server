@@ -14,7 +14,7 @@ A ready-to-run implementation of everything below is at
 `scripts/wda_firmware_update.sh <plc-ip> <username> <password> <path-to.wup>`.
 
 > **Safety note:** every write method below is denylisted by `is_dangerous_method()`
-> (`wago-quickref/SKILL.md`). In live mode the MCP server refuses these unless the exact
+> (`src/safety.py`). In live mode the MCP server refuses these unless the exact
 > method ID is in `WAGO_ALLOW_METHODS`; in GitOps mode they're proposed with
 > `requires_human: CRITICAL`. The File API steps (`/files/...`) bypass `invoke_method`
 > entirely and are not wrapped by any MCP tool — do those with raw HTTP/curl, as below.

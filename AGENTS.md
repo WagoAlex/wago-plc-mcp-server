@@ -43,10 +43,6 @@ docs/
   gitops/README.md   YAML schema blueprint for the wago-plc-config config repo
   *.json             Raw WDA parameter cassettes per device class (FW31)
 
-wago-quickref/
-  SKILL.md                         Contributor skill — WDA HTTP behaviour
-  references/wda-api-reference.md  Full WDA endpoint and payload reference
-
 wago-plc-skill/SKILL.md            End-user + agent skill - natural-language tool mapping,
                                     tool contracts, error shapes, PTXdist vs. Yocto recognition
 ```
@@ -104,8 +100,7 @@ holds the mutable runtime state: API key, audit log, fleet host file.
 
 ## WDA API — the shapes that bite
 
-Read `wago-quickref/references/wda-api-reference.md` before touching any WDA
-HTTP behaviour. Key rules:
+Key rules:
 
 - **Base URL:** `https://<IP>/wda` — HTTPS only, self-signed certs (`verify=False`).
 - **Set parameters:** `PATCH /wda/parameters` with JSON:API body. `204` = success, empty body. POST returns 405.
@@ -172,8 +167,8 @@ underscores). Do not re-introduce runtime fleet registration as an MCP tool.
   only `name`, `instructions`, `host`, `port`.
 
 **ALWAYS:**
-- Read `wago-quickref/references/wda-api-reference.md` before changing any
-  WDA HTTP call.
+- Re-read "WDA API — the shapes that bite" above before changing any WDA
+  HTTP call.
 - Run tests inside Docker with the dev image and a bind mount (the test suite
   is kept locally and is not part of this repository):
   `docker run --rm -v "$PWD/tests:/app/tests:ro" wmcp-dev pytest tests/`.
@@ -243,9 +238,8 @@ parameter IDs, values, and the first 8 chars of the API key.
 
 ## Source-of-truth hierarchy
 
-1. `src/` code + `wago-quickref/references/wda-api-reference.md` — authoritative.
-2. `wago-quickref/SKILL.md` — accurate project skill; matches deployed transport.
-3. Any external skill describing `aiohttp`, base `/wda/v2`, or `inputParameters`
+1. `src/` code + "WDA API — the shapes that bite" above — authoritative.
+2. Any external skill describing `aiohttp`, base `/wda/v2`, or `inputParameters`
    payloads is **stale** — the live client uses `httpx`, base `/wda`, JSON:API,
    and `/runs` for method invocation.
 

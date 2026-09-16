@@ -56,8 +56,6 @@ flowchart TB
         CC("Claude Code<br/>(direct HTTP)")
         OC("OpenClaw<br/>(direct HTTP)")
     end
-    %% Legacy/offline path: wago_proxy.py bridges stdio to HTTP for Claude
-    %% Desktop clients too old to speak remote MCP directly - see Windows .exe
 
     CD & CC & OC -- "Bearer token" --> MCP
 
@@ -472,7 +470,6 @@ several people or clients connect to at once.
 | [Docker](#docker-recommended) | Plant server, shared multi-user fleet | Docker host on the OT network |
 | [Portainer](#portainer) | Docker host managed remotely through Portainer's UI | Portainer pointed at that Docker host |
 | [MCP Registry](#mcp-registry) | Clients that install servers from the official registry | `uv` or Docker |
-| [Windows .exe](#windows-exe) | Workaround for an air-gapped Windows box, or a Claude Desktop version too old for `.mcpb`/remote MCP | Nothing - zero dependencies |
 | [uvx / PyPI](#uvx--pypi) | Developer machine, any OS | `uv` installed |
 | [IDE](#ide-cursor-vs-code) | Cursor, VS Code + Copilot | `uv` installed |
 | [HTTP remote](#http-remote-chatgpt-api-n8n-openai) | ChatGPT, OpenAI API, n8n | Running server reachable over network |
@@ -661,44 +658,6 @@ compose file for why).
 
 ---
 
-### Windows .exe
-
-> [!NOTE]
-> **This is a workaround, not the default.** It exists for a Claude Desktop
-> version too old to speak remote MCP directly, or a fully air-gapped
-> Windows machine. If you can install a `.mcpb` file at all (any current
-> Claude Desktop), use [Quick Start](#quick-start) instead - it needs no
-> separate proxy process. `wago-proxy.exe` below is a compiled build of
-> [`wago_proxy.py`](wago_proxy.py), a small stdio<->HTTP bridge kept only
-> for this legacy path.
-
-Self-contained bundle - no Python, no package manager.
-
-```bat
-deploy\windows\build.bat        # build once on any Windows machine with Python 3.11+
-deploy\windows\setup.bat        # configure .env and get the Claude Desktop JSON snippet
-```
-
-**`%APPDATA%\Claude\claude_desktop_config.json`:**
-
-```json
-{
-  "mcpServers": {
-    "wago-plc": {
-      "command": "C:\\wago-mcp\\wago-proxy.exe",
-      "env": {
-        "WAGO_MCP_URL": "http://localhost:6042/mcp",
-        "WAGO_MCP_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
-
-![claude_desktop_config.json example](docs/media/claude-desktop-config-example.png)
-
----
-
 ### Claude Desktop extension (.mcpb)
 
 <img src="docs/media/wago-plc-illustration.png" alt="WAGO controller illustration" width="320" align="right">
@@ -814,16 +773,20 @@ response = client.responses.create(
 
 ---
 
-### Skills - install the right one
+### Skills - install the one that ships with this repo
 
-Two skills ship with this repo - install the one that matches your use case:
+[`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) works for both
+**Claude Desktop / Claude Code end users** (plain-English interaction,
+safety guidance, troubleshooting, device-generation recognition - PTXdist
+vs. Yocto) and **autonomous agents / pipelines** (tool I/O contracts, error
+shapes, retry rules, watchlist lifecycle):
 
-| Skill | For | Install |
-|---|---|---|
-| [`wago-plc-skill/SKILL.md`](wago-plc-skill/SKILL.md) | **Claude Desktop / Claude Code end users, and autonomous agents / pipelines** - plain-English interaction, safety guidance, troubleshooting, device-generation recognition (PTXdist vs. Yocto), tool I/O contracts, error shapes, retry rules, watchlist lifecycle | `cp -r wago-plc-skill ~/.claude/skills/` |
-| [`wago-quickref/SKILL.md`](wago-quickref/SKILL.md) | **Contributors to this repo** - raw WDA HTTP behaviour, pagination encoding, payload shapes | `cp -r wago-quickref ~/.claude/skills/wago-plc-mcp-server` |
+```bash
+mkdir -p ~/.claude/skills
+cp -r wago-plc-skill ~/.claude/skills/
+```
 
-`wago-plc-skill` uses only the six frontmatter fields the
+It uses only the six frontmatter fields the
 [Agent Skills standard](https://agentskills.io) allows (`name`, `description`,
 `license`, `compatibility`, `allowed-tools`, `metadata`) - no Claude
 Code-only extensions - so it installs the same way everywhere the standard
@@ -1399,10 +1362,8 @@ echo "Saved $(jq '.data | length' "$OUT") parameters to $OUT"
 - WAGO PLC with WDx/WDA REST API enabled (firmware build ≥ 28)
 - Network route from Docker host to PLC subnets
 
-Claude Desktop connects directly over HTTP (no proxy needed) unless you're
-using the [Windows .exe](#windows-exe) bundle or running `wago_proxy.py`
-directly for an older client - that path additionally needs Python 3.11+
-and `fastmcp` on the client machine.
+Claude Desktop connects directly over HTTP - no proxy or bridge process
+needed on the client machine.
 
 ---
 

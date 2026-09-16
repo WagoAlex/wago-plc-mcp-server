@@ -952,7 +952,7 @@ async def main() -> None:
         logger.warning(
             "[tls] MCP endpoint TLS DISABLED — plain HTTP. "
             "Set MCP_TLS_CERT + MCP_TLS_KEY to enable. "
-            "Also update wago_proxy.py and .mcp.json URLs to https:// when enabling."
+            "Also update .mcp.json URLs to https:// when enabling."
         )
 
     app = AuthMiddleware(base_app, api_key)
