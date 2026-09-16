@@ -132,6 +132,10 @@ if $DO_PUSH; then
   docker push "${IMAGE}"
   docker push "${IMAGE_LATEST}"
   echo "  pushed ${IMAGE} + :latest"
+  echo "▶ pushing ${FW_IMAGE}"
+  docker push "${FW_IMAGE}"
+  docker push "${REPO}-fwupdate:latest"
+  echo "  pushed ${FW_IMAGE} + :latest"
 fi
 
 # ── git release (commit + tag) ────────────────────────────────────────────────

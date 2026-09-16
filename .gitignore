@@ -86,3 +86,6 @@ docker-compose.dev.yml
 # tests: the whole suite is kept locally and never published (owner decision 2026-09-15).
 # Run it with the dev image and a bind mount, see Dockerfile dev target.
 /tests/
+
+# fwupdate: local .wup bundles (hundreds of MB each)
+/fwupdate/firmware/

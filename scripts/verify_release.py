@@ -37,6 +37,7 @@ def check_pypi(version: str) -> None:
 
 def check_docker_hub(version: str) -> None:
     fetch_json(f"https://hub.docker.com/v2/repositories/{IMAGE}/tags/{version}")
+    fetch_json(f"https://hub.docker.com/v2/repositories/{IMAGE}-fwupdate/tags/{version}")
 
 
 def check_registry(version: str) -> None:
@@ -86,7 +87,7 @@ def check_uvx_initialize(version: str) -> None:
 
 CHECKS = [
     ("PyPI", check_pypi),
-    ("Docker Hub", check_docker_hub),
+    ("Docker Hub (server + fwupdate)", check_docker_hub),
     ("MCP Registry", check_registry),
     ("GitHub Release assets (.mcpb + .skill)", check_release_asset),
     ("uvx from PyPI", check_uvx_initialize),

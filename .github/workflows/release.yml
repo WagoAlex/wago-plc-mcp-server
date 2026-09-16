@@ -125,7 +125,9 @@ jobs:
           tag_name: v${{ steps.ver.outputs.value }}
           name: v${{ steps.ver.outputs.value }}
           generate_release_notes: true
-          files: sbom-${{ steps.ver.outputs.value }}.json
+          files: |
+            sbom-${{ steps.ver.outputs.value }}.json
+            sbom/sbom-fwupdate-${{ steps.ver.outputs.value }}.json
 
       # Keep the SBOM as a workflow artifact for 90 days (mirrors cve-scan.yml retention)
       - name: Upload SBOM artifact
