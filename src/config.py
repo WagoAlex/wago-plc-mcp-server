@@ -94,20 +94,44 @@ def _load_per_plc_secrets() -> dict[str, str]:
     return result
 
 
+def _parse_password_overrides(blob: str) -> dict[str, str]:
+    """Parse 'ip=pwd' pairs, comma- or newline-separated, into {ip: password}.
+
+    Comma form is PLC_PASSWORDS (one .mcpb text field); newline form is the
+    contents of PLC_PASSWORDS_FILE (one .mcpb file picker) — a masked
+    single-line field stops being usable once there are more than a handful
+    of overrides, so a plain file with one 'ip=password' per line is the
+    scale-up path, mirroring WAGO_PLC_HOSTS_FILE for the host list itself.
+    '#' starts a comment, consistent with WAGO_PLC_HOSTS_FILE.
+    """
+    result: dict[str, str] = {}
+    for pair in re.split(r"[,\n]", blob):
+        line = pair.split("#")[0].strip()
+        ip, sep, pwd = line.partition("=")
+        ip, pwd = ip.strip(), pwd.strip()
+        if sep and ip and pwd:
+            result[ip] = pwd
+    return result
+
+
 def parse_plcs_from_env() -> list[tuple[str, str, str]]:
     """Parse PLC list from environment + Docker Secrets, supporting three formats.
 
     Password resolution order (highest priority first):
       1. Docker Secret  /run/secrets/plc_password_<ip-with-underscores>  (per-PLC)
+      2. Env var        PLC_PASSWORDS_FILE=/path/to/file                 (per-PLC, file - many PLCs)
       2. Env var        PLC_PASSWORDS_<ip-with-underscores>               (per-PLC, backward-compat)
+      2. Env var        PLC_PASSWORDS=<ip>=<pwd>,<ip>=<pwd>,...           (per-PLC, one field - a few PLCs)
       3. Docker Secret  /run/secrets/plc_default_password                 (shared default)
       4. Env var        DEFAULT_PLC_PASSWORD                              (shared default, dev fallback)
       5. Hardcoded      "wago"
 
-    Host formats (all three can be combined; IPs are merged):
-      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2        (CSV, suitable for small fleets)
+    Host formats (all can be combined; IPs are merged):
+      WAGO_PLC_HOSTS=10.0.0.1,10.0.0.2         (CSV, suitable for small fleets)
       WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt  (one IP per line, # comments; large fleets)
       PLC_PASSWORDS_10_0_0_1=secret_a          (per-PLC env, also extends host list)
+      PLC_PASSWORDS=10.0.0.2=secret_b,10.0.0.3=secret_c        (bulk per-PLC env, also extends host list)
+      PLC_PASSWORDS_FILE=/app/data/passwords.txt                (bulk per-PLC file, also extends host list)
     Per-PLC credentials override the shared default for matching IPs.
     """
     user = os.getenv("DEFAULT_PLC_USERNAME", "admin")
@@ -120,7 +144,15 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
             "[config] DEFAULT_PLC_PASSWORD is a known factory default — "
             "set a strong password via Docker Secret (plc_default_password) or env var"
         )
-    per_plc_secrets = _load_per_plc_secrets()
+    password_overrides = _parse_password_overrides(os.getenv("PLC_PASSWORDS", ""))
+    overrides_file = os.getenv("PLC_PASSWORDS_FILE", "").strip()
+    if overrides_file:
+        p = Path(overrides_file)
+        if p.exists():
+            password_overrides = {**password_overrides, **_parse_password_overrides(p.read_text())}
+        else:
+            logger.warning(f"[config] PLC_PASSWORDS_FILE={overrides_file} not found — skipping")
+    per_plc_secrets = {**password_overrides, **_load_per_plc_secrets()}
     plcs: dict[str, tuple[str, str]] = {}
 
     hosts_csv = os.getenv("WAGO_PLC_HOSTS", "").strip()
@@ -145,5 +177,9 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
         if m:
             ip = m.group(1).replace("_", ".")
             plcs[ip] = (user, per_plc_secrets.get(ip) or val or default_pwd)
+
+    for ip in password_overrides:
+        if ip not in plcs:
+            plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
 
     return [(ip, u, p) for ip, (u, p) in plcs.items()]

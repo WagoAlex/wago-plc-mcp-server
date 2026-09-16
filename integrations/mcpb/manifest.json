@@ -4,8 +4,8 @@
   "name": "wago-plc-mcp-server",
   "display_name": "WAGO PLC",
   "version": "2.3.3",
-  "description": "Read and monitor WAGO PLC parameters over the WDA REST API. Read-only unless you allow writes.",
-  "long_description": "Connects Claude Desktop to WAGO controllers (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network through the native WDA REST API over HTTPS.\n\n**Read-only by default.** Parameter writes, method calls and file uploads are refused until you tick *Allow writes and method calls*. Reboot, factory reset and firmware methods stay blocked even then.\n\nThis bundle is for a single user and a handful of PLCs. For a shared or production fleet, run the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
+  "description": "Read and monitor WAGO PLC parameters over the WDA REST API. The server blocks writes until you allow them.",
+  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you turn on *Allow writes and method calls*. The server always blocks reboot, factory reset, and firmware methods.\n\nThis bundle works for one user and a few PLCs. For a shared or production fleet, use the Docker deployment instead: https://github.com/WagoAlex/wago-plc-mcp-server#deployment-options",
   "author": {
     "name": "Alexander Fugmann",
     "email": "alexander.fugmann@wago.com",
@@ -43,12 +43,20 @@
       "env": {
         "TRANSPORT": "stdio",
         "WAGO_PLC_HOSTS": "${user_config.plc_hosts}",
+        "WAGO_PLC_HOSTS_FILE": "${user_config.hosts_file}",
         "DEFAULT_PLC_USERNAME": "${user_config.username}",
         "DEFAULT_PLC_PASSWORD": "${user_config.password}",
+        "PLC_PASSWORDS": "${user_config.per_plc_passwords}",
+        "PLC_PASSWORDS_FILE": "${user_config.passwords_file}",
         "WAGO_TIMEOUT_SECONDS": "${user_config.timeout_seconds}",
         "WAGO_ALLOW_WRITES": "${user_config.allow_writes}",
+        "WAGO_READONLY_HOSTS": "${user_config.readonly_hosts}",
+        "WAGO_PAGE_LIMIT": "${user_config.page_limit}",
+        "WAGO_MAX_CONCURRENT_REGISTRATIONS": "${user_config.max_concurrent_registrations}",
+        "WAGO_MAX_CONCURRENT_READS": "${user_config.max_concurrent_reads}",
+        "WAGO_TLS_CA": "${user_config.tls_ca}",
         "AUDIT_LOG_FILE": "${HOME}/.wago-plc-mcp/audit.log",
-        "LOG_LEVEL": "WARNING"
+        "LOG_LEVEL": "${user_config.log_level}"
       }
     }
   },
@@ -56,27 +64,48 @@
     "plc_hosts": {
       "type": "string",
       "title": "PLC IP addresses",
-      "description": "Comma-separated IPs of your WAGO controllers, reachable from this computer. Example: 192.168.1.10,192.168.1.11",
-      "required": true
+      "description": "Comma-separated list of PLC IP addresses. Example: 192.168.1.10,192.168.1.11. Use this field for a few PLCs. For many PLCs, use the file field below. You can use both fields together.",
+      "default": "",
+      "required": false
+    },
+    "hosts_file": {
+      "type": "file",
+      "title": "PLC IP list file (optional, for many PLCs)",
+      "description": "A text file with one IP address on each line. A line that starts with '#' is a comment. This file is easier to manage than the field above when you have many PLCs. You must fill in at least one of the two IP fields.",
+      "required": false
     },
     "username": {
       "type": "string",
       "title": "PLC username",
-      "description": "Web-based management (WBM) user on the controllers.",
+      "description": "Web-based management (WBM) user name on the PLCs. WDA allows only one user name for each PLC. The server uses this user name for every PLC in the list above.",
       "default": "admin",
       "required": true
     },
     "password": {
       "type": "string",
-      "title": "PLC password",
-      "description": "Password for that user, same on all listed PLCs. Stored in your OS keychain.",
+      "title": "Default PLC password",
+      "description": "Password for that user name. The server uses this password for every PLC unless you set a different password below. Your operating system keychain stores this password.",
       "sensitive": true,
       "required": true
+    },
+    "per_plc_passwords": {
+      "type": "string",
+      "title": "Per-PLC passwords (optional, a few PLCs)",
+      "description": "Use this field only for PLCs with a different password than the default above. Enter comma-separated ip=password pairs. Example: 192.168.1.11=secretB,192.168.1.12=secretC. This field hides your text as you type. For many overrides, use the file field below instead.",
+      "sensitive": true,
+      "default": "",
+      "required": false
+    },
+    "passwords_file": {
+      "type": "file",
+      "title": "Per-PLC passwords file (optional, many PLCs)",
+      "description": "A text file with one ip=password pair on each line. A line that starts with '#' is a comment. Unlike the field above, this file shows your text and you can edit it. If an IP address is in both places, the server uses the password from this file. This form does not hide the file content. Keep this file private: set file permissions and do not add it to a code repository.",
+      "required": false
     },
     "timeout_seconds": {
       "type": "number",
       "title": "Request timeout (seconds)",
-      "description": "CC100 needs 45 or more; other controllers work with 15.",
+      "description": "The CC100 PLC needs 45 seconds or more. Other PLCs work with 15 seconds.",
       "default": 45,
       "min": 5,
       "max": 300
@@ -84,8 +113,53 @@
     "allow_writes": {
       "type": "boolean",
       "title": "Allow writes and method calls",
-      "description": "Off: every PLC is read-only. On: Claude can change parameters, run methods and upload files on the listed PLCs. Only enable for controllers you are allowed to change.",
+      "description": "When off, every PLC allows only read access. When on, Claude can change parameters, run methods, and upload files on the listed PLCs. Turn this on only for PLCs you have permission to change.",
       "default": false
+    },
+    "readonly_hosts": {
+      "type": "string",
+      "title": "Force read-only on these PLCs (optional)",
+      "description": "Comma-separated list of PLC IP addresses. These PLCs stay read-only even when 'Allow writes and method calls' is on.",
+      "default": "",
+      "required": false
+    },
+    "page_limit": {
+      "type": "number",
+      "title": "Bulk-read page size",
+      "description": "Number of parameters on each page when the server reads a PLC's full parameter list. The WDA API allows a maximum of 255, no matter what value you enter here.",
+      "default": 500,
+      "min": 50,
+      "max": 500
+    },
+    "max_concurrent_registrations": {
+      "type": "number",
+      "title": "Parallel PLC startup limit",
+      "description": "Number of PLCs that register at the same time when the server starts. Lower this number if a slow network causes registration timeouts.",
+      "default": 5,
+      "min": 1,
+      "max": 50
+    },
+    "max_concurrent_reads": {
+      "type": "number",
+      "title": "Parallel read limit (bulk reads)",
+      "description": "Number of PLCs that the server queries at the same time during one bulk-read call.",
+      "default": 10,
+      "min": 1,
+      "max": 50
+    },
+    "tls_ca": {
+      "type": "string",
+      "title": "Verify PLC TLS certificates (optional)",
+      "description": "Leave this field blank to skip certificate verification. This is the default setting. Enter 'true' to verify against your system trust store. Or enter the file path to a CA bundle.",
+      "default": "",
+      "required": false
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log detail level",
+      "description": "Enter DEBUG, INFO, WARNING, or ERROR. WARNING shows only important messages. Use DEBUG to find a connection problem.",
+      "default": "WARNING",
+      "required": false
     }
   },
   "compatibility": {

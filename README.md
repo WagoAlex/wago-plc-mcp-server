@@ -633,10 +633,19 @@ itself. Meant for one engineer and a handful of controllers; use
 2. Open it with Claude Desktop: double-click the file, or drag it onto the
    Claude Desktop window.
 3. Fill in the install form: PLC IP addresses, username, password and request
-   timeout. Claude Desktop keeps the password in its secure storage.
+   timeout. Claude Desktop keeps passwords in its secure storage.
 4. Leave **Allow writes and method calls** unticked unless Claude should change
    these controllers. Unticked, every PLC is read-only: parameter writes,
    method calls and file uploads are refused and logged.
+
+Different password per PLC (same username everywhere - WDA has no per-PLC
+username): fill **Per-PLC passwords** with `ip=password` pairs, comma-separated,
+e.g. `192.168.1.11=secretB,192.168.1.12=secretC`. Any IP listed there that
+isn't in the main IP field gets added automatically.
+
+The form also exposes the same tuning knobs as `.env` for Docker: bulk-read
+page size, parallel registration/read limits, forcing specific PLCs read-only,
+PLC TLS certificate verification, and log verbosity.
 
 Writes and refusals are recorded in `~/.wago-plc-mcp/audit.log`. Reboot,
 factory reset and firmware methods stay blocked even with writes allowed.
