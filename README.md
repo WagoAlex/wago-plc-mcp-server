@@ -480,7 +480,7 @@ You do not need Python.
 | Docker | [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) with the WSL 2 backend and Linux containers | [Docker Engine](https://docs.docker.com/engine/install/) with the Compose plugin |
 | Git | [Git for Windows](https://git-scm.com/downloads/win) | The `git` package of your distribution |
 | Network | HTTPS (port 443) from the laptop to each PLC | Same |
-| Firmware | The `.wup` update files for your devices, from WAGO | Same |
+| Firmware | The update files for your devices, from WAGO: `.wup` files, or `.zip` bundles for the CC100-IEC62443 | Same |
 | PLC access | The WBM user name and password of each PLC | Same |
 
 > [!NOTE]
@@ -501,20 +501,20 @@ mkdir firmware
 docker compose pull
 ```
 
-Copy your `.wup` files into the `firmware` folder that you made.
+Copy your firmware files (`.wup`, or `.zip` for the CC100-IEC62443) into the `firmware` folder that you made.
 Git ignores this folder, so the large files do not go into a commit.
 
 #### Step 2 - Make the approval repository
 
 The tool flashes a PLC only if a committed file approves that PLC and that firmware version.
 
-1. Show the version of each `.wup` file:
+1. Show the version of each firmware file:
 
    ```bash
    docker compose run --rm --entrypoint python fwupdate build_catalog.py /firmware /tmp/catalog.json
    ```
 
-   The output shows `rev=4.9.1` for each file. Use this value as the version.
+   The output shows `rev=4.9.1` for each file, or `rev=02.00.13` for a CC100-IEC62443 bundle. Use this value exactly as the version.
 
 2. Make the repository next to `wago-plc-mcp-server`:
 
@@ -638,7 +638,7 @@ docker run --rm -v "${PWD}/data:/app/data:ro" wagoalex/wago-plc-mcp-server pytho
 | `is not inside a git repository` | `POLICY_HOST_DIR` does not point to the approval repository | Correct `POLICY_HOST_DIR` in `.env` |
 | `required env var PLC_IP is not set` | `.env` is missing or incomplete | Do step 3 again |
 | `ConnectTimeout` or `ConnectError` | The laptop cannot reach the PLC | Check the IP address, cable, VPN, and firewall |
-| `No bundle in catalog lists order number` | The `firmware` folder has no `.wup` file for this device | Add the correct `.wup` file |
+| `No bundle in catalog lists order number` | The `firmware` folder has no firmware file for this device | Add the correct `.wup` or `.zip` file |
 | `bundles match order number ... Set TARGET_VERSION` | The `firmware` folder has more than one file for this device | Add `-e TARGET_VERSION=4.9.1` to the command |
 | `Device is already at ... nothing to do` | The PLC already has this version | No action is necessary |
 | `below the minimum` | The PLC needs an intermediate firmware version first | Update to the version in the message first |

@@ -1,10 +1,15 @@
 """
 Firmware catalog: maps a device's order number + current version to the
-correct .wup bundle for a requested target version.
+correct bundle for a requested target version.
 
-A catalog entry is built directly from a bundle's own package-info.xml -
-never guessed from filenames. See build_catalog.py to (re)generate
-catalog.json from a directory of .wup files.
+Two bundle formats:
+  .wup  PTXdist firmware (CC100, PFC, Edge Controller, WP400, TP600): a zip with
+        package-info.xml and one .raucb, flashed through WDA FirmwareUpdate.
+  .zip  CC100-IEC62443 firmware (FW 02.x): a signed zip with bundle-config.json,
+        flashed as a whole through the WDA Update feature.
+
+A catalog entry is built directly from the bundle's own metadata - never
+guessed from filenames. See build_catalog.py to (re)generate catalog.json.
 """
 import json
 import xml.etree.ElementTree as ET
@@ -73,8 +78,10 @@ def version_in_range(version, range_str):
 
 
 def read_bundle_metadata(wup_path: Path):
-    """Extract catalog fields from one .wup's package-info.xml, without
-    extracting the (large) .raucb payload."""
+    """Extract catalog fields from one bundle's metadata, without extracting
+    the (large) payload. Dispatches on the file suffix."""
+    if wup_path.suffix.lower() == ".zip":
+        return _read_zip_bundle_metadata(wup_path)
     with zipfile.ZipFile(wup_path) as zf:
         with zf.open("package-info.xml") as f:
             xml_bytes = f.read()
@@ -89,6 +96,7 @@ def read_bundle_metadata(wup_path: Path):
     downgrade_el = group.find("Downgrade/VersionList/VersionRange")
 
     return {
+        "format": "wup",
         "wup_file": wup_path.name,
         "raucb_file": file_el.get("Name"),
         "revision": desc.get("Revision"),
@@ -99,10 +107,41 @@ def read_bundle_metadata(wup_path: Path):
     }
 
 
+def _read_zip_bundle_metadata(zip_path: Path):
+    """CC100-IEC62443 bundle: bundle-config.json names the firmware version and
+    the supported order numbers. It declares no upgrade/downgrade range - the
+    device checks the signature and compatibility itself (Update/Start returns
+    InvalidSignature or UpdateIncompatible)."""
+    with zipfile.ZipFile(zip_path) as zf:
+        config = json.loads(zf.read("bundle-config.json"))
+    return {
+        "format": "zip",
+        "wup_file": zip_path.name,
+        "raucb_file": None,
+        "revision": config["firmware"]["version"],
+        "release_index": None,
+        "article_numbers": list(config["supported-devices"]),
+        "upgrade_range": None,
+        "downgrade_range": None,
+    }
+
+
+def _is_zip_bundle(path: Path) -> bool:
+    """Only zips that carry bundle-config.json are firmware; ignore other zips."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return "bundle-config.json" in zf.namelist()
+    except zipfile.BadZipFile:
+        return False
+
+
 def build_catalog(firmware_dir: Path):
     entries = []
-    for wup_path in sorted(firmware_dir.glob("*.wup")):
-        entries.append(read_bundle_metadata(wup_path))
+    for path in sorted(firmware_dir.glob("*.wup")):
+        entries.append(read_bundle_metadata(path))
+    for path in sorted(firmware_dir.glob("*.zip")):
+        if _is_zip_bundle(path):
+            entries.append(read_bundle_metadata(path))
     return {"bundles": entries}
 
 
@@ -160,6 +199,16 @@ def resolve_bundle(catalog, device_order_number, current_version, target_version
     bundle = candidates[0]
     cur = parse_version(current_version)
     target = parse_version(bundle["revision"])
+
+    if bundle.get("format") == "zip":
+        # No declared range to check. The committed approval names the exact
+        # revision, and the device verifies signature and compatibility.
+        if cur == target and not allow_reflash:
+            raise ValueError(
+                f"Device is already at {bundle['revision']} - nothing to do "
+                f"(set FW_ALLOW_REFLASH=true to write it anyway)"
+            )
+        return bundle, "reflash" if cur == target else "upgrade" if target > cur else "downgrade"
 
     if cur == target:
         if not allow_reflash:
