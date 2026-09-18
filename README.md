@@ -967,10 +967,10 @@ The workflow uses a **self-hosted runner**, because GitHub-hosted runners cannot
 Each run gets `scripts/apply.py` from this repository with a sparse checkout. A fix here applies there without a version change.
 The workflow template is [`docs/gitops/apply.yml`](docs/gitops/apply.yml).
 
-### Set up GitOps
+### GitOps setup
 
 The MCP server does not store the YAML files and does not include a config repository.
-You create the config repository yourself, one time. After that, each change goes through a pull request.
+You create the config repository yourself, one time. After that, each change needs a pull request.
 
 You need:
 
@@ -1002,10 +1002,10 @@ You need:
 GitHub-hosted runners cannot reach your PLC network.
 
 1. Go to **Settings → Actions → Runners → New self-hosted runner** and select **Linux**.
-2. Run the commands that GitHub shows on the host that can reach the PLCs.
+2. On the host that can reach the PLCs, run the commands that GitHub shows.
 3. Install the runner as a service: `sudo ./svc.sh install && sudo ./svc.sh start`.
 
-**Step 4 - Turn on GitOps mode in the MCP server**
+**Step 4 - Enable GitOps mode in the MCP server**
 
 Docker (`.env` or Portainer stack):
 
@@ -1017,22 +1017,22 @@ WAGO_GITOPS_REPO=<owner>/wago-plc-config   # the repository from step 1
 
 Then recreate the container: `docker rm -f wmcp && docker compose up -d`.
 
-Claude Desktop extension: in the extension settings, turn on **Allow writes and method calls** and **GitOps mode**.
+Claude Desktop extension: in the extension settings, select **Allow writes and method calls** and **GitOps mode**.
 Enter the repository from step 1 in **GitOps config repository**.
 
 > [!IMPORTANT]
-> The agent gets the config repository name only from `WAGO_GITOPS_REPO`. There is no auto-discovery.
+> The agent gets the config repository name only from `WAGO_GITOPS_REPO`. The agent does not find the repository automatically.
 > If you do not set it, the `next_step` instructions point to `wago-plc-config`.
 
-**Step 5 - Test it**
+**Step 5 - Test the setup**
 
 1. Ask Claude for a harmless change, for example: "Set the SNMP location of 192.168.1.10 to Test-Rack".
 2. Claude replies that it proposed the change, and opens a pull request that changes `plcs/192.168.1.10.yaml`.
-3. On the pull request, the **Dry-run** check shows the drift. The PLC does not change.
-4. Approve and merge the pull request. The **Apply** job writes the change to the PLC.
+3. On the pull request, the **Dry-run** job shows the drift. The PLC does not change.
+4. Approve the pull request, then merge it. The **Apply** job writes the change to the PLC.
 5. Ask Claude to read the parameter again to confirm the change.
 
-If the dry-run job stays in the **Queued** state, the runner is offline.
+If the **Dry-run** job stays in the **Queued** state, the runner is offline.
 
 ### Use GitOps mode
 
@@ -1040,11 +1040,12 @@ In GitOps mode you ask Claude for changes the same way as in live mode. The diff
 
 **Change a parameter**
 
-1. Ask Claude, for example: "Turn on NTP on 192.168.1.10 and use 192.168.1.1 as the time server".
+1. Ask Claude, for example: "Enable NTP on 192.168.1.10 with time server 192.168.1.1".
 2. Claude replies with `status: proposed` and changes `plcs/192.168.1.10.yaml` in a pull request.
-   Without a GitHub tool, Claude gives you the file path and the YAML. Commit the change on a branch and open the pull request yourself.
-3. Open the pull request. The **Dry-run** check shows each parameter as `current -> desired`. Nothing changes on the PLC yet.
-4. If the dry run is correct, approve and merge. The **Apply** job writes only the parameters that are different.
+   Without a GitHub tool, Claude gives you the file path and the YAML. Commit the change on a branch.
+   Then open the pull request yourself.
+3. Open the pull request. The **Dry-run** job shows each parameter as `current -> desired`. Nothing changes on the PLC yet.
+4. If the **Dry-run** job output is correct, approve the pull request, then merge it. The **Apply** job writes only the parameters that are different.
 5. Ask Claude to read the parameters again to confirm the change.
 
 **Run a method (one-time action)**
@@ -1058,15 +1059,15 @@ In GitOps mode you ask Claude for changes the same way as in live mode. The diff
 The ops file has `requires_human: CRITICAL` and an empty `approved_by`.
 `apply.py` refuses to run it without an approver.
 
-1. Review the pull request. Also check the time: a reboot stops the machine that the PLC controls.
-2. Approve and merge. The merge is the approval: CI records the approving reviewer, or the person who merged, as `approved_by`.
-   Claude must never fill in `approved_by` itself. If the file already has a name in it, reject the pull request.
+1. Review the pull request. Make sure that the time is safe: a reboot stops the machine that the PLC controls.
+2. Approve the pull request, then merge it. The merge is the approval: CI records the approving reviewer, or the person who merged, as `approved_by`.
+   Claude must never write a value in `approved_by`. If the file already has a name in it, reject the pull request.
 
 If you run `apply.py` by hand instead of through CI, set `approved_by` in the file or set `WAGO_APPROVED_BY`.
 
 **Undo a change**
 
-Open a new pull request that sets the old values in `plcs/<ip>.yaml`, and merge it.
+Open a new pull request that sets the old values in `plcs/<ip>.yaml`. Then merge it.
 To remove a parameter from GitOps control, delete its line. CI does not reset a parameter that is no longer in the file.
 
 **Stop a merge that must not run**
@@ -1133,7 +1134,7 @@ python scripts/apply.py ops/b7d3e1f9.yaml --execute
 | CODESYS 3 webserver | `0-0-codesys3-webserver-enabled` | direct |
 
 - Parameter IDs and YAML examples for all subsystems: [`docs/gitops/README.md`](docs/gitops/README.md)
-- Config repository setup: [Set up GitOps](#set-up-gitops)
+- Config repository setup: [GitOps setup](#gitops-setup)
 
 ## Security
 

@@ -1,5 +1,5 @@
 # Template for the config repository. Copy it to .github/workflows/apply.yml
-# in your own config repo. Setup: README.md -> GitOps write-gate -> Set up GitOps.
+# in your own config repo. Setup: README.md -> GitOps write-gate -> GitOps setup.
 
 name: Apply PLC Config
 
