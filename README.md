@@ -965,26 +965,74 @@ A GitHub Actions workflow in the config repository runs the CI step. The trigger
 
 The workflow uses a **self-hosted runner**, because GitHub-hosted runners cannot reach the PLC subnet.
 Each run gets `scripts/apply.py` from this repository with a sparse checkout. A fix here applies there without a version change.
-For the full workflow, see [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#how-the-github-actions-workflow-works).
+The workflow template is [`docs/gitops/apply.yml`](docs/gitops/apply.yml).
 
-### Enable GitOps mode
+### Set up GitOps
+
+The MCP server does not store the YAML files and does not include a config repository.
+You create the config repository yourself, one time. After that, each change goes through a pull request.
+
+You need:
+
+- A GitHub repository that you control. Make it private, because it contains your PLC IP addresses and settings.
+- A Linux host that can reach the PLCs, for the self-hosted runner. It needs Python 3.11 or later with `pip`, and `git`. The host can be the same host as the Docker deployment.
+- A GitHub tool for Claude, for example the GitHub MCP server or the `gh` CLI in Claude Code. Without a GitHub tool, Claude gives you the YAML and you commit it yourself.
+
+**Step 1 - Create the config repository**
+
+1. Create a new private repository, for example `wago-plc-config`.
+2. Make two folders: `plcs/` for desired-state files and `ops/` for one-time actions.
+   Git does not keep an empty folder, so add an empty `.gitkeep` file to each.
+3. Copy [`docs/gitops/apply.yml`](docs/gitops/apply.yml) to `.github/workflows/apply.yml` in the new repository.
+   For file examples, see [`docs/gitops/examples/`](docs/gitops/examples/).
+
+**Step 2 - Configure the repository on GitHub**
+
+1. Go to **Settings → Secrets and variables → Actions** and add the secrets `PLC_USERNAME` and `PLC_PASSWORD`.
+   CI uses this login for every PLC.
+2. Optional: on the **Variables** tab, add `AUDIT_SYSLOG` (a syslog target).
+   The runner does not keep files between runs, so syslog is the only audit record of the CI writes.
+3. Go to **Settings → Actions → General → Workflow permissions** and select **Read and write permissions**.
+   CI commits the deletion of `ops/` files after it runs them.
+4. Recommended: go to **Settings → Branches** and add a rule for `main` that requires a pull request with one approval.
+   Without this rule, the person who proposes a change can also merge it.
+
+**Step 3 - Register a self-hosted runner**
+
+GitHub-hosted runners cannot reach your PLC network.
+
+1. Go to **Settings → Actions → Runners → New self-hosted runner** and select **Linux**.
+2. Run the commands that GitHub shows on the host that can reach the PLCs.
+3. Install the runner as a service: `sudo ./svc.sh install && sudo ./svc.sh start`.
+
+**Step 4 - Turn on GitOps mode in the MCP server**
+
+Docker (`.env` or Portainer stack):
 
 ```env
-GITOPS_MODE=1   # intercept writes; return YAML fragments for PR
-GITOPS_MODE=0   # default: write directly (still fully audit-logged)
-
-# Only needed if your config repo isn't named/owned wago-plc-config -
-# every returned YAML fragment's next_step points the agent at this repo.
-WAGO_GITOPS_REPO=wago-plc-config
+WAGO_ALLOW_WRITES=true   # required: a read-only PLC refuses the request before GitOps mode applies
+GITOPS_MODE=1            # 1 = return YAML for a pull request, 0 = write directly (default)
+WAGO_GITOPS_REPO=<owner>/wago-plc-config   # the repository from step 1
 ```
 
-In the Claude Desktop extension, use the **GitOps mode** checkbox and the **GitOps config repository** field.
-Also turn on **Allow writes and method calls**, because a read-only PLC refuses the request before GitOps mode applies.
+Then recreate the container: `docker rm -f wmcp && docker compose up -d`.
+
+Claude Desktop extension: in the extension settings, turn on **Allow writes and method calls** and **GitOps mode**.
+Enter the repository from step 1 in **GitOps config repository**.
 
 > [!IMPORTANT]
 > The agent gets the config repository name only from `WAGO_GITOPS_REPO`. There is no auto-discovery.
-> If you fork or rename the config repository, set this variable.
-> If you do not, the `next_step` instructions point to the wrong repository.
+> If you do not set it, the `next_step` instructions point to `wago-plc-config`.
+
+**Step 5 - Test it**
+
+1. Ask Claude for a harmless change, for example: "Set the SNMP location of 192.168.1.10 to Test-Rack".
+2. Claude replies that it proposed the change, and opens a pull request that changes `plcs/192.168.1.10.yaml`.
+3. On the pull request, the **Dry-run** check shows the drift. The PLC does not change.
+4. Approve and merge the pull request. The **Apply** job writes the change to the PLC.
+5. Ask Claude to read the parameter again to confirm the change.
+
+If the dry-run job stays in the **Queued** state, the runner is offline.
 
 ### Config YAML files
 
@@ -1045,7 +1093,7 @@ python scripts/apply.py ops/b7d3e1f9.yaml --execute
 | CODESYS 3 webserver | `0-0-codesys3-webserver-enabled` | direct |
 
 - Parameter IDs and YAML examples for all subsystems: [`docs/gitops/README.md`](docs/gitops/README.md)
-- Config repository and review guide: [github.com/WagoAlex/wago-plc-config](https://github.com/WagoAlex/wago-plc-config)
+- Config repository setup: [Set up GitOps](#set-up-gitops)
 
 ## Security
 
