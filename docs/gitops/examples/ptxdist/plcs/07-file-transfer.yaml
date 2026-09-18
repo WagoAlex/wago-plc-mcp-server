@@ -1,7 +1,7 @@
 # 07. File transfer: FTPS only
 # Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
 # Area: Access security. Device: PFC200 (all PTXdist device classes).
-# Use this when file transfer must be encrypted. FTP sends passwords in plain text.
+# Use this when the PLC must encrypt file transfers. FTP sends passwords in plain text.
 #
 # In your config repository, merge these keys into plcs/<ip>.yaml.
 # Keep one file for each PLC. apply.py changes only the keys in the file.

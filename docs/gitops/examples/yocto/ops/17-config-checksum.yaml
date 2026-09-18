@@ -1,7 +1,8 @@
 # 17. Calculate the configuration checksum
 # Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
 # Risk: safe. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
-# Use this before and after a change to prove what changed (IEC 62443). The result is in outArgs.ConfigChecksum.
+# Use this before and after a change. A different checksum proves that the configuration changed (IEC 62443).
+# The result is in outArgs.ConfigChecksum.
 #
 # Claude creates this file as ops/<id>.yaml. CI runs the method once after the
 # merge and then deletes the file.

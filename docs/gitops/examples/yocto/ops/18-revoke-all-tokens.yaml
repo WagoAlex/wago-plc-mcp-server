@@ -1,7 +1,7 @@
-# 18. Log out all sessions (revoke all tokens)
+# 18. End all sessions (revoke all tokens)
 # Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
 # Risk: safe for the machine. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
-# Use this after a suspected leak of a login token. All users must log in again.
+# Use this after a suspected leak of a login token. All users must enter their password again.
 #
 # Claude creates this file as ops/<id>.yaml. CI runs the method once after the
 # merge and then deletes the file.
