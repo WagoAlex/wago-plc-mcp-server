@@ -1075,6 +1075,78 @@ To remove a parameter from GitOps control, delete its line. CI does not reset a 
 - Merge without a PLC call: put `[skip ci]` in the merge commit message.
 - Cancel a run that has not started: `gh run list --workflow apply.yml --limit 3`, then `gh run cancel <run-id>`.
 
+### Hands-on example: change the NTP interval on a PFC200
+
+This example uses the PFC200 at `192.168.42.118` in our test rack and the file `plcs/192.168.42.118.yaml` in our config repository.
+Before the change, the file contains:
+
+```yaml
+plc_ip: 192.168.42.118
+# PFC200
+managed_parameters:
+  0-0-ntpclient-enabled: true
+  0-0-ntpclient-configuredtimeservers:
+    - 192.168.42.2
+  0-0-ntpclient-updateinterval: 300
+```
+
+**1. Ask Claude for the change**
+
+> Set the NTP update interval on 192.168.42.118 to 600 seconds.
+
+**2. The server returns a proposal, not a write**
+
+Claude calls `set_parameters`. In GitOps mode, the server does not connect to the PLC for the write. It returns:
+
+```json
+{
+  "status": "proposed",
+  "config_file": "plcs/192.168.42.118.yaml",
+  "desired_state_yaml": "plc_ip: 192.168.42.118\nmanaged_parameters:\n  0-0-ntpclient-updateinterval: 600\n",
+  "next_step": "Merge desired_state_yaml into WagoAlex/wago-plc-config/plcs/192.168.42.118.yaml (add/update keys under managed_parameters) and open a PR. apply.py will read current PLC state, diff against desired, and apply only what changed."
+}
+```
+
+**3. Claude opens a pull request**
+
+Claude merges the new value into the file. It keeps the other keys. The pull request contains one changed line:
+
+```diff
+   0-0-ntpclient-configuredtimeservers:
+     - 192.168.42.2
+-  0-0-ntpclient-updateinterval: 300
++  0-0-ntpclient-updateinterval: 600
+```
+
+**4. The Dry-run job shows the drift**
+
+The **Dry-run** job reads each parameter in the file from the PLC and compares it with the file.
+It shows only the parameters that are different, and it does not write:
+
+```text
+[192.168.42.118] Drift detected (1 parameter(s)):
+  0-0-ntpclient-updateinterval: 300 → 600
+
+Dry-run - pass --execute to apply.
+```
+
+**5. You review and merge**
+
+Make sure that the drift contains only the change that you asked for.
+Approve the pull request, then merge it.
+The **Apply** job writes the one parameter to the PLC:
+
+```text
+[192.168.42.118] Drift detected (1 parameter(s)):
+  0-0-ntpclient-updateinterval: 300 → 600
+[192.168.42.118] Applied 1 change(s).
+```
+
+**6. Claude confirms the change**
+
+Ask Claude to read `0-0-ntpclient-updateinterval` on `192.168.42.118` again. The value is `600`.
+If you merge the same file again, the job shows `[192.168.42.118] In sync - nothing to apply.`
+
 ### Config YAML files
 
 **`plcs/<ip>.yaml`** sets the desired state:
