@@ -1,0 +1,13 @@
+# 04. DNS servers
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Area: Network identity. Device: PFC200 (all PTXdist device classes).
+# Use this when the PLC must resolve names, for example a cloud or NTP host name.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+# Keep one file for each PLC. apply.py changes only the keys in the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/plcs/04-dns-servers.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/ptxdist/plcs/04-dns-servers.yaml --execute
+plc_ip: 192.168.42.118
+managed_parameters:
+  0-0-networking-dns-customdnsservers:
+    - 192.168.42.2

@@ -435,13 +435,13 @@ A human-approved, logged path is the accepted route for dangerous actions, so
 
 ```bash
 # NON-CRITICAL desired-state drift check - prints diff, applies nothing:
-python scripts/apply.py docs/gitops/examples/plcs/192.168.42.110.yaml
+python scripts/apply.py docs/gitops/examples/ptxdist/plcs/01-ntp-client.yaml
 
 # NON-CRITICAL safe method (NTP sync) - ungated, runs directly on --execute:
-python scripts/apply.py docs/gitops/examples/ops/example-ntp-sync.yaml
+python scripts/apply.py docs/gitops/examples/ptxdist/ops/16-sync-time-now.yaml
 
 # CRITICAL op as the agent committed it - refused (approved_by empty):
-python scripts/apply.py docs/gitops/examples/ops/example-reboot.yaml --execute
+python scripts/apply.py docs/gitops/examples/ptxdist/ops/20-reboot.yaml --execute
 ```
 
 All four paths (non-critical config, non-critical method, critical-refused,

@@ -1,0 +1,12 @@
+# 13. BACnet
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Area: Fieldbus. Device: PFC200 (not WP400).
+# Use this when the PLC is part of a building automation system.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+# Keep one file for each PLC. apply.py changes only the keys in the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/plcs/13-bacnet.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/ptxdist/plcs/13-bacnet.yaml --execute
+plc_ip: 192.168.42.118
+managed_parameters:
+  0-0-bacnet-general-enabled: true

@@ -1,0 +1,12 @@
+# 09. File integrity monitoring (AIDE)
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Area: Access security. Device: PFC200 (all PTXdist device classes).
+# Use this when you must detect changed system files. Use 17-integrity-check-now.yaml to run a check.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+# Keep one file for each PLC. apply.py changes only the keys in the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/plcs/09-integrity-monitoring.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/ptxdist/plcs/09-integrity-monitoring.yaml --execute
+plc_ip: 192.168.42.118
+managed_parameters:
+  0-0-aide-enabled: true

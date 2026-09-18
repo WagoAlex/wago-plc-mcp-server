@@ -1,0 +1,16 @@
+# 18. Log out all sessions (revoke all tokens)
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Risk: safe for the machine.
+# Use this after a suspected leak of a login token. All users must log in again.
+#
+# Claude creates this file as ops/<id>.yaml. CI runs the method once after the
+# merge and then deletes the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/ops/18-revoke-all-tokens.yaml
+#   Run:     python scripts/apply.py docs/gitops/examples/ptxdist/ops/18-revoke-all-tokens.yaml --execute
+id: ex18a0b1
+proposed_at: 2026-09-18T10:00:00+00:00
+proposed_by: agent-claude
+plc_ip: 192.168.42.118
+action: invoke_method
+method_id: 0-0-oauth2server-revokealltokens
+arguments: {}

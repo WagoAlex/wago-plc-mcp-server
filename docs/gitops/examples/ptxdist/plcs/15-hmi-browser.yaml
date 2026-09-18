@@ -1,0 +1,14 @@
+# 15. HMI browser: reconnect and certificate check
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Area: HMI. Device: TP600 or WP400.
+# Use this when the panel must reconnect after a PLC restart and reject untrusted certificates.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+# Keep one file for each PLC. apply.py changes only the keys in the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/plcs/15-hmi-browser.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/ptxdist/plcs/15-hmi-browser.yaml --execute
+plc_ip: 192.168.2.174
+managed_parameters:
+  0-0-integratedwebbrowser-monitoring-reconnect: true
+  0-0-integratedwebbrowser-monitoring-reconnectinterval: 10   # seconds
+  0-0-integratedwebbrowser-security-allowunverifiedcertificates: false

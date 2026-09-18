@@ -1,0 +1,18 @@
+# 14. HMI display: brightness, night mode, screensaver
+# Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
+# Area: HMI. Device: TP600 or WP400.
+# Use this when a panel must be dimmer at night and protect the screen when nobody uses it.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+# Keep one file for each PLC. apply.py changes only the keys in the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/ptxdist/plcs/14-hmi-display.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/ptxdist/plcs/14-hmi-display.yaml --execute
+plc_ip: 192.168.2.174
+managed_parameters:
+  0-0-display-brightness-backlight: 80            # percent
+  0-0-display-brightness-nightmode-enabled: true
+  0-0-display-brightness-nightmode-backlight: 20  # percent
+  0-0-display-brightness-nightmode-start: "21:00:00"
+  0-0-display-brightness-nightmode-end: "06:00:00"
+  0-0-display-screensaver-enabled: true
+  0-0-display-screensaver-idletime: 600           # seconds
