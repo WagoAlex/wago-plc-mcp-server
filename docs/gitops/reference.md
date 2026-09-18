@@ -1,30 +1,35 @@
-# GitOps YAML Schema - wago-plc-config
+# GitOps YAML reference
 
-This document is the canonical schema reference for the `wago-plc-config`
-configuration repository. `apply.py` reads these files and reconciles the
-live PLC state against what is declared here.
+This page describes the files in a GitOps config repository, for example `wago-plc-config`.
+`apply.py` reads these files and compares the live PLC with them.
+For the setup and the daily workflow, see the [GitOps guide](README.md).
+
+> [!IMPORTANT]
+> The parameter IDs on this page are for PTXdist PLCs (firmware 04.x, build 31).
+> A Yocto PLC, for example the CC100-IEC62443, uses different IDs for some functions.
+> Read the "Device generations" section in [`wago-plc-skill/SKILL.md`](../../wago-plc-skill/SKILL.md) before you use them.
 
 ## Repository layout
 
 ```
 wago-plc-config/
 ├── plcs/
-│   ├── 192.168.42.110.yaml   # one file per PLC - desired steady state
+│   ├── 192.168.42.110.yaml   # one file for each PLC - the desired state
 │   ├── 192.168.42.118.yaml
 │   └── ...
 └── ops/
-    └── a3f1c2d8.yaml         # one-shot operations (self-delete on success)
+    └── a3f1c2d8.yaml         # one-time actions (CI deletes the file after a successful run)
 ```
 
 ---
 
 ## Desired-state files - `plcs/<ip>.yaml`
 
-Declare what the PLC **should always look like**. `apply.py` reads the live
-values, diffs them against this file, and patches only what has drifted.
+This file sets the values that the PLC **must always have**.
+`apply.py` reads the live values, compares them with this file, and writes only the values that are different.
 
 ```yaml
-plc_ip: 192.168.42.118        # required - must match the filename
+plc_ip: 192.168.42.118        # required - use the same IP as in the file name
 managed_parameters:            # required - map of WDA parameter ID → desired value
   0-0-ntpclient-enabled: true
   0-0-ntpclient-configuredtimeservers:
@@ -34,57 +39,56 @@ managed_parameters:            # required - map of WDA parameter ID → desired 
 
 ### Rules
 
-- `plc_ip` must equal the IP in the filename - `apply.py` validates this.
-- Values are matched case-insensitively (`true` == `True` == `"true"`).
-- Types coerce to match the live PLC type: YAML `"true"` → Python `bool True`
-  before PATCH; YAML `"300"` → `int 300` if the live value is an int.
-- Read-only parameters (e.g. `0-0-version-firmwareversion`) must not appear here.
-- Array-valued parameters (e.g. NTP servers) are written as YAML sequences.
-- Omitting a parameter leaves it unchanged - only listed keys are managed.
+- Use the same IP in `plc_ip` and in the file name. `apply.py` uses `plc_ip` and does not read the file name.
+- `apply.py` compares values without case: `true`, `True`, and `"true"` are equal.
+- `apply.py` converts each value to the type of the live value before it writes it. For example, YAML `"true"` becomes the boolean `true`, and YAML `"300"` becomes the integer `300` if the live value is an integer.
+- Do not put a read-only parameter in the file, for example `0-0-version-firmwareversion`.
+- Write a parameter with an array value, for example the NTP servers, as a YAML list.
+- `apply.py` does not change a parameter that is not in the file.
 
 ---
 
 ## Ops files - `ops/<id>.yaml`
 
-One-shot imperative actions (reboots, NTP sync, firmware update trigger).
-On successful `--execute` `apply.py` **deletes the file automatically**.
-If the method fails the file is preserved so the PR stays open and the
-operator can investigate.
+An ops file runs one action one time, for example a time sync or a reboot.
+After a successful run with `--execute`, `apply.py` **deletes the file**.
+If the method fails, `apply.py` keeps the file. Then the operator can examine the problem.
 
 ```yaml
-id: a3f1c2d8                           # 8-char hex, unique per operation
+id: a3f1c2d8                           # 8 hex characters, unique for each operation
 proposed_at: 2026-06-21T14:22:00+00:00
 proposed_by: agent-claude-code          # who proposed this action
 plc_ip: 192.168.42.118
-action: invoke_method                   # always "invoke_method" for now
+action: invoke_method                   # invoke_method, or firmware_update for the firmware process
 method_id: 0-0-ntpclient-updatetime    # WDA method ID
-arguments: {}                           # map of inArg name → value; {} for no-arg methods
+arguments: {}                           # map of inArg name → value. Use {} for a method without arguments
 ```
 
 ---
 
-## Feature reference - parameter IDs per subsystem
+## Parameters for each function
 
-The tables below list every WDA parameter that `gitops.py` helpers cover.
-All IDs use the zero-indexed singleton prefix `0-0-` (one instance per
-device). Where an ID has a numeric instance slot (e.g. `communities-1`) only
-instance 1 is present by default on stock firmware.
+The tables show the WDA parameters that the `gitops.py` helper functions use.
+All IDs start with `0-0-`. Some IDs contain an instance number, for example `communities-1`.
+Some instances exist only after someone configures them, for example SNMP communities. Read an instance with `get_parameter` before you write it.
 
-### Cloud connectivity
+For 20 tested example files, see [`examples/`](examples/README.md).
 
-Generated by `gitops.cloud_params()`.
+### Cloud connection
+
+The function `gitops.cloud_params()` makes these values.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-cloudconnections-1-transport-host` | string | MQTT broker hostname/IP |
+| `0-0-cloudconnections-1-transport-host` | string | MQTT broker host name or IP |
 | `0-0-cloudconnections-1-cloudtype` | enum int | 2 = Any Cloud (generic MQTT) |
-| `0-0-cloudconnections-1-identification-clientid` | string | Unique per device |
+| `0-0-cloudconnections-1-identification-clientid` | string | Unique for each device |
 | `0-0-cloudconnections-1-messaging-messagingprotocol` | enum int | 4 = Native MQTT |
-| `0-0-cloudconnections-1-enabled` | bool | Must PATCH together with cloudtype and host |
+| `0-0-cloudconnections-1-enabled` | bool | Write it together with `cloudtype` and `transport-host` |
 
-**Caution:** `cloudtype` and `transport-host` must appear in the same PATCH.
-WDA returns code-41 if they conflict (e.g. Azure IoT Hub host with
-`cloudtype=2`).
+> [!CAUTION]
+> Put `cloudtype` and `transport-host` in the same write.
+> If they do not agree, WDA returns error code 41. An example is an Azure IoT Hub host with `cloudtype: 2`.
 
 ```yaml
 plc_ip: 192.168.42.117
@@ -98,14 +102,14 @@ managed_parameters:
 
 ### NTP time sync
 
-Generated by `gitops.ntp_params()`. Present on all device classes.
+The function `gitops.ntp_params()` makes these values. All device classes have them.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
 | `0-0-ntpclient-enabled` | bool | |
-| `0-0-ntpclient-configuredtimeservers` | string[] | Ordered list of NTP server IPs or hostnames |
-| `0-0-ntpclient-updateinterval` | uint16 | Seconds between sync attempts; default 600 |
-| `0-0-ntpclient-isrunning` | bool | Read-only - do not include in desired state |
+| `0-0-ntpclient-configuredtimeservers` | string[] | List of NTP server IPs or host names, in order |
+| `0-0-ntpclient-updateinterval` | uint16 | Seconds between two syncs. The default is 600 |
+| `0-0-ntpclient-isrunning` | bool | Read-only. Do not put it in a desired-state file |
 | `0-0-ntpclient-istimeserveravailable` | bool | Read-only |
 
 ```yaml
@@ -118,7 +122,7 @@ managed_parameters:
   0-0-ntpclient-updateinterval: 300
 ```
 
-NTP sync method (ops file):
+Ops file for a time sync:
 
 ```yaml
 id: b7d3e1f9
@@ -132,21 +136,21 @@ arguments: {}
 
 ### SNMP
 
-Generated by `gitops.snmp_params()`. Present on PFC200/PFC300/Edge/TP600.
-Not present on CC100 or WP400.
+The function `gitops.snmp_params()` makes these values. All device classes have the general SNMP parameters.
+The `communities-1-*` parameters exist only after the first community is configured.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
 | `0-0-snmp-enable` | bool | |
 | `0-0-snmp-communities-1-name` | string | Community string for v1/v2c |
 | `0-0-snmp-communities-1-access` | enum int | 1 = read-only (default) |
-| `0-0-snmp-location` | string | sysLocation OID value |
-| `0-0-snmp-contact` | string | sysContact OID value |
-| `0-0-snmp-name` | string | sysName OID value (read-only) |
-| `0-0-snmp-description` | string | sysDescr OID value (read-only) |
-| `0-0-snmp-objectid` | string | sysObjectID OID value (read-only) |
-| `0-0-snmp-trapreceiversv1v2c` | instantiations | Trap target list - complex write |
-| `0-0-snmp-trapreceiversv3` | instantiations | SNMPv3 trap targets - complex write |
+| `0-0-snmp-location` | string | sysLocation value |
+| `0-0-snmp-contact` | string | sysContact value |
+| `0-0-snmp-name` | string | sysName value (read-only) |
+| `0-0-snmp-description` | string | sysDescr value (read-only) |
+| `0-0-snmp-objectid` | string | sysObjectID value (read-only) |
+| `0-0-snmp-trapreceiversv1v2c` | instantiations | List of trap targets. Configure it in the WBM |
+| `0-0-snmp-trapreceiversv3` | instantiations | List of SNMPv3 trap targets. Configure it in the WBM |
 
 ```yaml
 plc_ip: 192.168.42.114
@@ -159,17 +163,21 @@ managed_parameters:
 
 ### Serial interface
 
-Generated by `gitops.serial_params()`. Present on PFC200/PFC300/Edge/TP600
-(devices with physical RS-232/485 port, hardware variant dependent).
-Not present on CC100 or WP400. Interface name is `X3` on PFC200.
+The function `gitops.serial_params()` makes these values.
+PFC200, PFC300, Edge Controller, and TP600 have them if the hardware variant has an RS-232/485 port.
+The CC100 and the WP400 do not have them. On the PFC200, the port name is `X3`.
+
+> [!WARNING]
+> `0-0-serialinterfaces-1-assignedmode` is read-only on the PFC300.
+> Check it with `get_parameter_definition` before you put it in a file.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-serialinterfaces-1-assignedmode` | enum int | 0 = unassigned, 1 = RS-232, 2 = RS-485 (device-specific) |
+| `0-0-serialinterfaces-1-assignedmode` | enum int | 0 = not assigned, 1 = RS-232, 2 = RS-485 (depends on the device) |
 | `0-0-serialinterfaces-1-assignedowner` | enum int | 0 = None, 1 = CODESYS, 2 = Service |
-| `0-0-serialinterfaces-1-currentmode` | enum int | Read-only - reflects active mode |
-| `0-0-serialinterfaces-1-name` | string | Read-only - physical port label (e.g. "X3") |
-| `0-0-serialserviceinterfaceowner-configured` | enum int | 0 = None, 1 = CODESYS, 2 = Service (current: 2) |
+| `0-0-serialinterfaces-1-currentmode` | enum int | Read-only. Shows the active mode |
+| `0-0-serialinterfaces-1-name` | string | Read-only. The label of the port, for example "X3" |
+| `0-0-serialserviceinterfaceowner-configured` | enum int | 0 = None, 1 = CODESYS, 2 = Service |
 
 ```yaml
 plc_ip: 192.168.42.118
@@ -180,21 +188,20 @@ managed_parameters:
 
 ### OpenVPN
 
-Generated by `gitops.openvpn_params()`. Present on PFC200/PFC300/Edge/TP600.
+The function `gitops.openvpn_params()` makes these values. All device classes have them.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-openvpn-enabled` | bool | Activate the OpenVPN client |
+| `0-0-openvpn-enabled` | bool | Starts the OpenVPN client |
 | `0-0-openvpn-isrunning` | bool | Read-only |
-| `0-0-openvpn-configurationdescription` | string | Human-readable label for the loaded config |
-| `0-0-openvpn-certificatedescription` | string | Human-readable label for the loaded cert |
-| `0-0-openvpn-configfile` | string | Uploaded `.ovpn` config - write via WBM, not WDA |
-| `0-0-openvpn-certificate` | string | Uploaded cert bundle - write via WBM, not WDA |
-| `0-0-openvpn-privatekey` | string | Uploaded private key - write via WBM, not WDA |
+| `0-0-openvpn-configurationdescription` | string | A label for the loaded configuration |
+| `0-0-openvpn-certificatedescription` | string | A label for the loaded certificate |
+| `0-0-openvpn-configfile` | bytes | The `.ovpn` file. Upload it in the WBM, not with WDA |
+| `0-0-openvpn-certificate` | bytes | The certificate bundle. Upload it in the WBM, not with WDA |
+| `0-0-openvpn-privatekey` | bytes | The private key. Upload it in the WBM, not with WDA |
 
-> The `.ovpn` config, certificate, and key files must be uploaded through the
-> WAGO Web-Based Management (WBM) interface or via the WAGO I/O-CHECK tool.
-> The WDA API exposes only the description metadata and the enable flag.
+> Upload the `.ovpn` file, the certificate, and the key in the WAGO Web-Based Management (WBM)
+> or with WAGO I/O-CHECK. In GitOps files, use only the descriptions and the enable flag.
 
 ```yaml
 plc_ip: 192.168.42.116
@@ -203,18 +210,18 @@ managed_parameters:
   0-0-openvpn-configurationdescription: Lab VPN tunnel
 ```
 
-### FTP / FTPS
+### FTP and FTPS
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-ftpd-enabled` | bool | Plain FTP (unencrypted) |
-| `0-0-ftpd-ftps` | bool | Require FTPS (TLS wrapper) |
+| `0-0-ftp-enabled` | bool | FTP without encryption |
+| `0-0-ftps-enabled` | bool | FTP with TLS encryption |
 
 ```yaml
 plc_ip: 192.168.42.110
 managed_parameters:
-  0-0-ftpd-enabled: true
-  0-0-ftpd-ftps: false
+  0-0-ftp-enabled: false
+  0-0-ftps-enabled: true
 ```
 
 ### SSH
@@ -222,17 +229,18 @@ managed_parameters:
 | Parameter | Type | Notes |
 |-----------|------|-------|
 | `0-0-ssh-enabled` | bool | |
+| `0-0-ssh-isrootloginallowed` | bool | Set it to `false` to close the root account for SSH |
 | `0-0-ssh-isrunning` | bool | Read-only |
 
 ### Docker
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-docker-enabled` | bool | Requires reboot to take effect |
+| `0-0-docker-enabled` | bool | Needs a reboot before it has an effect |
 | `0-0-docker-isrunning` | bool | Read-only |
 
-> Enabling Docker (`true`) requires a PLC reboot. Add a corresponding ops
-> file to trigger the reboot after the desired-state PR is applied.
+> After you enable Docker, the PLC needs a reboot.
+> After CI applies the desired-state pull request, add an ops file for the reboot.
 
 ```yaml
 # plcs/192.168.42.116.yaml
@@ -248,36 +256,38 @@ proposed_at: 2026-06-21T10:00:00+00:00
 proposed_by: agent-claude-code
 plc_ip: 192.168.42.116
 action: invoke_method
-method_id: 0-0-reboot-reboot
+method_id: 0-0-reboot-beginreboot
 arguments: {}
+requires_human: CRITICAL
+approved_by: ''
 ```
 
-### CODESYS 3 webserver (Edge Controller / TP600)
+### CODESYS 3
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-codesys3-webserver-enabled` | bool | Enables the CODESYS WebVisu HTTP server |
-| `0-0-codesys3-enabled` | bool | Read-only on most devices |
+| `0-0-codesys3-enabled` | bool | Starts the CODESYS 3 runtime. Writeable on the PFC300 (checked) |
+| `0-0-codesys3-webserver-enabled` | bool | Starts the web server for the CODESYS WebVisu |
 
-### Cloud IPsec
+### IPsec
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
 | `0-0-ipsec-enabled` | bool | |
 | `0-0-ipsec-isrunning` | bool | Read-only |
 
-### Browser / HMI panel (WP400, TP600 only)
+### HMI browser (Edge Controller, WP400, TP600)
 
-Generated by `gitops.browser_params()`.
+The function `gitops.browser_params()` makes these values.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-integratedwebbrowser-startpage` | enum int | 0 = blank, 1 = show favorites entry |
-| `0-0-integratedwebbrowser-startpagefavorite` | instance_ref int | Index into favorites list |
-| `0-0-integratedwebbrowser-favorites` | instantiations | Collection of {url, label} - complex write, use WBM |
-| `0-0-integratedwebbrowser-monitoring-reconnect` | bool | Auto-reconnect on network loss |
-| `0-0-integratedwebbrowser-monitoring-reconnectinterval` | uint | Reconnect interval (seconds) |
-| `0-0-integratedwebbrowser-security-allowunverifiedcertificates` | bool | Accept self-signed certs |
+| `0-0-integratedwebbrowser-startpage` | enum int | 0 = blank, 1 = favorites entry. The TP600 in our rack shows `2`, so read the value first |
+| `0-0-integratedwebbrowser-startpagefavorite` | instance_ref int | The number of an entry in the favorites list |
+| `0-0-integratedwebbrowser-favorites` | instantiations | List of URLs and labels. Configure it in the WBM |
+| `0-0-integratedwebbrowser-monitoring-reconnect` | bool | Connect again after a network loss |
+| `0-0-integratedwebbrowser-monitoring-reconnectinterval` | uint | Seconds between two connection attempts |
+| `0-0-integratedwebbrowser-security-allowunverifiedcertificates` | bool | Accept self-signed certificates |
 
 ```yaml
 plc_ip: 192.168.2.136
@@ -287,21 +297,22 @@ managed_parameters:
   0-0-integratedwebbrowser-monitoring-reconnect: true
 ```
 
-### Display (WP400, TP600 only)
+### Display (Edge Controller, WP400, TP600)
+
+The Edge Controller has only orientation and screensaver. The WP400 and the TP600 also have brightness.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `0-0-display-brightness` | uint | 0-100 percent |
+| `0-0-display-brightness-backlight` | uint8 | 0-100 percent |
+| `0-0-display-brightness-nightmode-enabled` | bool | Lower brightness between the start and end time |
 | `0-0-display-orientation` | enum int | 0 = 0°, 1 = 90°, 2 = 180°, 3 = 270° |
 | `0-0-display-screensaver-enabled` | bool | |
-| `0-0-display-screensaver-timeout` | uint | Idle seconds before screensaver |
+| `0-0-display-screensaver-idletime` | uint32 | Seconds without input before the screensaver starts |
 
-### Bridge configuration (read-only survey - do not write)
+### Network bridges (read them, do not write them)
 
-Bridge topology parameters are read-only at the name/MAC level. The IP
-configuration sources (DHCP vs static) and connected ethernet port assignments
-are writeable but carry the same risk as TCP/IP changes - incorrect values
-will sever the network connection.
+The name, label, and MAC address of a bridge are read-only.
+The IP configuration and the Ethernet port assignment are writeable. But a wrong value disconnects the PLC from the network, the same as a wrong TCP/IP setting.
 
 | Parameter | Type | Writeable |
 |-----------|------|-----------|
@@ -311,107 +322,74 @@ will sever the network connection.
 | `0-0-networking-bridges-1-connectedethernetports` | instance_ref[] | Yes - dangerous |
 | `0-0-networking-bridges-1-ipconfiguration-sources` | enum[] | Yes - dangerous |
 | `0-0-networking-bridges-1-ipconfiguration-addresses` | string[] | Yes - dangerous |
-| `0-0-networking-bridges-2-*` | various | same pattern |
+| `0-0-networking-bridges-2-*` | different types | Same as bridge 1 |
 
-**Do not include bridge or TCP/IP parameters in desired-state files.** A wrong
-value takes the PLC offline and requires physical access to recover.
+**Do not put bridge or TCP/IP parameters in a desired-state file.** A wrong value
+disconnects the PLC. Then you need physical access to the PLC to repair it.
 
 ---
 
-## Not exposed via WDA
+## Functions that WDA does not have
 
-These features are commonly asked about but do not have WDA parameter
-equivalents - they must be configured through the WAGO Web-Based Management
-(WBM) interface or WAGO I/O-CHECK:
+WDA has no parameters for these functions.
+Configure them in the WAGO Web-Based Management (WBM) or with WAGO I/O-CHECK:
 
-| Feature | How to configure |
+| Function | Where to configure it |
 |---------|-----------------|
-| Syslog (remote) | WBM → System → Syslog |
-| Port mapping / iptables / firewall rules | WBM → Networking → Firewall |
+| Remote syslog | WBM → System → Syslog |
+| Port mapping, iptables, firewall rules | WBM → Networking → Firewall |
 | Commissioning service | WBM → Configuration |
-| VPN cert / key / config file upload | WBM → Networking → OpenVPN |
+| Upload of VPN certificates, keys, and configuration files | WBM → Networking → OpenVPN |
 | Browser favorites list | WBM → HMI → Browser |
-| SNMP trap receiver details | WBM → Management → SNMP |
+| SNMP trap receivers | WBM → Management → SNMP |
 
 ---
 
-## Applying files with `apply.py`
+## Run `apply.py`
 
 ```bash
-# Dry-run - show drift without changing anything
+# Dry run - show the drift and change nothing
 python scripts/apply.py plcs/192.168.42.118.yaml
 
-# Apply drift to live PLC
+# Write the drift to the live PLC
 python scripts/apply.py plcs/192.168.42.118.yaml --execute
 
-# Invoke method and self-delete ops file
+# Run the method, then delete the ops file
 python scripts/apply.py ops/a3f1c2d8.yaml --execute
 ```
 
-`apply.py` reads `DEFAULT_PLC_USERNAME` / `DEFAULT_PLC_PASSWORD` from `.env`
-(or environment). Place a `.env` beside `apply.py` or export the variables
-before running.
-
----
-
-## GitOps workflow (GITOPS_MODE=1)
-
-When `GITOPS_MODE=1` is set in the MCP server's environment, `set_parameters`
-and `invoke_method` tool calls are **intercepted** - they return a YAML
-fragment for the agent to commit as a PR instead of writing directly to the
-PLC. A human reviews the PR; `apply.py` runs on merge.
-
-```
-Agent proposes change
-        │
-        ▼
-gitops.desired_state_fragment() / ops_fragment()
-        │
-        ▼
-Agent commits YAML to wago-plc-config repo, opens PR
-        │
-        ▼
-Human reviews & approves PR
-        │
-        ▼
-CI/CD (or human) runs: python scripts/apply.py <file> --execute
-        │
-        ▼
-Live PLC updated; ops files self-delete
-```
-
-Set `GITOPS_MODE=0` (default) for direct writes - suitable for lab/dev
-environments where every write still goes to the tamper-evident audit log.
+`apply.py` reads `DEFAULT_PLC_USERNAME` and `DEFAULT_PLC_PASSWORD` from a `.env` file or from the environment.
+Put the `.env` file in the directory of `apply.py` or in a parent directory, or export the variables first.
 
 ---
 
 ## Safety model - three independent gates
 
-The threat is not "an agent deletes a database." It is an agent that goes rogue
-(hallucination, prompt injection, a bug) and reboots or reconfigures a PLC at the
-wrong moment. In some production lines that means equipment damage or worse. These
-three gates are enforced in code (`src/safety.py`, `src/main.py`, `scripts/apply.py`)
-and **cannot be talked out of by the agent**.
+The risk is not that an agent deletes a database.
+The risk is an agent that makes a wrong decision, for example because of a hallucination, a prompt injection, or a bug.
+Then it can restart or change a PLC at the wrong time. On some production lines, this can damage equipment or cause injury.
+The three gates are in the code (`src/safety.py`, `src/main.py`, `scripts/apply.py`). **The agent cannot change them with a prompt.**
 
 ### Gate 1 - Dangerous-method denylist (default-deny)
 
-Methods whose ID contains `reboot`, `restart`, `factoryreset`, `firmwareupdate`,
-or `format` are treated as dangerous.
+The server treats a method as dangerous in these cases:
 
-| Mode | Behaviour |
+- A part of the method ID starts with `reboot`, `restart`, `factory`, `firmware`, or `format`.
+- The method belongs to the `update` feature (`0-0-update-*`). The CC100-IEC62443 uses this feature for firmware updates.
+
+| Mode | Behavior |
 |---|---|
-| Live (`GITOPS_MODE=0`) | **Denied** unless the exact method ID is in `WAGO_ALLOW_METHODS`. |
-| GitOps (`GITOPS_MODE=1`) | **Proposed**, but the ops YAML is flagged `requires_human: CRITICAL` with an empty `approved_by`, and the proposal is audit-logged. |
+| Live (`GITOPS_MODE=0`) | **Refused**, unless the exact method ID is in `WAGO_ALLOW_METHODS`. |
+| GitOps (`GITOPS_MODE=1`) | **Proposed**. The ops YAML has `requires_human: CRITICAL` and an empty `approved_by`. The audit log records the proposal. |
 
-The list is deliberately tight (bare `reset` is excluded - it would catch benign
-parameters). Widen it in `src/safety.py` or grant a single method via
-`WAGO_ALLOW_METHODS`.
+The list is short on purpose. For example, it does not contain `reset`, because that word also occurs in harmless parameters.
+To change the list, edit `src/safety.py`. To allow one method, add its ID to `WAGO_ALLOW_METHODS`.
 
 ### Gate 2 - Per-PLC read-only
 
-A PLC listed in `WAGO_READONLY_HOSTS` (CSV), or tagged `# readonly` on its line in
-`WAGO_PLC_HOSTS_FILE`, rejects **both** `set_parameters` and `invoke_method` in
-**every** mode. This is the hard "never touch this unit" switch for production.
+A PLC in `WAGO_READONLY_HOSTS` (comma-separated), or with `# readonly` on its line in
+`WAGO_PLC_HOSTS_FILE`, refuses **both** `set_parameters` and `invoke_method` in **all** modes.
+Use this for a production PLC that the agent must never change.
 
 ```env
 WAGO_READONLY_HOSTS=192.168.42.118,192.168.42.119
@@ -421,29 +399,26 @@ WAGO_READONLY_HOSTS=192.168.42.118,192.168.42.119
 192.168.42.118  # readonly prod line A
 ```
 
-### Gate 3 - `apply.py` human-gate + audit
+### Gate 3 - Human approval and audit in `apply.py`
 
-A human-approved, logged path is the accepted route for dangerous actions, so
-`apply.py` does not block them - it enforces that a human approved them:
+`apply.py` can run a dangerous action, but only after a person approves it:
 
-- A dangerous op is **refused** unless its YAML carries a non-empty `approved_by`.
-  The agent's proposal never fills that field; a reviewer sets it during PR review.
-- Every executed reconcile (`apply_desired_state`, `apply_ops`) appends a record
-  to the tamper-evident audit chain when `AUDIT_LOG_FILE` is set.
+- `apply.py` **refuses** a dangerous operation if `approved_by` is empty.
+  The agent never writes a value in this field. With the CI workflow, the merge sets it from the approving reviewer.
+- If `AUDIT_LOG_FILE` is set, `apply.py` adds a record to the tamper-evident audit chain for each run.
 
-### Trying it out (dry-run, no PLC changes)
+### Try it (dry run, no PLC changes)
 
 ```bash
-# NON-CRITICAL desired-state drift check - prints diff, applies nothing:
+# Desired state (not critical) - shows the drift and changes nothing:
 python scripts/apply.py docs/gitops/examples/ptxdist/plcs/01-ntp-client.yaml
 
-# NON-CRITICAL safe method (NTP sync) - ungated, runs directly on --execute:
+# Safe method (NTP sync) - no gate, it runs with --execute:
 python scripts/apply.py docs/gitops/examples/ptxdist/ops/16-sync-time-now.yaml
 
-# CRITICAL op as the agent committed it - refused (approved_by empty):
+# Critical operation, as the agent wrote it - refused, because approved_by is empty:
 python scripts/apply.py docs/gitops/examples/ptxdist/ops/20-reboot.yaml --execute
 ```
 
-All four paths (non-critical config, non-critical method, critical-refused,
-critical-approved) are verified against a live PLC; the critical-approved path
-opens the gate only once a human sets `approved_by`.
+We tested all four paths against a live PLC: desired state, safe method, critical refused, and critical approved.
+The gate opens only after a person sets `approved_by`.
