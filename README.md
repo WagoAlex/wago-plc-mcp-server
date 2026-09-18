@@ -1034,6 +1034,46 @@ Enter the repository from step 1 in **GitOps config repository**.
 
 If the dry-run job stays in the **Queued** state, the runner is offline.
 
+### Use GitOps mode
+
+In GitOps mode you ask Claude for changes the same way as in live mode. The difference: Claude never writes to the PLC. It gives you a pull request, and the merge applies it.
+
+**Change a parameter**
+
+1. Ask Claude, for example: "Turn on NTP on 192.168.1.10 and use 192.168.1.1 as the time server".
+2. Claude replies with `status: proposed` and changes `plcs/192.168.1.10.yaml` in a pull request.
+   Without a GitHub tool, Claude gives you the file path and the YAML. Commit the change on a branch and open the pull request yourself.
+3. Open the pull request. The **Dry-run** check shows each parameter as `current -> desired`. Nothing changes on the PLC yet.
+4. If the dry run is correct, approve and merge. The **Apply** job writes only the parameters that are different.
+5. Ask Claude to read the parameters again to confirm the change.
+
+**Run a method (one-time action)**
+
+1. Ask Claude, for example: "Sync the time on 192.168.1.10 now".
+2. Claude creates `ops/<id>.yaml` in a pull request.
+3. Merge the pull request. CI runs the method once and then deletes the ops file.
+
+**Dangerous methods (reboot, factory reset, firmware)**
+
+The ops file has `requires_human: CRITICAL` and an empty `approved_by`.
+`apply.py` refuses to run it without an approver.
+
+1. Review the pull request. Also check the time: a reboot stops the machine that the PLC controls.
+2. Approve and merge. The merge is the approval: CI records the approving reviewer, or the person who merged, as `approved_by`.
+   Claude must never fill in `approved_by` itself. If the file already has a name in it, reject the pull request.
+
+If you run `apply.py` by hand instead of through CI, set `approved_by` in the file or set `WAGO_APPROVED_BY`.
+
+**Undo a change**
+
+Open a new pull request that sets the old values in `plcs/<ip>.yaml`, and merge it.
+To remove a parameter from GitOps control, delete its line. CI does not reset a parameter that is no longer in the file.
+
+**Stop a merge that must not run**
+
+- Merge without a PLC call: put `[skip ci]` in the merge commit message.
+- Cancel a run that has not started: `gh run list --workflow apply.yml --limit 3`, then `gh run cancel <run-id>`.
+
 ### Config YAML files
 
 **`plcs/<ip>.yaml`** sets the desired state:
