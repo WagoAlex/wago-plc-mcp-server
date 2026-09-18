@@ -1,7 +1,7 @@
 # GitOps examples - 20 use cases
 
 Each file shows one use case. Copy the keys that you need into your own config repository.
-For the setup and the daily workflow, see [GitOps setup](../../../README.md#gitops-setup) and [Use GitOps mode](../../../README.md#use-gitops-mode).
+For the setup and the daily workflow, see [GitOps setup](../README.md#gitops-setup) and [Use GitOps mode](../README.md#use-gitops-mode).
 
 ## Firmware generation: PTXdist only
 

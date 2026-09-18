@@ -1,26 +1,29 @@
-# Firmware updates for WAGO controllers
+# Firmware updates for WAGO PLCs
 
-Updates the firmware of WAGO PFC/CC/TP/WP devices over the WDA REST API, from a
-container, with live progress on stdout. Verified on CC100, PFC200 G2, PFC300,
-Edge Controller, TP600 and WP400.
+This tool updates the firmware of WAGO PFC, CC, TP, and WP devices with the WDA REST API.
+It runs in a container and shows the progress on stdout.
+We tested it on the CC100, PFC200 G2, PFC300, Edge Controller, TP600, and WP400.
 
-It is a **separate tool from the MCP server on purpose**. The MCP server refuses
-every firmware method so that an AI agent cannot flash a controller; this tool
-is run by a person during a maintenance window, and refuses to start without an
-approval committed to git.
+This tool is **separate from the MCP server on purpose**. The MCP server never runs a firmware method on its own,
+so an AI agent cannot flash a PLC. A person runs this tool during a maintenance window.
+The tool does not start until someone commits an approval to Git.
+
+> [!NOTE]
+> Some links on this page go to `wago-plc-config`, our internal config repository.
+> If you cannot open them, use the same sections in your own config repository.
 
 ---
 
 ## Quick start
 
-The image is published on Docker Hub as
-[`wagoalex/wago-plc-mcp-server-fwupdate`](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server-fwupdate),
-with the same version tags as the MCP server. You need this folder (for
-`docker-compose.yml` and `_env`), not a Python install:
+The image is on Docker Hub as
+[`wagoalex/wago-plc-mcp-server-fwupdate`](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server-fwupdate).
+It has the same version tags as the MCP server.
+You need this folder for `docker-compose.yml` and `_env`. You do not need Python.
 
 For a step-by-step procedure on a Windows or Linux laptop, see
-[Update firmware from a Windows or Linux laptop](../README.md#update-firmware-from-a-windows-or-linux-laptop).
-The commands below work the same in PowerShell and in a Linux shell.
+[Update firmware from a Windows or Linux laptop](../docs/firmware-updates.md#update-firmware-from-a-windows-or-linux-laptop).
+The commands below are the same in PowerShell and in a Linux shell.
 
 ```bash
 git clone https://github.com/WagoAlex/wago-plc-mcp-server.git
@@ -29,68 +32,65 @@ cp _env .env
 docker compose pull
 ```
 
-Fill in four things:
+Set these values in `.env`:
 
 | Setting | Meaning |
 |---|---|
-| `PLC_IP`, `PLC_PASSWORD` | The device and its credentials |
-| `FIRMWARE_SOURCE` | Where your `.wup` bundles live (directory, share, S3, HTTPS) |
-| `POLICY_HOST_DIR` | Your config-repo checkout containing `firmware-policy.yaml` |
-| `FIRMWARE_HOST_DIR` | Only for the default mounted-directory source |
+| `PLC_IP`, `PLC_PASSWORD` | The device and its password |
+| `FIRMWARE_SOURCE` | The location of your `.wup` bundles (directory, share, S3, HTTPS) |
+| `POLICY_HOST_DIR` | Your checkout of the config repository, with `firmware-policy.yaml` |
+| `FIRMWARE_HOST_DIR` | Only for the default source, a mounted directory |
 
-Then, always in this order:
+Then do these steps in this order:
 
 ```bash
-# 1. Rehearse. Uploads and verifies the image, then cancels.
-#    Start is never called - nothing is flashed.
+# 1. Rehearse. The tool uploads and checks the image, then cancels.
+#    It never calls Start, so nothing is flashed.
 docker compose run --rm -e DRY_RUN=true fwupdate
 
-# 2. One device, for real
+# 2. Update one device
 docker compose run --rm fwupdate
 
-# 3. Or every device your policy approves, one at a time
+# 3. Or update each device that your policy approves, one after the other
 docker compose run --rm -e DRY_RUN=true fleet
 docker compose run --rm fleet
 ```
 
-Changed the source in this checkout? Add `--build` to the `docker compose run` command to
-use your local build instead of the published image.
+If you changed the source code in this checkout, add `--build` to the `docker compose run` command.
+Then Docker uses your local build instead of the published image.
 
-A run takes roughly 5-15 minutes per device, most of it upload and the
-device's own reboot.
+A run takes about 5-15 minutes for each device. The upload and the reboot of the device take most of this time.
 
-> **Do not walk away from step 2 or 3 the way you would from a build.** These
-> steps write flash and reboot a controller. Run them in a window, watch the
-> output, and never background them or pipe them into something that could keep
-> them alive past the point you meant to stop.
+> **Stay with steps 2 and 3 until they are complete.** These steps write to the flash memory and restart a PLC.
+> Run them in a visible window and watch the output.
+> Do not run them in the background. Do not send their output to a process that can keep them alive after you want to stop.
 
 ---
 
-## What can go wrong, and what the tool does about it
+## What can go wrong, and what the tool does
 
 | Situation | What happens |
 |---|---|
-| Device is below its minimum firmware build | Refused before anything is written - see below |
-| Device not approved in git | Refused before the device is contacted |
-| Approval edited but not committed | Refused - an uncommitted policy is not an authorization |
-| Approval says a different revision than the bundle | Refused, both values named |
-| Two bundles match the device | Refused and listed - never a guess |
-| Device already at that version | Refused unless `FW_ALLOW_REFLASH=true` |
-| Current version outside the bundle's declared range | Refused |
-| Device rejects the image | Stops immediately, prints the device's own `errorcause` |
-| Install never reaches a finishable state | Stops at `POLL_TIMEOUT` with diagnostics |
+| The device has a firmware build below its minimum | Refused before the tool writes anything. See below |
+| The device is not approved in Git | Refused before the tool connects to the device |
+| Someone changed the approval but did not commit it | Refused. A policy that is not committed is not an authorization |
+| The approval names a different revision than the bundle | Refused. The message shows both values |
+| Two bundles match the device | Refused. The message lists both. The tool never guesses |
+| The device already has that version | Refused, unless `FW_ALLOW_REFLASH=true` |
+| The current version is outside the range of the bundle | Refused |
+| The device refuses the image | The tool stops immediately and shows the `errorcause` of the device |
+| The installation does not reach a state where it can finish | The tool stops at `POLL_TIMEOUT` and shows diagnostics |
 
-Every one of those outcomes is written to the audit log.
+The audit log records each of these results.
 
 ---
 
 ## Minimum firmware build
 
-Some hardware cannot take an update directly from an old build and needs an
-intermediate step. Bundles do not express this - every one of them declares the
-same permissive `3.0.0-4.9.99` range - so the tool checks it separately, reading
-`0-0-version-softwarereleaseindex` (the `31` in `04.09.01(31)`) and refusing
-before `Activate`:
+Some hardware cannot go directly from an old build to the new one. It needs an intermediate update first.
+The bundles do not show this: all of them declare the same wide range, `3.0.0-4.9.99`.
+So the tool does a separate check. It reads `0-0-version-softwarereleaseindex` (the `31` in `04.09.01(31)`)
+and refuses before `Activate`:
 
 ```
 ==> Device identity: order=0750-8302  current firmware=04.09.01(31)
@@ -98,63 +98,57 @@ FATAL: 0750-8302 is at build 28, below the minimum 30 for this update path.
        Update it to build 30 first.
 ```
 
-The check applies to `.wup` bundles only, and runs after the tool finds the
-bundle. The CC100-IEC62443 uses a different build scheme (`02.00.13(04)`), so
-its `.zip` bundles skip it.
+The check applies only to `.wup` bundles. It runs after the tool finds the bundle.
+The CC100-IEC62443 uses a different build scheme (`02.00.13(04)`), so the tool does not do this check for its `.zip` bundles.
 
-An unreadable build is refused too, rather than assumed good. Which class needs
-what is a fleet fact, so it lives with the fleet:
+If the tool cannot read the build, it refuses. It does not assume that the build is correct.
+The minimum build for each device class is a fact about the fleet, so it is in the config repository:
 [wago-plc-config → Minimum firmware before updating](https://github.com/WagoAlex/wago-plc-config#minimum-firmware-before-updating).
 
-## What this tool enforces at run time
+## What the tool checks at run time
 
-Approvals are **authored and reviewed in your config repository** - how to write
-one, which entry forms exist, and who signs it off is documented there:
+You write and review approvals **in your config repository**.
+The config repository describes how to write an approval, the entry forms, and who approves it:
 [wago-plc-config → Approve a firmware update](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update).
 
-This section is what the container does with that file. Before anything is
-flashed it refuses unless all of these hold:
+This section describes what the container does with that file.
+Before it flashes anything, it refuses unless all of these conditions are true:
 
-1. the policy file is **tracked by git**
-2. the working-tree copy is **identical to the committed one** - editing the
-   file locally authorizes nothing
-3. the device's IP is listed with the **exact revision** the resolved bundle
-   declares
-4. optionally (`FW_REQUIRE_SIGNED_COMMIT=true`) `HEAD` carries a **valid
-   signature**
-5. optionally (`FW_REQUIRE_SEPARATE_APPROVER=true`) the approver is not also
-   the proposer
+1. Git **tracks** the policy file.
+2. The file in the working tree is **the same as the committed file**. A local change authorizes nothing.
+3. The policy lists the IP of the device with the **exact revision** that the bundle declares.
+4. Optional (`FW_REQUIRE_SIGNED_COMMIT=true`): `HEAD` has a **valid signature**.
+5. Optional (`FW_REQUIRE_SEPARATE_APPROVER=true`): the approver is not the proposer.
 
-### What gets installed when no revision is named
+### What the tool installs when no revision is named
 
-A policy entry lists the revisions a device may run. With no `TARGET_VERSION`
-and no revision in the ops file, the tool installs the **newest allowed**, unless
-the entry pins a different `default`. A revision outside the list is refused,
-naming what was allowed:
+A policy entry lists the revisions that a device can run.
+If there is no `TARGET_VERSION` and no revision in the ops file, the tool installs the **newest allowed** revision.
+An entry can set a different `default`.
+The tool refuses a revision that is not in the list, and it shows the allowed revisions:
 
 ```
 FATAL: refused - 192.168.42.115 is approved for firmware 4.9.1, but the
        resolved bundle is 4.9.50.
 ```
 
-Which revisions a device is allowed to run is a fleet decision, so the entry
-forms are documented where approvals are written:
-[wago-plc-config -> Standing approval](https://github.com/WagoAlex/wago-plc-config#standing-approval-the-fleet-policy).
+The allowed revisions for a device are a decision about the fleet.
+So the config repository, where you write approvals, describes the entry forms:
+[wago-plc-config → Standing approval](https://github.com/WagoAlex/wago-plc-config#standing-approval-the-fleet-policy).
 
 ### Nobody types their own name
 
-`approved_by` is never something you have to fill in by hand. The approver is
-resolved from the most authenticated source available:
+You never type `approved_by` by hand. The tool takes the approver from the most authenticated source that it has:
 
-| Precedence | Source | Available when |
+| Priority | Source | Available when |
 |---|---|---|
-| 1 | **PR review** | CI read the pull request's review approvals on merge. Passed as `WAGO_APPROVED_BY` plus a citable `WAGO_APPROVAL_REF` |
-| 2 | Authenticated actor | A PR merged without a review approval, or a direct push - `WAGO_APPROVED_BY` alone |
-| 3 | Commit author | Running the updater by hand, outside CI |
-| 4 | The value in the file | Nothing above was available. Weakest: a typed name proves nothing |
+| 1 | **Pull request review** | CI read the review approvals of the pull request at the merge. CI sends them as `WAGO_APPROVED_BY`, with a reference in `WAGO_APPROVAL_REF` |
+| 2 | Authenticated actor | Someone merged a pull request without a review approval, or pushed directly. CI sends only `WAGO_APPROVED_BY` |
+| 3 | Commit author | You run the tool by hand, not in CI |
+| 4 | The value in the file | None of the sources above is available. This is the weakest source: a typed name proves nothing |
 
-Self-approval is **allowed and recorded**, not refused - one engineer
-maintaining a rack should not need a second account:
+The tool **allows and records** self-approval. It does not refuse it.
+One engineer who maintains a rack does not need a second account:
 
 ```
 ==> NOTE: proposer and approver are the same person (self-approved).
@@ -164,66 +158,61 @@ maintaining a rack should not need a second account:
     192.168.42.119 -> 4.9.1
 ```
 
-`FW_REQUIRE_SEPARATE_APPROVER=true` refuses it instead, for anything under a
-change-control requirement.
+For a change-control requirement, set `FW_REQUIRE_SEPARATE_APPROVER=true`. Then the tool refuses self-approval.
 
-What auto-fill costs, stated plainly: a file with an empty `approved_by` no
-longer refuses on its own, because committing and merging it **is** the
-approval. Whether a second person was involved is decided by your config
-repository's branch-protection settings, not by this tool - the tool records
-the truth either way. Setting that up, and who counts as an approver in each
-merge case, is documented where approvals are written:
+There is a cost to the automatic approver. A file with an empty `approved_by` is no longer refused,
+because the commit and the merge **are** the approval.
+The branch-protection settings of your config repository decide if a second person must take part, not this tool.
+The tool records what happened in both cases.
+The config repository describes how to set this up, and who counts as the approver for each type of merge:
 [wago-plc-config → Who counts as the approver](https://github.com/WagoAlex/wago-plc-config#who-counts-as-the-approver).
 
-On success it prints the authorizing commit, and the reviewer when the entry
-carries one:
+After a successful check, the tool shows the authorizing commit. If the entry names a reviewer, it shows the reviewer too:
 
 ```
 ==> Authorized by commit 18d2cbfef290 (/policy/firmware-policy.yaml), signed off by ALEX: 192.168.42.119 -> 4.9.1
 ```
 
-Refusals name the reason and exit before the device is touched:
+A refusal shows the reason. The tool stops before it connects to the device:
 
 ```
 FATAL: refused - 192.168.42.115 is approved for firmware 4.9.1, but the resolved
 bundle is 4.9.50. Commit a policy change if 4.9.50 is what you want.
 ```
 
-Mount the checkout **including its `.git`** - that is what proves the approval
-was committed - and point `FW_POLICY_FILE` at the file:
+Mount the checkout **with its `.git` directory**. The `.git` directory proves that someone committed the approval.
+Set `FW_POLICY_FILE` to the policy file:
 
 ```env
-# .env - a host path, so set it here, not with -e
+# .env - this is a host path, so set it here, not with -e
 POLICY_HOST_DIR=/path/to/wago-plc-config
 ```
 
-`DRY_RUN=true` skips the gate on purpose: a dry run never calls `Start`, so
-nothing can be flashed, and rehearsing before asking for approval is the right
-order. `FW_AUTHZ=off` disables the gate entirely - see
-[Running this securely](#running-this-securely) for when that is and is not
-appropriate.
+`DRY_RUN=true` skips the Git check on purpose. A dry run never calls `Start`, so it cannot flash anything.
+Rehearse first, then ask for the approval.
+`FW_AUTHZ=off` disables the Git check fully. For when to use it and when not, see
+[Running this securely](#running-this-securely).
 
-## Every run lands in the audit chain
+## The audit chain records each run
 
-A firmware flash is the highest-consequence thing this fleet can do, so it
-writes to the **same tamper-evident hash chain** as the MCP server and
-`scripts/apply.py` - not a separate log, and not a copy of the implementation:
-the image builds `src/audit.py` straight from the server's source, and the
-`../data:/app/data` mount is the same volume.
+A firmware flash is the action with the largest effect in the fleet.
+So it writes to the **same tamper-evident hash chain** as the MCP server and `scripts/apply.py`.
+It is not a separate log and not a copy of the code: the image uses `src/audit.py` from the server source,
+and the `../data:/app/data` mount is the same volume.
 
-Every outcome is recorded, refusals included, because "who tried and was
-denied" is the half that matters after an incident:
+The chain records each result, also the refusals.
+After an incident, the important question is who tried and got a refusal:
 
 | `result` | When |
 |---|---|
-| `authorized` | The git gate passed - carries the commit sha and `approved_by` |
-| `refused: ...` | Any gate refusal, with the reason verbatim |
-| `ok` | Flash completed, with the resulting firmware version |
-| `failed: device reports Error` | The device rejected it, with its own `errorcause` |
-| `failed: timed out ...` | Never reached a finishable state |
-| `aborted: ...` | The run died mid-flash - the state an incident review most needs |
-| `dry run ok (not flashed)` | A rehearsal, explicitly marked as not a flash |
-| `proceeding without git authorization` | `FW_AUTHZ=off` was used |
+| `authorized` | The Git check passed. The record has the commit SHA and `approved_by` |
+| `refused: ...` | A check refused the run. The record has the exact reason |
+| `ok` | The flash is complete. The record has the new firmware version |
+| `failed: device reports Error` | The device refused the image. The record has the `errorcause` of the device |
+| `failed: timed out ...` | The installation did not reach a state where it can finish |
+| `aborted: ...` | The run stopped during the flash. An incident review needs this state most |
+| `dry run ok (not flashed)` | A rehearsal. The record says that nothing was flashed |
+| `proceeding without git authorization` | Someone used `FW_AUTHZ=off` |
 
 ```json
 {"ts": "2026-09-07T12:45:37Z", "action": "firmware_update", "plc": "192.168.42.111",
@@ -232,8 +221,7 @@ denied" is the half that matters after an incident:
  "authorization_file": "/policy/firmware-policy.yaml"}
 ```
 
-An authorized run additionally carries who approved it and how that was
-established:
+The record of an authorized run also shows who approved it, and how the tool found that:
 
 ```json
 {"result": "authorized", "revision": "4.9.1", "commit": "3968873334d8...",
@@ -242,48 +230,48 @@ established:
  "approval_ref": "WagoAlex/wago-plc-config#4 opened by alice, approved by bob, merged by bob"}
 ```
 
-Commands for reading and verifying that trail are under
+For the commands that read and check the chain, see
 [Verifying the trail afterwards](#verifying-the-trail-afterwards).
 
-Passwords never reach the log - `audit.redact_details()` runs before hashing,
-so the chain stays verifiable over exactly what is stored.
+Passwords never go into the log. `audit.redact_details()` runs before the tool calculates the hash.
+So the hash covers exactly the stored record, and you can check it.
 
 ## The whole fleet in one command
 
-`fleet.py` reads the same policy and updates every approved device
-**sequentially**, one child process per device:
+`fleet.py` reads the same policy and updates each approved device
+**one after the other**. It starts one child process for each device:
 
 ```bash
 docker compose run --rm -e DRY_RUN=true fleet   # rehearse the whole fleet
-docker compose run --rm fleet                   # then run it for real
+docker compose run --rm fleet                   # then do the update
 ```
 
-Sequential is deliberate: firmware updates hit device-specific quirks (the
-`/tmp/fwupdate` permission requirement, the `Finish`-on-`Unconfirmed` timing)
-that are much easier to diagnose one at a time, and a batch of simultaneous
-reboots multiplies the blast radius of any single undiscovered issue. One
-process per device also means a crash mid-run cannot poison the next. A failed
-device is reported and the fleet continues; the summary at the end lists every
-outcome, and the exit code is non-zero if any device failed.
+The tool updates one device at a time on purpose.
+Firmware updates have device-specific problems, for example the `/tmp/fwupdate` permission requirement
+or the time to call `Finish` at `Unconfirmed`. It is much easier to find these problems one device at a time.
+Many reboots at the same time also increase the effect of a problem that nobody found yet.
+With one process for each device, a crash cannot affect the next device.
+If a device fails, the tool reports it and continues with the next device.
+The summary at the end lists each result. The exit code is not zero if a device failed.
 
-Per-device passwords follow the MCP server's convention: a Docker secret at
-`/run/secrets/plc_password_<ip_with_underscores>`, falling back to
-`PLC_PASSWORD` for the whole fleet.
+The passwords for each device use the same convention as the MCP server:
+a Docker secret at `/run/secrets/plc_password_<ip_with_underscores>`.
+If there is no secret, the tool uses `PLC_PASSWORD` for the whole fleet.
 
 ## Where bundles come from - `FIRMWARE_SOURCE`
 
-Everything downstream (catalog resolution, upload, flash) only ever sees a
-plain directory of `.wup` files, so the source is swappable:
+The later steps (catalog, upload, flash) always see a normal directory of `.wup` files.
+So you can change the source:
 
 | `FIRMWARE_SOURCE` | What it is |
 |---|---|
-| `/firmware` | A mounted directory - set `FIRMWARE_HOST_DIR` and use the compose mount |
-| `file:///mnt/fwshare` | A network share (SMB/NFS) the **host** has already mounted - mounting is the OS's job, not this container's |
-| `s3://bucket/firmware/` | An S3 bucket, or any S3-compatible store via `AWS_ENDPOINT_URL` (MinIO, Ceph). Standard AWS credential env vars |
-| `https://host/path/PFC-G2_update_V040901.wup` | One bundle over HTTPS. **This is what a Teams / SharePoint / OneDrive share link is**, once you append `?download=1` to an "anyone with the link" URL |
-| `https://host/path/index.json` | A manifest - the way to serve a whole multi-device bundle set over HTTPS from anywhere that hosts a static file |
+| `/firmware` | A mounted directory. Set `FIRMWARE_HOST_DIR` and use the compose mount |
+| `file:///mnt/fwshare` | A network share (SMB/NFS) that the **host** already mounted. The operating system mounts it, not this container |
+| `s3://bucket/firmware/` | An S3 bucket, or an S3-compatible store with `AWS_ENDPOINT_URL` (MinIO, Ceph). Uses the standard AWS credential variables |
+| `https://host/path/PFC-G2_update_V040901.wup` | One bundle over HTTPS. **A Teams, SharePoint, or OneDrive share link is this type**, after you add `?download=1` to an "anyone with the link" URL |
+| `https://host/path/index.json` | A manifest. Use it to supply a full set of bundles for many devices over HTTPS, from any host that supplies static files |
 
-Manifest format (`sha256` optional but checked when present):
+The manifest format (`sha256` is optional, but the tool checks it when it is there):
 
 ```json
 [
@@ -295,46 +283,39 @@ Manifest format (`sha256` optional but checked when present):
 ]
 ```
 
-Sources behind auth (SharePoint with a token, Artifactory, a private bucket
-gateway) take `FIRMWARE_SOURCE_TOKEN`, sent as `Authorization: Bearer`.
+For a source that needs authentication (SharePoint with a token, Artifactory, a gateway for a private bucket),
+set `FIRMWARE_SOURCE_TOKEN`. The tool sends it as `Authorization: Bearer`.
 
-Remote bundles are cached in the `fwcache` volume by name and size, so a
-re-run does not re-fetch ~200 MB files. Downloads are written to a `.part`
-file and renamed only on success, so an interrupted transfer can never be
-mistaken for a cached bundle. A `sha256` mismatch deletes the download and
-aborts. Note that the `.wup` is WAGO-signed regardless - the device itself
-rejects a corrupt or wrong-vintage image with `SignatureInvalid` /
-`SignatureTooOld` - so these checks are the early, cheap backstop, not the
-only one.
+The `fwcache` volume keeps remote bundles by name and size, so a second run does not download files of about 200 MB again.
+The tool writes each download to a `.part` file and renames it only after success.
+So the tool never uses an interrupted download as a cached bundle.
+If the `sha256` is wrong, the tool deletes the download and stops.
+WAGO also signs each `.wup` file, and the device refuses a damaged or wrong image with `SignatureInvalid` or `SignatureTooOld`.
+So these checks are an early and cheap protection, not the only one.
 
-Resolve a source standalone to see what it yields, without touching a device:
+To see what a source supplies, without a connection to a device:
 
 ```bash
 docker compose run --rm --entrypoint python fwupdate source.py s3://my-bucket/fw /tmp/cache
 ```
 
-## Catalog mode (default) - auto-detects hardware and picks the right bundle
+## Catalog mode (default) - the tool finds the hardware and the correct bundle
 
-Point `FIRMWARE_HOST_DIR` at a directory holding `.wup` bundles for any mix
-of hardware (CC100, PFC100/200/300, Edge Controller/TP600, WP400 - whatever
-you have). The container:
+Set `FIRMWARE_HOST_DIR` to a directory with `.wup` bundles for any mix of hardware
+(CC100, PFC100/200/300, Edge Controller/TP600, WP400). The container does these steps:
 
-1. Reads the device's own `Identity/OrderNumber` and current firmware version
-2. Builds a catalog from every bundle's own `package-info.xml` in that
-   directory (`catalog.py` / `build_catalog.py`) - nothing is inferred from
-   filenames
-3. Picks the bundle whose `ArticleList` contains the device's order number.
-   If exactly one matches, it is used. If several do, the container **refuses
-   and lists them** - it never guesses, for the reason documented under
+1. It reads the `Identity/OrderNumber` and the current firmware version of the device.
+2. It makes a catalog from the `package-info.xml` of each bundle in the directory (`catalog.py` / `build_catalog.py`).
+   It does not use the file names.
+3. It selects the bundle whose `ArticleList` contains the order number of the device.
+   If exactly one bundle matches, it uses that bundle. If more than one matches, the container **refuses and lists them**.
+   It never guesses, for the reason in
    [why the revision must be exact](https://github.com/WagoAlex/wago-plc-config#why-the-revision-must-be-exact).
-   `TARGET_VERSION`, or the revision in the policy when running the fleet,
-   resolves it
-4. Validates the device's current version falls within *that bundle's own*
-   declared upgrade or downgrade range before touching anything
-5. Refuses to run (no flash attempted) if: no bundle matches the device's
-   order number, several match and no `TARGET_VERSION` was given, the
-   device is already at the target version, or the current version is
-   outside the bundle's declared range
+   `TARGET_VERSION`, or the revision in the policy for a fleet run, selects one of them.
+4. Before it changes anything, it checks that the current version of the device is in the upgrade or downgrade range that *this bundle* declares.
+5. It refuses to run, and flashes nothing, in these cases: no bundle matches the order number,
+   more than one bundle matches and there is no `TARGET_VERSION`, the device already has the target version,
+   or the current version is outside the range of the bundle.
 
 ```bash
 cp _env .env
@@ -343,9 +324,8 @@ cp _env .env
 docker compose run --rm fwupdate
 ```
 
-Example resolution output (real, from a live PFC300 that had never been
-touched - the tool correctly identified it and picked its bundle with no
-manual XML-reading):
+This is real output from a live PFC300 that nobody had updated before.
+The tool found the device and selected its bundle. Nobody read the XML by hand:
 ```
 ==> Device identity: order=0750-8302  current firmware=04.08.09
 ==> Building catalog from /firmware
@@ -353,56 +333,53 @@ manual XML-reading):
 ==> Resolved: PFC-300-Linux_update_V040901_31_r9d0900aaed.wup (upgrade 04.08.09 -> 4.9.1, build 31)
 ```
 
-`TARGET_VERSION` is what you set to disambiguate, to roll back, or to hold
-a device at an older release while others move ahead. It takes the exact
-revision string a bundle declares (run `build_catalog.py <dir>` to see
-what's available):
+Set `TARGET_VERSION` to select one of several bundles, to go back to an older release,
+or to keep a device at an older release while other devices get the new one.
+It takes the exact revision string that a bundle declares.
+To see the available revisions, run `build_catalog.py <dir>`:
 ```bash
 docker compose run --rm -e TARGET_VERSION=4.9.1 fwupdate
 ```
 
 ## CC100-IEC62443 - `.zip` bundles
 
-The CC100-IEC62443 (`751-9412`, FW 02.x) does not use `.wup` files. Its firmware
-is a signed `.zip`, for example `wago-image-wago-cc100-02.00.13-fw-bundle.zip`,
-with a `bundle-config.json` that names the version and the supported order
-numbers. Put it in the same firmware folder. The catalog reads both formats and
-ignores other `.zip` files.
+The CC100-IEC62443 (`751-9412`, firmware 02.x) does not use `.wup` files. Its firmware is a signed `.zip` file,
+for example `wago-image-wago-cc100-02.00.13-fw-bundle.zip`.
+It contains a `bundle-config.json` with the version and the supported order numbers.
+Put it in the same firmware folder. The catalog reads both formats and ignores other `.zip` files.
 
-The tool uses the WDA `Update` feature for these devices, not `FirmwareUpdate`:
+For these devices, the tool uses the WDA `Update` feature, not `FirmwareUpdate`:
 
 | Step | WDA call |
 |---|---|
-| 1. Create an update source | `0-0-update-createupdatefile` (`Name`) -> `UpdateFile` (file ID) + `Instance` |
-| 2. Upload the whole `.zip` | `PATCH /files/{file_id}`, ~4 MB chunks |
+| 1. Make an update source | `0-0-update-createupdatefile` (`Name`) -> `UpdateFile` (file ID) + `Instance` |
+| 2. Upload the full `.zip` file | `PATCH /files/{file_id}`, chunks of about 4 MB |
 | 3a. Dry run: remove the source | `0-0-update-removesource` (`Source`) |
 | 3b. Real run: start | `0-0-update-start` (`Source`, `ExpectStatusRequest=false`) |
 | 4. Wait | Poll `0-0-update-status` (0 ReadyOrDone, 1 InProgress, 2 Error) through the reboot |
 
-Differences from `.wup` bundles:
+The differences from `.wup` bundles:
 
-- The approval in `firmware-policy.yaml` uses the bundle's version string exactly: `192.168.2.85: { allowed: ["02.00.13"] }`.
-- The bundle declares no upgrade or downgrade range. The device checks the signature and compatibility itself. A refusal names the reason, for example `InvalidSignature` or `UpdateIncompatible`.
+- The approval in `firmware-policy.yaml` uses the exact version string of the bundle: `192.168.2.85: { allowed: ["02.00.13"] }`.
+- The bundle declares no upgrade or downgrade range. The device checks the signature and the compatibility. A refusal shows the reason, for example `InvalidSignature` or `UpdateIncompatible`.
 - There is no minimum-build check (see above).
 
-## Manual mode - bypass the catalog
+## Manual mode - skip the catalog
 
-Set `WUP_PATH` to an exact file (a path *inside* the container, under
-`/firmware/`) to skip catalog resolution entirely and use exactly that
-bundle, no compatibility checks beyond what the device itself enforces:
+Set `WUP_PATH` to an exact file, with a path *in* the container under `/firmware/`.
+Then the tool does not use the catalog. It uses exactly that bundle, and only the device checks the compatibility:
 ```bash
 docker compose run --rm -e WUP_PATH=/firmware/WP400-Linux_update_V040901_31_r9d0900aaed.wup fwupdate
 ```
 
 ## What a run looks like
 
-A dry run (`DRY_RUN=true`) performs catalog resolution, `Activate`, the full
-chunked upload and the device-side verification, then cancels and clears the
-session. `Start` - the step that writes flash - is never called. Use it on
-every device class you have not flashed before.
+A dry run (`DRY_RUN=true`) selects the bundle, calls `Activate`, uploads all chunks, and lets the device check the image.
+Then it cancels and clears the session. It never calls `Start`, the step that writes the flash memory.
+Do a dry run on each device class that you did not update before.
 
-A real run streams progress live (`Activate` → upload chunks → `Start` → poll through the
-device's auto-reboot → `Finish` → `Clear`), e.g. (real output from a live run):
+A real run shows its progress live: `Activate` → upload chunks → `Start` → poll through the automatic reboot → `Finish` → `Clear`.
+This is real output from a live run:
 
 ```
     fwstatus: Started (3)  progress: 51%
@@ -417,15 +394,13 @@ device's auto-reboot → `Finish` → `Clear`), e.g. (real output from a live ru
 ==> Done. fwstatus: Inactive (0)  firmware version: 04.09.01
 ```
 
-**Progress plateaus at ~93% permanently** - it never reaches 100 on its own,
-on any device tested (WP400, two PFC200 G2 units). `status` reaching
-`Unconfirmed (4)` is the real completion signal; that's what the poll loop
-actually waits for before calling `Finish`.
+**The progress stays at about 93%.** It did not reach 100 on any tested device (a WP400 and two PFC200 G2).
+The real completion signal is the status `Unconfirmed (4)`. The poll loop waits for this status before it calls `Finish`.
 
 ## When an update fails
 
-The container stops as soon as `status` reaches `Error (7)` or `Revert (6)` - it does
-not wait out `POLL_TIMEOUT` - and prints what the device itself says went wrong:
+The container stops when the status is `Error (7)` or `Revert (6)`. It does not wait for `POLL_TIMEOUT`.
+It shows what the device reports:
 
 ```
 FATAL: update failed - device reports Error (7)
@@ -436,126 +411,118 @@ FATAL: update failed - device reports Error (7)
     ...
 ```
 
-`errorcause` is the useful field; the hundreds digit is the phase that failed
-(2xx signature, 3xx resources, 4xx backup, 6xx the RAUC install itself, 900 self-test,
-1000 confirmation timeout). Full table: `docs/wda-firmware-update.md`.
+`errorcause` is the useful field. The hundreds digit shows the phase that failed:
+2xx signature, 3xx resources, 4xx backup, 6xx the RAUC installation, 900 self-test, 1000 confirmation timeout.
+For the full table, see [`docs/wda-firmware-update.md`](../docs/wda-firmware-update.md).
 
-## Env vars
+## Environment variables
 
-| Var | Required | Default | Notes |
+| Variable | Required | Default | Notes |
 |---|---|---|---|
-| `PLC_IP` | yes | - | Device IP |
+| `PLC_IP` | yes | - | IP of the device |
 | `PLC_PASSWORD` | yes | - | |
 | `PLC_USERNAME` | no | `admin` | |
-| `FIRMWARE_SOURCE` | no | `/firmware` | Where bundles come from: a path, `file://`, `s3://` or `https://` (see above) |
-| `FIRMWARE_HOST_DIR` | yes for the default mounted-directory source | - | **Host** directory of `.wup` files, used by the compose volume mount |
-| `FWUPDATE_VERSION` | no | `latest` | Image tag to pull, e.g. `2.4.0` to pin a release |
-| `FIRMWARE_CACHE` | no | `/firmware-cache` | Where remote sources are synced to |
-| `FIRMWARE_SOURCE_TOKEN` | no | unset | Bearer token for an HTTPS source behind auth |
-| `POLICY_HOST_DIR` | yes unless `FW_AUTHZ=off` | `.` | **Host** path of the git checkout holding the policy, mounted at `/policy` |
-| `FW_POLICY_FILE` | no | `/policy/firmware-policy.yaml` | Git-committed approvals file |
-| `FW_AUTHZ` | no | `on` | `off` disables the git gate entirely (loudly) |
+| `FIRMWARE_SOURCE` | no | `/firmware` | The source of the bundles: a path, `file://`, `s3://`, or `https://` (see above) |
+| `FIRMWARE_HOST_DIR` | yes for the default source, a mounted directory | - | **Host** directory of `.wup` files. The compose volume mount uses it |
+| `FWUPDATE_VERSION` | no | `latest` | Image tag to pull, for example `2.4.0` to use one release |
+| `FIRMWARE_CACHE` | no | `/firmware-cache` | The directory that receives the files of a remote source |
+| `FIRMWARE_SOURCE_TOKEN` | no | not set | Bearer token for an HTTPS source that needs authentication |
+| `POLICY_HOST_DIR` | yes, unless `FW_AUTHZ=off` | `.` | **Host** path of the Git checkout with the policy. The container mounts it at `/policy` |
+| `FW_POLICY_FILE` | no | `/policy/firmware-policy.yaml` | The committed file with the approvals |
+| `FW_AUTHZ` | no | `on` | `off` disables the Git check fully, with a clear warning |
 | `FW_REQUIRE_SIGNED_COMMIT` | no | `false` | Also require a valid signature on `HEAD` |
-| `FW_REQUIRE_SEPARATE_APPROVER` | no | `false` | Refuse self-approval instead of logging it |
-| `WAGO_APPROVED_BY` | no | auto | The authenticated actor; falls back to the commit author |
-| `TARGET_VERSION` | no | unset = require a single match | Exact bundle revision to require, e.g. `4.9.1`. Needed whenever more than one bundle in the directory lists the device's order number |
-| `WUP_PATH` | no | unset = catalog mode | Container-internal path to an exact bundle; setting this skips catalog resolution |
-| `CHUNK_SIZE` | no | `4000000` | Bytes/chunk. ~4 MB is the verified safe ceiling - larger trips a `lighttpd` request-size cap independent of the app |
-| `POLL_INTERVAL` | no | `6` | Seconds between status polls |
-| `HTTP_TIMEOUT` | no | `45` | Seconds per HTTP request. The CC100 needs 45+; it times out at 30 mid-install. A ceiling, not a delay |
-| `FW_ALLOW_REFLASH` | no | `false` | Write the version the device already runs (still range-checked) |
-| `WAGO_APPROVED_BY` | no | unset | Lets CI supply `approved_by` for a review-gated entry, as `scripts/apply.py` does |
-| `AUDIT_LOG_FILE` | no | `/app/data/audit.log` | Shared tamper-evident chain; empty disables audit writes |
-| `POLL_TIMEOUT` | no | `900` | Seconds to wait for the install to reach a finishable state (`status=Unconfirmed` or `progress=100`) before giving up |
+| `FW_REQUIRE_SEPARATE_APPROVER` | no | `false` | Refuse self-approval. By default, the tool records it |
+| `WAGO_APPROVED_BY` | no | automatic | The authenticated approver. CI sets it, the same as for `scripts/apply.py`. Without it, the tool uses the commit author |
+| `TARGET_VERSION` | no | not set = only one bundle can match | The exact bundle revision, for example `4.9.1`. Necessary when more than one bundle in the directory lists the order number of the device |
+| `WUP_PATH` | no | not set = catalog mode | Path in the container to an exact bundle. If set, the tool does not use the catalog |
+| `CHUNK_SIZE` | no | `4000000` | Bytes for each chunk. About 4 MB is the tested safe maximum. A larger chunk exceeds a request-size limit in `lighttpd` |
+| `POLL_INTERVAL` | no | `6` | Seconds between two status polls |
+| `HTTP_TIMEOUT` | no | `45` | Seconds for each HTTP request. The CC100 needs 45 or more: with 30, it times out during the installation. This is a maximum, not a delay |
+| `FW_ALLOW_REFLASH` | no | `false` | Install the version that the device already has (the tool still checks the range) |
+| `AUDIT_LOG_FILE` | no | `/app/data/audit.log` | The shared tamper-evident chain. An empty value disables the audit records |
+| `POLL_TIMEOUT` | no | `900` | Seconds to wait until the installation can finish (`status=Unconfirmed` or `progress=100`). Then the tool stops |
 
-## Rebuilding/inspecting the catalog standalone
+## Show the catalog without the container
 
 ```bash
-python3 build_catalog.py /home/wago/Documents/mcp/fw
+python3 build_catalog.py <directory-with-bundles>
 ```
-Prints every bundle's revision, build index, article count, and
-upgrade/downgrade ranges - useful for checking what `TARGET_VERSION` values
-are actually available before running the container.
+This command shows the revision, build index, article count, and upgrade and downgrade ranges of each bundle.
+Use it to see the available `TARGET_VERSION` values before you start the container.
 
-## Known preconditions (device-side, not fixed by this container)
+## Known preconditions on the device (the container does not fix them)
 
-If `Activate` fails, the device's `/tmp/fwupdate` directory likely doesn't
-exist with the right ownership. Fix once via SSH:
+If `Activate` fails, the directory `/tmp/fwupdate` on the device probably does not exist, or has the wrong owner.
+Correct it one time with SSH:
 ```bash
 mkdir -p /tmp/fwupdate && chgrp admin /tmp/fwupdate && chmod 770 /tmp/fwupdate
 ```
 
-`network_mode: host` is required - the container needs direct LAN access to
-the PLC subnet.
+The container needs `network_mode: host`, because it needs direct LAN access to the PLC subnet.
 
 ## Before your first production window
 
-- [ ] Rehearse with `DRY_RUN=true` on every device class you have not flashed
-      before, not just one - [What a run looks like](#what-a-run-looks-like)
-- [ ] Confirm `/tmp/fwupdate` exists on each device with the right ownership -
-      [Known preconditions](#known-preconditions-device-side-not-fixed-by-this-container)
-- [ ] Expect a slow reboot. A CC100 took 10 minutes to return, a WP400 about
-      one - [What a run looks like](#what-a-run-looks-like)
-- [ ] Know that progress plateaus at ~93% and never reaches 100 -
+- [ ] Rehearse with `DRY_RUN=true` on each device class that you did not update before, not only on one -
       [What a run looks like](#what-a-run-looks-like)
-- [ ] Decide sequential or parallel, and why -
+- [ ] Make sure that `/tmp/fwupdate` exists on each device with the correct owner -
+      [Known preconditions](#known-preconditions-on-the-device-the-container-does-not-fix-them)
+- [ ] Expect a slow reboot. A CC100 needed 10 minutes to come back, a WP400 about one minute -
+      [What a run looks like](#what-a-run-looks-like)
+- [ ] Remember that the progress stays at about 93% and does not reach 100 -
+      [What a run looks like](#what-a-run-looks-like)
+- [ ] Decide between one device at a time and parallel updates, and write down why -
       [The whole fleet in one command](#the-whole-fleet-in-one-command)
-- [ ] Review credentials, network placement and the escape hatches -
+- [ ] Review the credentials, the network placement, and the escape hatches -
       [Running this securely](#running-this-securely)
-- [ ] Have the failure table to hand -
+- [ ] Keep the failure table available -
       [When an update fails](#when-an-update-fails)
 
 ---
 
 ## Running this securely
 
-The tool is designed to be run by a person, on a maintenance host, against a
-segmented OT network. The points below are what an auditor will ask about.
+A person runs this tool on a maintenance host, against a segmented OT network.
+An auditor will ask about the points below.
 
-**Credentials.** Prefer Docker secrets over `.env`. A per-device secret at
-`/run/secrets/plc_password_<ip_with_underscores>` is used automatically in
-fleet mode, falling back to `PLC_PASSWORD`. Passwords are never written to the
-audit log: `audit.redact_details()` runs before hashing, so the chain stays
-verifiable over exactly what is stored.
+**Credentials.** Use Docker secrets, not `.env`, when you can.
+In fleet mode, the tool uses a secret for each device at `/run/secrets/plc_password_<ip_with_underscores>`.
+If there is no secret, it uses `PLC_PASSWORD`.
+The tool never writes passwords to the audit log: `audit.redact_details()` runs before the tool calculates the hash.
+So the hash covers exactly the stored record, and you can check it.
 
-**Network placement.** Run on a host that already has a route to the PLC
-subnets (`network_mode: host` is required). The container needs no inbound
-access and no internet access, unless you point `FIRMWARE_SOURCE` at a remote
-bundle store.
+**Network placement.** Run the tool on a host that has a route to the PLC subnets (`network_mode: host` is necessary).
+The container needs no inbound access. It needs internet access only if `FIRMWARE_SOURCE` is a remote bundle store.
 
-**Bundle integrity.** `.wup` bundles are signed by WAGO and the device rejects a
-wrong or tampered image itself (`SignatureInvalid`, `SignatureTooOld`). An
-HTTPS manifest can additionally carry a `sha256` per bundle, which is verified
-before the file is accepted into the cache. Interrupted downloads are written
-to a `.part` file and never mistaken for a complete bundle.
+**Bundle integrity.** WAGO signs the `.wup` bundles. The device refuses a wrong or changed image (`SignatureInvalid`, `SignatureTooOld`).
+An HTTPS manifest can also have a `sha256` for each bundle. The tool checks it before it puts the file in the cache.
+The tool writes interrupted downloads to a `.part` file and never uses them as a complete bundle.
 
-**Approval integrity.** For regulated environments set
-`FW_REQUIRE_SIGNED_COMMIT=true`, which additionally requires `git verify-commit
-HEAD` to pass. Mount the policy checkout read-only (`:ro`) - the tool only ever
-reads it.
+**Approval integrity.** In a regulated environment, set `FW_REQUIRE_SIGNED_COMMIT=true`.
+Then `git verify-commit HEAD` must also pass.
+Mount the policy checkout read-only (`:ro`). The tool only reads it.
 
-**Separation of duties.** The person who proposes an approval and the person
-who sets `approved_by` need not be the same; enforce that with branch
-protection and required reviewers on your config repository, the same way you
-already do for `ops/` files.
+**Separation of duties.** To make sure that a second person approves each firmware change,
+use branch protection and required reviewers in your config repository.
+Use the same settings as for your `ops/` files.
+To also enforce it in this tool, set `FW_REQUIRE_SEPARATE_APPROVER=true`.
 
-**Escape hatches, and when not to use them.** `FW_AUTHZ=off` disables the git
-gate and `FW_ALLOW_REFLASH=true` permits writing a version the device already
-runs. Both print a notice and both are recorded in the audit log. `FW_AUTHZ=off`
-is for bench work on a device that is not part of a managed fleet; a run that
-uses it is, by definition, not authorized.
+**Escape hatches, and when not to use them.** `FW_AUTHZ=off` disables the Git check.
+`FW_ALLOW_REFLASH=true` allows the tool to install the version that the device already has.
+Both show a notice, and the audit log records both.
+Use `FW_AUTHZ=off` only for bench work on a device that is not part of a managed fleet.
+A run with `FW_AUTHZ=off` is never an authorized run.
 
 ---
 
 ## Verifying the trail afterwards
 
 ```bash
-# Was the chain tampered with?
+# Did someone change the chain?
 docker exec wmcp python /app/src/audit_verify.py --log /app/data/audit.log
 
-# What did this fleet's firmware activity look like?
+# Show the firmware activity of this fleet
 grep firmware_update data/audit.log | python3 -m json.tool
 
-# Who approved a given flash?
+# Who approved a flash?
 git -C /path/to/wago-plc-config show <commit-from-the-audit-record>
 ```
