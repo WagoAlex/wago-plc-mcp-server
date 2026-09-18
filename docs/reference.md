@@ -102,6 +102,9 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 
 ## Configuration reference
 
+The Claude Desktop extension shows each of these settings in its install form, except `HOST`, `PORT`, `TRANSPORT`, `MCP_API_KEY`, and `MCP_TLS_*`.
+These settings apply only to the HTTP server. The extension always uses stdio.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WAGO_PLC_HOSTS` | - | PLC IPs, separated by commas |
@@ -121,10 +124,10 @@ delete_watchlist("192.168.1.10", "1") # explicit cleanup when done
 | `MCP_TLS_CERT` | - | Path to the TLS certificate for the MCP endpoint |
 | `MCP_TLS_KEY` | - | Path to the TLS private key for the MCP endpoint |
 | `MCP_TLS_KEY_PASSWORD` | - | Password for an encrypted TLS private key |
-| `SECURITY_PROFILE` | - | `hardened` stops the server at startup if `WAGO_TLS_CA`, `MCP_TLS_CERT`, or `MCP_TLS_KEY` is not set |
+| `SECURITY_PROFILE` | - | `hardened` stops the server at startup if `WAGO_TLS_CA` is not set. With the HTTP transport, `MCP_TLS_CERT` and `MCP_TLS_KEY` are also necessary. With stdio, they are not, because stdio has no network connection |
 | `AUDIT_LOG_FILE` | `/app/data/audit.log` | Audit log path in the container |
 | `AUDIT_SYSLOG` | - | Sends audit records to syslog, for example `udp://10.0.0.5:514` or `tcp://...` |
-| `SYSLOG_HOST` | - | Syslog or SIEM host for the server log |
+| `SYSLOG_HOST` | - | Syslog or SIEM host that receives the audit entries. When set, the server keeps 2 local audit files instead of 5 |
 | `SYSLOG_PORT` | `514` | Syslog port |
 | `SYSLOG_TCP` | `false` | `true` = TCP (reliable), `false` = UDP |
 | `TRANSPORT` | `streamable-http` | `streamable-http`, `sse`, or `stdio` |

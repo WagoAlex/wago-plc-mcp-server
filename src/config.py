@@ -37,7 +37,13 @@ def check_security_profile() -> None:
     wda_ca = os.getenv("WAGO_TLS_CA", "").strip()
     wda_tls_ok = bool(wda_ca) and wda_ca.lower() not in {"false", "0"}
 
-    mcp_tls_ok = bool(os.getenv("MCP_TLS_CERT", "").strip()) and bool(os.getenv("MCP_TLS_KEY", "").strip())
+    # stdio (Claude Desktop extension, uvx) has no client<->server network leg -
+    # the client talks to the server over a local pipe - so only the WDA leg
+    # needs TLS there.
+    stdio = os.getenv("TRANSPORT", "").strip().lower() == "stdio"
+    mcp_tls_ok = stdio or (
+        bool(os.getenv("MCP_TLS_CERT", "").strip()) and bool(os.getenv("MCP_TLS_KEY", "").strip())
+    )
 
     if wda_tls_ok and mcp_tls_ok:
         return

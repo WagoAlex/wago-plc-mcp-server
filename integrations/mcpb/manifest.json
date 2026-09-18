@@ -57,8 +57,15 @@
         "WAGO_MAX_CONCURRENT_REGISTRATIONS": "${user_config.max_concurrent_registrations}",
         "WAGO_MAX_CONCURRENT_READS": "${user_config.max_concurrent_reads}",
         "WAGO_TLS_CA": "${user_config.tls_ca}",
-        "AUDIT_LOG_FILE": "${HOME}/.wago-plc-mcp/audit.log",
-        "LOG_LEVEL": "${user_config.log_level}"
+        "AUDIT_LOG_FILE": "${user_config.audit_log_file}",
+        "LOG_LEVEL": "${user_config.log_level}",
+        "WAGO_ALLOW_METHODS": "${user_config.allow_methods}",
+        "SECURITY_PROFILE": "${user_config.security_profile}",
+        "AUDIT_SYSLOG": "${user_config.audit_syslog}",
+        "SYSLOG_HOST": "${user_config.syslog_host}",
+        "SYSLOG_PORT": "${user_config.syslog_port}",
+        "SYSLOG_TCP": "${user_config.syslog_tcp}",
+        "LOG_FILE": "${user_config.log_file}"
       }
     }
   },
@@ -166,6 +173,62 @@
       "type": "string",
       "title": "Verify PLC TLS certificates (optional)",
       "description": "Leave this field blank to skip certificate verification. This is the default setting. Enter 'true' to verify against your system trust store. Or enter the file path to a CA bundle.",
+      "default": "",
+      "required": false
+    },
+    "allow_methods": {
+      "type": "string",
+      "title": "Allowed dangerous methods (advanced)",
+      "description": "The server refuses reboot, restart, factory reset, firmware, format, and 0-0-update-* methods. Enter exact method IDs, separated by commas, to allow them in live mode. Example: 0-0-reboot-beginreboot. Leave blank to keep all of them blocked. This has no effect in GitOps mode.",
+      "default": "",
+      "required": false
+    },
+    "security_profile": {
+      "type": "string",
+      "title": "Security profile (advanced)",
+      "description": "Leave blank for the default. Enter 'hardened' to stop the server at startup if PLC certificate verification is off. The hardened profile needs the field 'Verify PLC TLS certificates'.",
+      "default": "",
+      "required": false
+    },
+    "audit_log_file": {
+      "type": "string",
+      "title": "Audit log file",
+      "description": "Path of the hash-chained audit log. The server records each write, method call, and refusal in this file. Do not leave it blank: a blank value disables the local audit log.",
+      "default": "${HOME}/.wago-plc-mcp/audit.log",
+      "required": false
+    },
+    "audit_syslog": {
+      "type": "string",
+      "title": "Audit records to syslog (optional)",
+      "description": "Also send each hash-chained audit record to a syslog server. Example: udp://10.0.0.5:514 or tcp://10.0.0.5:514. Leave blank to use only the local file.",
+      "default": "",
+      "required": false
+    },
+    "syslog_host": {
+      "type": "string",
+      "title": "SIEM syslog host (optional)",
+      "description": "Host name or IP of a syslog or SIEM server that receives the audit entries. When you set it, the server keeps fewer local audit files (2 instead of 5). Leave blank to disable.",
+      "default": "",
+      "required": false
+    },
+    "syslog_port": {
+      "type": "number",
+      "title": "SIEM syslog port",
+      "description": "Port of the SIEM syslog host. Used only when 'SIEM syslog host' is set.",
+      "default": 514,
+      "min": 1,
+      "max": 65535
+    },
+    "syslog_tcp": {
+      "type": "boolean",
+      "title": "SIEM syslog over TCP",
+      "description": "When on, the server sends to the SIEM syslog host over TCP. When off, it uses UDP.",
+      "default": false
+    },
+    "log_file": {
+      "type": "string",
+      "title": "Debug log file (optional)",
+      "description": "Path of a file for the server log. Leave blank to log only to the Claude Desktop log. Use it with 'Log detail level' DEBUG to find a problem.",
       "default": "",
       "required": false
     },
