@@ -29,6 +29,8 @@ For a shared server, go to [Deployment options](deployment.md#deployment-options
 
 You must supply the PLC IP address, the WBM username (usually `admin`), and the password.
 All other fields have default values.
+The form also has the advanced settings: allowed dangerous methods, security profile, audit log file, syslog export, and debug log file.
+For the meaning of each setting, see the [Configuration reference](reference.md#configuration-reference).
 
 **A small number of PLCs with the same password:**
 
