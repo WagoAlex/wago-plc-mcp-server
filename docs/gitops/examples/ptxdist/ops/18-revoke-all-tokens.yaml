@@ -1,7 +1,7 @@
-# 18. Log out all sessions (revoke all tokens)
+# 18. End all sessions (revoke all tokens)
 # Firmware generation: PTXdist (FW 04.x, build 31). Do not use on a Yocto PLC.
 # Risk: safe for the machine.
-# Use this after a suspected leak of a login token. All users must log in again.
+# Use this after a suspected leak of a login token. All users must enter their password again.
 #
 # Claude creates this file as ops/<id>.yaml. CI runs the method once after the
 # merge and then deletes the file.

@@ -19,7 +19,7 @@ To identify the generation, read `0-0-version-firmwareversion`. For the other si
 |---|---|---|
 | Time zone | `0-0-systemtime-timezone: 8` is CET | Instance `8` is Africa/El_Aaiun. Europe/Berlin is `247` |
 | DNS servers | One flat `0-0-networking-dns-customdnsservers` | One list for each bridge: `0-0-networking-bridges-<N>-nameservers-dns` |
-| Services | SSH, FTP/FTPS, SNMP, Docker, CODESYS, BACnet, AIDE, HMI display and browser | None of these. Instead: remote syslog, NTP server, password rules, storm protection, MQTT broker, Portainer agent, I/O channel modes |
+| Services | SSH, FTP/FTPS, SNMP, Docker, CODESYS, BACnet, AIDE, HMI display and browser | Does not have these services. Has remote syslog, NTP server, password rules, storm protection, MQTT broker, Portainer agent, and I/O channel modes |
 | `0-0-ntpclient-updatetime` | Runs at any time | Inactive while the NTP client is off |
 
 ## Test record
@@ -29,7 +29,7 @@ On 2026-09-18 we ran a dry run of each file with `apply.py` (without `--execute`
 | Set | Devices | Result |
 |---|---|---|
 | `ptxdist/` | PFC300 (0750-8302) for files 01-13 and 16-20, TP600 (0762-5305) for files 14 and 15, firmware `04.09.01`. For the test, we changed only the `plc_ip`. | 01-15: the PLC returned each parameter, and each file showed its drift or "In sync". 16-18: `apply.py` showed the method call. 19-20: refused, because `approved_by` is empty. This is the correct result. |
-| `yocto/` | CC100-IEC62443 (0751-9412), firmware `02.00.13`, the device at `192.168.2.85` in the files | The same results for 01-20. |
+| `yocto/` | CC100-IEC62443 (0751-9412), firmware `02.00.13`, the device at `192.168.2.85` in the files | The results for 01-20 were the same. |
 
 ## How the list is divided
 
@@ -72,7 +72,7 @@ CI runs the method one time after the merge and then deletes the file.
 |---|---|---|---|
 | 16 | Safe | [Synchronize the time now](ptxdist/ops/16-sync-time-now.yaml) | `0-0-ntpclient-updatetime` |
 | 17 | Safe | [Run a file integrity check now](ptxdist/ops/17-integrity-check-now.yaml) | `0-0-aide-check` |
-| 18 | Safe | [Log out all sessions](ptxdist/ops/18-revoke-all-tokens.yaml) | `0-0-oauth2server-revokealltokens` |
+| 18 | Safe | [End all sessions](ptxdist/ops/18-revoke-all-tokens.yaml) | `0-0-oauth2server-revokealltokens` |
 | 19 | Dangerous | [Restart the CODESYS runtime](ptxdist/ops/19-restart-codesys.yaml) | `0-0-codesys3-restart` |
 | 20 | Dangerous | [Reboot the PLC](ptxdist/ops/20-reboot.yaml) | `0-0-reboot-beginreboot` |
 
@@ -109,7 +109,7 @@ All files use `192.168.2.85`, the CC100-IEC62443 in our test rack. Replace the I
 |---|---|---|---|
 | 16 | Safe | [Synchronize the time now](yocto/ops/16-sync-time-now.yaml) | `0-0-ntpclient-updatetime` (needs file 01 first) |
 | 17 | Safe | [Calculate the configuration checksum](yocto/ops/17-config-checksum.yaml) | `0-0-security-calculateconfigchecksum` |
-| 18 | Safe | [Log out all sessions](yocto/ops/18-revoke-all-tokens.yaml) | `0-0-oauth2server-revokealltokens` |
+| 18 | Safe | [End all sessions](yocto/ops/18-revoke-all-tokens.yaml) | `0-0-oauth2server-revokealltokens` |
 | 19 | Dangerous | [Reboot the PLC](yocto/ops/19-reboot.yaml) | `0-0-reboot-beginreboot` |
 | 20 | Dangerous | [Reset to factory settings](yocto/ops/20-factory-reset.yaml) | `0-0-factorysettings-reset` |
 

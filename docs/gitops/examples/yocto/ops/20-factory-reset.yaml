@@ -1,7 +1,7 @@
 # 20. Reset to factory settings
 # Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
 # Risk: DANGEROUS. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
-# The PLC loses its configuration, including its IP settings and users. You can need physical access afterward.
+# The PLC loses its configuration, including its IP settings and users. After the reset, you possibly need physical access to the PLC.
 #
 # Claude creates this file as ops/<id>.yaml. CI runs the method once after the
 # merge and then deletes the file.
