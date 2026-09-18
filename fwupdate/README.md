@@ -19,7 +19,7 @@ with the same version tags as the MCP server. You need this folder (for
 `docker-compose.yml` and `_env`), not a Python install:
 
 For a step-by-step procedure on a Windows or Linux laptop, see
-[Update firmware from a Windows or Linux laptop](../README.md#update-firmware-from-a-windows-or-linux-laptop).
+[Update firmware from a Windows or Linux laptop](../docs/firmware-updates.md#update-firmware-from-a-windows-or-linux-laptop).
 The commands below work the same in PowerShell and in a Linux shell.
 
 ```bash

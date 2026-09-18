@@ -1,39 +1,39 @@
 # Security Policy
 
-_wago-plc-mcp-server — CRA Article 11, 13(6), 13(7), 14 compliance document._
+_wago-plc-mcp-server - CRA Article 11, 13(6), 13(7), 14 compliance document._
 
 ---
 
 ## Supported Versions
 
-Security patches are provided for the current major release series.
-Support for a major version ends **24 months after the next major release**,
-or at end-of-sale, whichever is later.
+We supply security patches for the current major release series.
+Support for a major version stops **24 months after the next major release**,
+or at end-of-sale. The later date applies.
 
 | Version | Status         | Security patches until |
 |---------|----------------|------------------------|
 | 2.x     | ✅ Supported   | At least 2027-06-12    |
-| 1.x     | ❌ End of life | —                      |
+| 1.x     | ❌ End of life | -                      |
 
-End-of-support dates are updated here when a new major version is released.
+When we release a new major version, we update the end-of-support dates on this page.
 
 ---
 
 ## Reporting a Vulnerability
 
-**Do not open a public GitHub issue for security vulnerabilities.**
+**Do not open a public GitHub issue for a security vulnerability.**
 
-Use GitHub's private advisory mechanism instead:
+Use the private advisory function of GitHub:
 
-1. Go to the repository → **Security** → **Advisories** → **New draft security advisory**
-2. Describe the vulnerability, affected versions, and reproduction steps
-3. We will acknowledge within **3 business days**
+1. In the repository, go to **Security** → **Advisories** → **New draft security advisory**.
+2. Describe the vulnerability, the affected versions, and the steps to reproduce it.
+3. We send an acknowledgement within **3 business days**.
 
-Alternatively, email: **alexander.fugmann@wago.com**  
-Subject line: `[SECURITY] wago-plc-mcp-server — <one-line summary>`
+You can also send an email to **alexander.fugmann@wago.com**.
+Use this subject line: `[SECURITY] wago-plc-mcp-server - <one-line summary>`
 
-PGP encryption is not required but is welcome. If you need the public key,
-request it via email and it will be provided within 1 business day.
+PGP encryption is optional. If you need the public key, ask for it by email.
+We send it within 1 business day.
 
 ---
 
@@ -42,43 +42,43 @@ request it via email and it will be provided within 1 business day.
 | CVSS Score     | Severity | Acknowledgement | Fix shipped    |
 |----------------|----------|-----------------|----------------|
 | ≥ 9.0          | Critical | 24 hours        | 7 days         |
-| 7.0 – 8.9      | High     | 3 business days | 30 days        |
-| 4.0 – 6.9      | Medium   | 10 business days | 90 days       |
-| 0.1 – 3.9      | Low      | Next release    | —              |
+| 7.0 - 8.9      | High     | 3 business days | 30 days        |
+| 4.0 - 6.9      | Medium   | 10 business days | 90 days       |
+| 0.1 - 3.9      | Low      | Next release    | -              |
 
-Actively exploited vulnerabilities (regardless of CVSS) are treated as Critical.
+We treat a vulnerability that attackers actively exploit as Critical, for all CVSS scores.
 
-Fixes are shipped as patched Docker images on Docker Hub
-(`wagoalex/wago-plc-mcp-server`) and tagged releases on GitHub.
+We ship fixes as patched Docker images on Docker Hub
+(`wagoalex/wago-plc-mcp-server`) and as tagged releases on GitHub.
 
 ---
 
 ## Coordinated Disclosure
 
-We follow **responsible coordinated disclosure**:
+We use **responsible coordinated disclosure**:
 
-1. Reporter submits vulnerability privately
-2. We acknowledge within the SLA above
-3. We develop and test a fix
-4. We notify the reporter before public release
-5. We release the fix and publish a GitHub Security Advisory
-6. Reporter may publish their own write-up 7 days after our advisory is public
+1. The reporter sends the vulnerability to us privately.
+2. We send an acknowledgement within the SLA above.
+3. We make and test a fix.
+4. We tell the reporter before the public release.
+5. We release the fix and publish a GitHub Security Advisory.
+6. The reporter can publish a write-up 7 days after our advisory is public.
 
-We credit reporters in the advisory unless anonymity is requested.
+We name the reporter in the advisory, unless the reporter asks to stay anonymous.
 
 ---
 
 ## ENISA Incident Reporting (CRA Article 14)
 
-For incidents involving actively exploited vulnerabilities or significant impacts
+For an incident with an actively exploited vulnerability, or with a significant effect
 on users in the EU:
 
-- Initial notification to the relevant national CSIRT within **24 hours** of discovery
+- Initial notification to the related national CSIRT within **24 hours** of discovery
 - Intermediate report within **72 hours**
 - Final report within **30 days**
 
-Relevant CSIRTs by country:
-- Germany: [BSI](https://www.bsi.bund.de/) — meldestelle@bsi.bund.de
+Related CSIRTs by country:
+- Germany: [BSI](https://www.bsi.bund.de/) - meldestelle@bsi.bund.de
 - Austria: [CERT.at](https://www.cert.at/)
 - EU coordination: [ENISA](https://www.enisa.europa.eu/)
 
@@ -87,22 +87,22 @@ Relevant CSIRTs by country:
 ## Scope
 
 This policy covers the **wago-plc-mcp-server** software and its Docker image.
-It does not cover the WAGO PLC firmware, WDA REST API, or third-party dependencies
-(report those to the respective upstream maintainers).
+It does not cover the WAGO PLC firmware, the WDA REST API, or third-party dependencies.
+Report problems in those to their upstream maintainers.
 
 ---
 
 ## Out of Scope
 
-- Issues in WAGO firmware or WDA/WDx API — report to WAGO directly
-- Network-layer attacks against the PLC subnet — contact your SCADA/OT security team
+- Problems in WAGO firmware or in the WDA/WDx API. Report them to WAGO.
+- Network-layer attacks on the PLC subnet. Contact your SCADA/OT security team.
 - Theoretical vulnerabilities without a realistic attack path
 
 ---
 
 ## Hall of Fame
 
-Researchers who responsibly disclosed vulnerabilities will be credited here
-(unless they request anonymity).
+We name researchers who responsibly reported vulnerabilities here,
+unless they ask to stay anonymous.
 
 _No reports received yet._
