@@ -1,0 +1,16 @@
+# 16. Synchronize the time now
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Risk: safe. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# The method is inactive while the NTP client is off. Apply 01-ntp-client.yaml first.
+#
+# Claude creates this file as ops/<id>.yaml. CI runs the method once after the
+# merge and then deletes the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/ops/16-sync-time-now.yaml
+#   Run:     python scripts/apply.py docs/gitops/examples/yocto/ops/16-sync-time-now.yaml --execute
+id: y16a0b1c
+proposed_at: 2026-09-18T10:00:00+00:00
+proposed_by: agent-claude
+plc_ip: 192.168.2.85
+action: invoke_method
+method_id: 0-0-ntpclient-updatetime
+arguments: {}

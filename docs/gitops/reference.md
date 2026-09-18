@@ -72,7 +72,7 @@ The tables show the WDA parameters that the `gitops.py` helper functions use.
 All IDs start with `0-0-`. Some IDs contain an instance number, for example `communities-1`.
 Some instances exist only after someone configures them, for example SNMP communities. Read an instance with `get_parameter` before you write it.
 
-For 20 tested example files, see [`examples/`](examples/README.md).
+For tested example files, 20 for PTXdist and 20 for Yocto, see [`examples/`](examples/README.md).
 
 ### Cloud connection
 

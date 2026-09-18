@@ -1,0 +1,13 @@
+# 01. NTP client: time servers
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Time. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when the PLC must take its time from the plant time server.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/01-ntp-client.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/01-ntp-client.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  0-0-ntpclient-enabled: true
+  0-0-ntpclient-configuredtimeservers:
+    - 192.168.2.1

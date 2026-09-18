@@ -1,0 +1,14 @@
+# 06. Remote syslog
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Logging. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when a central log server must receive the PLC log.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/06-remote-syslog.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/06-remote-syslog.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  0-0-logging-rsyslog-clients-1-enabled: true
+  0-0-logging-rsyslog-clients-1-target: 192.168.2.10
+  0-0-logging-rsyslog-clients-1-port: 514
+  0-0-logging-rsyslog-clients-1-transportprotocol: 1   # 0 = UDP, 1 = TCP
