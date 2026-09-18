@@ -22,7 +22,7 @@ compatibility: >-
   Agent SDK. The skill itself needs no local runtime; it only calls the
   connected server's tools (list_plcs, get_parameter, set_parameters, etc.).
 metadata:
-  version: "2.4.0"
+  version: "2.4.1"
 ---
 
 # WAGO PLC Assistant
