@@ -12,7 +12,7 @@
 # wago-plc-mcp-server
 
 An MCP server that connects AI assistants to a fleet of WAGO PLCs.
-Ask the assistant in plain English to read, configure, and monitor your controllers.
+Ask the assistant in plain English to read, configure, and monitor your PLCs.
 You do not need scripts or parameter IDs.
 
 The server uses the WAGO WDA REST API. It gives the assistant 29 tools.
@@ -156,7 +156,7 @@ For a shared server, go to [Deployment options](#deployment-options).
 > 2. Go to **Settings → Extensions → Advanced settings → Install Unpacked Extension**.
 > 3. Select the unzipped folder.
 
-### Step 2 - Fill in the install form
+### Step 2 - Complete the install form
 
 You must supply the PLC IP address, the WBM username (usually `admin`), and the password.
 All other fields have default values.
@@ -198,7 +198,7 @@ The server merges the IP field and the IP file. You can use both.
 **Writes:** Keep **Allow writes and method calls** off if Claude must only read the PLCs.
 When this setting is off, the server refuses and logs all parameter writes, method calls, and file uploads.
 
-**GitOps mode:** Turn on **GitOps mode** if a person must review each change before it goes to a PLC.
+**GitOps mode:** If a person must review each change before it goes to a PLC, select **GitOps mode**.
 Then Claude does not write to the PLC. It returns a YAML file for a pull request in your config repository.
 This setting has an effect only when **Allow writes and method calls** is on.
 For more information, see [GitOps write-gate](#gitops-write-gate).
@@ -231,12 +231,12 @@ The assistant selects the tools and sends the REST calls.
 
 | You type | The assistant does this |
 |---|---|
-| "Which PLCs are running firmware older than build 31?" | Reads the firmware version from all controllers in parallel and lists the old ones |
+| "Which PLCs are running firmware older than build 31?" | Reads the firmware version from all PLCs in parallel and lists the old ones |
 | "Are NTP and Docker running on all Edge Controllers?" | Reads the service running flags across the fleet and shows stopped services |
 | "Show the diagnostic LED states on all PLCs" | Reads the SYS, RUN, and fieldbus LED text from all units |
 | "Is any controller showing a fault or error state?" | Compares LED text and error parameters across the fleet |
 
-### Diagnostics on one controller
+### Diagnostics on one PLC
 
 | You type | The assistant does this |
 |---|---|
@@ -261,11 +261,11 @@ The assistant selects the tools and sends the REST calls.
 | "Track the firmware update progress on all 12 PLCs" | Polls the update status and progress across the fleet |
 
 > [!NOTE]
-> The assistant asks for your confirmation before it writes a value to a controller.
+> The assistant asks for your confirmation before it writes a value to a PLC.
 
 ## Demos
 
-These screen recordings show Claude Desktop with real WAGO controllers. We did not remove steps.
+These screen recordings show Claude Desktop with real WAGO PLCs. We did not remove steps.
 
 <details>
 <summary><strong>Fleet health report across 16 PLCs</strong></summary>
@@ -312,7 +312,7 @@ Then it starts the time sync only on those units.
 <details>
 <summary><strong>Reachability and firmware versions</strong></summary>
 
-The agent calls `list_plcs`, then `describe_plc` on all controllers in parallel.
+The agent calls `list_plcs`, then `describe_plc` on all PLCs in parallel.
 It returns a table with the status, model, and firmware build of each PLC.
 
 ![Use case 4 demo](docs/media/demo-use-case-4.gif)
@@ -323,7 +323,7 @@ It returns a table with the status, model, and firmware build of each PLC.
 <summary><strong>Find devices with the default NTP server</strong></summary>
 
 The agent checks the NTP configuration on all PLCs.
-It shows each controller that still uses the factory-default time server.
+It shows each PLC that still uses the factory-default time server.
 
 ![Use case 5 demo](docs/media/demo-use-case-5.gif)
 
@@ -337,7 +337,7 @@ This part tells you what the server does on your PLCs and when it allows or refu
 
 ## What this does and does not do
 
-**WDA (WDx):** Each WAGO controller has a REST API called WDA (WAGO Device Access).
+**WDA (WDx):** Each WAGO PLC has a REST API called WDA (WAGO Device Access).
 WDA is for **system and diagnostic management**: firmware version, network settings, service health, status LEDs, reboot, and firmware update.
 It is similar to *Online & Diagnostics* in TIA Portal or *Controller Properties* in Studio 5000.
 WDA is **not** a fieldbus, **not** OPC UA, and gives **no** access to the I/O data of your control program.
@@ -573,7 +573,7 @@ PLC_PASSWORD=your-plc-password
 ```
 
 Keep `FIRMWARE_HOST_DIR=./firmware` and `POLICY_HOST_DIR=../../wago-plc-config`.
-These values point to the folders from steps 1 and 2.
+These values are the paths to the folders from steps 1 and 2.
 
 Make sure that the laptop can reach the PLC:
 
@@ -634,8 +634,8 @@ docker run --rm -v "${PWD}/data:/app/data:ro" wagoalex/wago-plc-mcp-server pytho
 
 | Message | Cause | Action |
 |---|---|---|
-| `has uncommitted changes` | The policy file is changed and not committed, or it has CRLF line endings on Windows | Commit the change. On Windows, add `.gitattributes` (step 2), then delete `firmware-policy.yaml` and run `git checkout firmware-policy.yaml`. |
-| `is not inside a git repository` | `POLICY_HOST_DIR` does not point to the approval repository | Correct `POLICY_HOST_DIR` in `.env` |
+| `has uncommitted changes` | You changed the policy file and did not commit it, or the file has CRLF line endings on Windows | Commit the change. On Windows, add `.gitattributes` (step 2), then delete `firmware-policy.yaml` and run `git checkout firmware-policy.yaml`. |
+| `is not inside a git repository` | `POLICY_HOST_DIR` is not the path of the approval repository | Correct `POLICY_HOST_DIR` in `.env` |
 | `required env var PLC_IP is not set` | `.env` is missing or incomplete | Do step 3 again |
 | `ConnectTimeout` or `ConnectError` | The laptop cannot reach the PLC | Check the IP address, cable, VPN, and firewall |
 | `No bundle in catalog lists order number` | The `firmware` folder has no firmware file for this device | Add the correct `.wup` or `.zip` file |
@@ -698,7 +698,7 @@ WAGO_TIMEOUT_SECONDS=45
 `WAGO_TIMEOUT_SECONDS` applies to all PLCs. Set it for the slowest device class in the fleet.
 CC100 needs 45 or more. Most other classes work with 15.
 IEC 62443 hardened units have approximately 3 times more parameters, and we did not tune their timeout.
-If registration of such a unit times out at 45 seconds, please open an issue.
+If the registration of such a unit takes more than 45 seconds, open an issue.
 
 > [!TIP]
 > For a large fleet, set `WAGO_PLC_HOSTS_FILE=/app/data/fleet.txt`. The file has one IP per line and supports `#` comments.
@@ -1022,7 +1022,7 @@ Enter the repository from step 1 in **GitOps config repository**.
 
 > [!IMPORTANT]
 > The agent gets the config repository name only from `WAGO_GITOPS_REPO`. The agent does not find the repository automatically.
-> If you do not set it, the `next_step` instructions point to `wago-plc-config`.
+> If you do not set it, the `next_step` instructions refer to `wago-plc-config`.
 
 **Step 5 - Test the setup**
 
@@ -1147,7 +1147,7 @@ The server gets the MCP API key from the first source that exists:
 3. **Persisted file** `./data/mcp_api_key`. The server makes this file at the first start. The file stays after you recreate the container.
 4. **New key.** The server makes a new key if no other source exists.
 
-To read the key from a Docker Secret, use the file on the host. The key does not go through the container:
+To read the key from a Docker Secret, read the file on the host. You do not need the container for this:
 
 ```bash
 cat secrets/mcp_api_key.txt
@@ -1214,7 +1214,7 @@ With this setting, the server stops at startup (`SystemExit(1)`) before it conne
 - `WAGO_TLS_CA` is not set, or is `false` or `0`.
 - `MCP_TLS_CERT` or `MCP_TLS_KEY` is not set.
 
-The check makes sure that TLS is configured. It does not check if the certificate is trusted. A self-signed certificate passes.
+The check makes sure that TLS is configured. It does not check if a trusted CA signed the certificate. A self-signed certificate passes.
 
 ### Audit log
 
@@ -1300,7 +1300,7 @@ To send each record to a syslog collector outside the host, set `AUDIT_SYSLOG=ud
 | Tool | Description |
 |------|-------------|
 | `list_watchlists(plc_ip)` | Lists the active watchlist IDs on the PLC |
-| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Makes a monitoring list on the PLC |
+| `create_watchlist(plc_ip, parameter_ids, timeout_seconds)` | Makes a watchlist on the PLC |
 | `read_watchlist(plc_ip, watchlist_id)` | Returns the values of all parameters in the list in one HTTP request |
 | `delete_watchlist(plc_ip, watchlist_id)` | Deletes the watchlist immediately |
 
@@ -1492,7 +1492,7 @@ You can use one shared API key. For traceability in the audit log, give each eng
 <summary><strong>Which firmware version is necessary?</strong></summary>
 
 Firmware build **28 or higher** (`04.xx.xx(28)` or later).
-Find the build number in the web interface of the controller under *Device Information*.
+Find the build number in the web interface of the PLC under *Device Information*.
 You can also ask the assistant: *"What firmware version is PLC 192.168.x.x running?"*
 
 </details>
