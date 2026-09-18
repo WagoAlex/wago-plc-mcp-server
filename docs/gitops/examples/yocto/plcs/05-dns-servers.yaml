@@ -1,0 +1,15 @@
+# 05. DNS servers of one bridge
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Network identity. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when the PLC must resolve names. Yocto sets DNS for each bridge, not for the device.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/05-dns-servers.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/05-dns-servers.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  # Bridge 1 carries 192.168.2.85 on this unit. Read
+  # 0-0-networking-bridges-<N>-ipconfiguration-currentaddresses to find the bridge on your unit.
+  0-0-networking-bridges-1-nameservers-dns:
+    - 192.168.2.1
+  0-0-networking-bridges-1-ipconfiguration-dhcpv4options-usedns: false   # use only the servers above

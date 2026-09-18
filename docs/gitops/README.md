@@ -50,7 +50,7 @@ You need:
 2. Make two folders: `plcs/` for desired-state files and `ops/` for one-time actions.
    Git does not keep an empty folder, so add an empty `.gitkeep` file to each.
 3. Copy [`docs/gitops/apply.yml`](apply.yml) to `.github/workflows/apply.yml` in the new repository.
-   For 20 example files, one for each common use case, see [`docs/gitops/examples/`](examples/README.md).
+   For example files, 20 for each firmware generation (PTXdist and Yocto), see [`docs/gitops/examples/`](examples/README.md).
 
 **Step 2 - Configure the repository on GitHub**
 

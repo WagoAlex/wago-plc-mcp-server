@@ -1,0 +1,14 @@
+# 15. Analog input mode
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: I/O. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when a temperature sensor is connected to X6 AI1.
+# Set the mode that matches the wiring. A wrong mode gives wrong values.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/15-analog-input-mode.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/15-analog-input-mode.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  # An instance of the AnalogOperationModes list (read 0-0-io-analogoperationmodes-<N>-name).
+  # On this unit: 100 = 0-10 V (current), 13 = Pt1000 [EN 60751], 20 = Ni 100 [DIN 43760].
+  0-0-io-channels-17-measurementmode: 13   # channel 17 = X6 AI1

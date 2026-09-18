@@ -1,0 +1,11 @@
+# 08. Access token lifetime
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Access security. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when a stolen login token must stop working sooner. The default is 28800 s (8 h).
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/08-token-lifetime.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/08-token-lifetime.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  0-0-oauth2server-accesstokenlifetime: 3600   # seconds

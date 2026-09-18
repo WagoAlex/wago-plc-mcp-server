@@ -1,0 +1,12 @@
+# 14. Portainer Edge agent: trusted certificates only
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Runtime. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when the Portainer Edge agent may connect only to a server with a trusted certificate.
+# Do not put 0-0-portainer-edgeagent-jointoken in Git. It is a secret. Set it in the WBM.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/14-portainer-agent.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/14-portainer-agent.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  0-0-portainer-edgeagent-allowselfsignedcertificates: false

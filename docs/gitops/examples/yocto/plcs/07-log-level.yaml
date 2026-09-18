@@ -1,0 +1,12 @@
+# 07. Minimum log level
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Area: Logging. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this when the log must keep fewer, more important messages.
+#
+# In your config repository, merge these keys into plcs/<ip>.yaml.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/plcs/07-log-level.yaml
+#   Apply:   python scripts/apply.py docs/gitops/examples/yocto/plcs/07-log-level.yaml --execute
+plc_ip: 192.168.2.85
+managed_parameters:
+  # 0 Emergency, 1 Alert, 2 Critical, 3 Error, 4 Warning, 5 Notice, 6 Informational (default), 7 Debug
+  0-0-logging-minloglevel: 5

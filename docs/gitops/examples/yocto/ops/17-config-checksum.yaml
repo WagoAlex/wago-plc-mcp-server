@@ -1,0 +1,16 @@
+# 17. Calculate the configuration checksum
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Risk: safe. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this before and after a change to prove what changed (IEC 62443). The result is in outArgs.ConfigChecksum.
+#
+# Claude creates this file as ops/<id>.yaml. CI runs the method once after the
+# merge and then deletes the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/ops/17-config-checksum.yaml
+#   Run:     python scripts/apply.py docs/gitops/examples/yocto/ops/17-config-checksum.yaml --execute
+id: y17a0b1c
+proposed_at: 2026-09-18T10:00:00+00:00
+proposed_by: agent-claude
+plc_ip: 192.168.2.85
+action: invoke_method
+method_id: 0-0-security-calculateconfigchecksum
+arguments: {}

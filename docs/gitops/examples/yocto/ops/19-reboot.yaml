@@ -1,0 +1,21 @@
+# 19. Reboot the PLC
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Risk: DANGEROUS. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# The PLC and all its outputs stop until the reboot is complete.
+#
+# Claude creates this file as ops/<id>.yaml. CI runs the method once after the
+# merge and then deletes the file.
+# This method is dangerous: apply.py refuses it while approved_by is empty.
+# With the CI workflow, the merge sets approved_by from the approving reviewer.
+# Claude must never write a value in approved_by.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/ops/19-reboot.yaml
+#   Run:     python scripts/apply.py docs/gitops/examples/yocto/ops/19-reboot.yaml --execute
+id: y19a0b1c
+proposed_at: 2026-09-18T10:00:00+00:00
+proposed_by: agent-claude
+plc_ip: 192.168.2.85
+action: invoke_method
+method_id: 0-0-reboot-beginreboot
+arguments: {}
+requires_human: CRITICAL
+approved_by: ''

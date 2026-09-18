@@ -1,0 +1,16 @@
+# 18. Log out all sessions (revoke all tokens)
+# Firmware generation: Yocto (CC100-IEC62443, firmware 02.x). Do not use on a PTXdist PLC.
+# Risk: safe for the machine. Tested on: CC100-IEC62443 (0751-9412), firmware 02.00.13.
+# Use this after a suspected leak of a login token. All users must log in again.
+#
+# Claude creates this file as ops/<id>.yaml. CI runs the method once after the
+# merge and then deletes the file.
+#   Dry run: python scripts/apply.py docs/gitops/examples/yocto/ops/18-revoke-all-tokens.yaml
+#   Run:     python scripts/apply.py docs/gitops/examples/yocto/ops/18-revoke-all-tokens.yaml --execute
+id: y18a0b1c
+proposed_at: 2026-09-18T10:00:00+00:00
+proposed_by: agent-claude
+plc_ip: 192.168.2.85
+action: invoke_method
+method_id: 0-0-oauth2server-revokealltokens
+arguments: {}
