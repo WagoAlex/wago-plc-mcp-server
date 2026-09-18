@@ -5,7 +5,7 @@
   "display_name": "WAGO PLC",
   "version": "2.4.2",
   "description": "Read and monitor WAGO PLC parameters over the WDA REST API. The server blocks writes until you allow them.",
-  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you select *Allow writes and method calls*. The server refuses reboot, factory reset, and firmware methods.\n\n**GitOps mode.** Select *GitOps mode* to get a YAML file for a reviewed pull request instead of a direct write.\n\nThis bundle is for one user and a few PLCs. For a shared or production fleet, use the Docker deployment: https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/deployment.md",
+  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you select *Allow writes and method calls*. The server also refuses reboot, factory reset, and firmware methods, unless you allow one exact method in *Allowed dangerous methods*.\n\n**GitOps mode.** Select *GitOps mode* to get a YAML file for a reviewed pull request instead of a direct write.\n\nThis bundle is for one user and a few PLCs. For a shared or production fleet, use the Docker deployment: https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/deployment.md",
   "author": {
     "name": "Alexander Fugmann",
     "email": "alexander.fugmann@wago.com",
@@ -80,27 +80,27 @@
     "hosts_file": {
       "type": "file",
       "title": "PLC IP list file (optional, for many PLCs)",
-      "description": "A text file with one IP address on each line. A line that starts with '#' is a comment. This file is easier to manage than the field above when you have many PLCs. You must fill in at least one of the two IP fields.",
+      "description": "A text file with one IP address on each line. A line that starts with '#' is a comment. This file is easier to manage than the field above when you have many PLCs. Enter at least one of the two IP fields.",
       "required": false
     },
     "username": {
       "type": "string",
       "title": "PLC username",
-      "description": "Web-based management (WBM) user name on the PLCs. WDA allows only one user name for each PLC. The server uses this user name for every PLC in the list above.",
+      "description": "Web-based management (WBM) username on the PLCs. WDA allows only one username for each PLC. The server uses this username for every PLC in the list above.",
       "default": "admin",
       "required": true
     },
     "password": {
       "type": "string",
       "title": "Default PLC password",
-      "description": "Password for that user name. The server uses this password for every PLC unless you set a different password below. Your operating system keychain stores this password.",
+      "description": "Password for that username. The server uses this password for every PLC unless you set a different password below. Your operating system keychain stores this password.",
       "sensitive": true,
       "required": true
     },
     "per_plc_passwords": {
       "type": "string",
       "title": "Per-PLC passwords (optional, a few PLCs)",
-      "description": "Use this field only for PLCs with a different password than the default above. Enter comma-separated ip=password pairs. Example: 192.168.1.11=secretB,192.168.1.12=secretC. This field hides your text as you type. For many overrides, use the file field below instead.",
+      "description": "Use this field only for PLCs with a different password than the default above. Enter comma-separated ip=password pairs. Example: 192.168.1.11=secretB,192.168.1.12=secretC. This field hides your text as you type. For many PLCs, use the file field below instead.",
       "sensitive": true,
       "default": "",
       "required": false
@@ -122,7 +122,7 @@
     "allow_writes": {
       "type": "boolean",
       "title": "Allow writes and method calls",
-      "description": "When off, every PLC allows only read access. When on, Claude can change parameters, run methods, and upload files on the listed PLCs. Turn this on only for PLCs you have permission to change.",
+      "description": "When off, every PLC allows only read access. When on, Claude can change parameters, run methods, and upload files on the listed PLCs. Select this setting only for PLCs that you have permission to change.",
       "default": false
     },
     "readonly_hosts": {
@@ -207,14 +207,14 @@
     "syslog_host": {
       "type": "string",
       "title": "SIEM syslog host (optional)",
-      "description": "Host name or IP of a syslog or SIEM server that receives the audit entries. When you set it, the server keeps fewer local audit files (2 instead of 5). Leave blank to disable.",
+      "description": "Host name or IP of a syslog or SIEM server that receives the audit entries. When you set it, the server keeps fewer local audit files (2 instead of 5). Leave blank to send nothing. Both syslog fields send audit entries. Most setups need only one of them.",
       "default": "",
       "required": false
     },
     "syslog_port": {
       "type": "number",
       "title": "SIEM syslog port",
-      "description": "Port of the SIEM syslog host. Used only when 'SIEM syslog host' is set.",
+      "description": "Port of the SIEM syslog host. The server uses it only when 'SIEM syslog host' is set.",
       "default": 514,
       "min": 1,
       "max": 65535
