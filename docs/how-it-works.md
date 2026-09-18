@@ -133,6 +133,11 @@ Each agent operation is in one of three classes. There are no other classes.
 | **Write a parameter** | `set_parameters` | Yes. It changes a stored configuration value. |
 | **Start a method** | `invoke_method` | Yes. It starts an action, for example NTP sync, reboot, or firmware update. |
 
+The diagram shows the path of each class to the PLC, and the gate that stops it.
+A critical write is a dangerous method: reboot, restart, factory reset, firmware, format, or a `0-0-update-*` method.
+
+![Read, write, and critical write paths from Claude to a WAGO PLC](media/workflow-read-write-critical.svg)
+
 ### Default behavior
 
 The default configuration is live mode with no read-only hosts.
