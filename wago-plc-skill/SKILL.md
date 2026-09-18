@@ -246,6 +246,37 @@ The server enforces guardrails in code - they are not suggestions:
   while something is wired to it) can damage equipment or worse, so these
   guardrails are intentional, not a bug to route around.
 
+## GitOps mode - changes go through a pull request
+
+The operator turns this on with `GITOPS_MODE=1` (Docker) or the **GitOps
+mode** checkbox (Claude Desktop extension). **Allow writes and method calls**
+must also be on, because a read-only PLC refuses the request before GitOps
+mode applies. You cannot switch the mode yourself.
+
+How to recognize it: `set_parameters` and `invoke_method` do not touch the PLC.
+They return `status: "proposed"` with `config_file`, a YAML body
+(`desired_state_yaml` or `ops_yaml`) and `next_step`.
+
+What to do with the result:
+
+1. Do not retry the write, and do not tell the user the PLC changed. It did
+   not. Say "proposed, waiting for review".
+2. Commit the YAML to the config repository that `next_step` names (default
+   `wago-plc-config`). The server does not store the YAML and does not ship
+   this repository. It is the operator's own repository. If you cannot find
+   it or have no write access, give the user the YAML instead:
+   - `set_parameters` -> merge the keys into `plcs/<ip>.yaml` under
+     `managed_parameters`. Keep the keys that are already there.
+   - `invoke_method` -> create `ops/<id>.yaml` with `ops_yaml`. CI deletes it
+     after it runs.
+3. Open a pull request. Use a GitHub tool if you have one. If you do not, give
+   the user the file path and YAML and let them commit it.
+4. A person reviews and merges. CI runs `scripts/apply.py` (dry run on the PR,
+   apply on merge to `main`). After the merge, you can confirm the change with
+   `get_parameter`.
+
+Never fill in `approved_by` in an ops file. The reviewer sets it.
+
 ## Watchlists - efficient repeated checking
 
 Use a watchlist instead of repeated single reads whenever something needs

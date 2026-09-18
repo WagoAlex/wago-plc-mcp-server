@@ -1,0 +1,122 @@
+# Template for the config repository. Copy it to .github/workflows/apply.yml
+# in your own config repo. Setup: README.md -> GitOps write-gate -> Set up GitOps.
+
+name: Apply PLC Config
+
+# PR:           dry-run - shows drift without touching PLCs
+# Push to main: execute - applies drift and invokes ops
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [plcs/**, ops/**]
+  push:
+    branches: [main]
+    paths: [plcs/**, ops/**]
+
+permissions:
+  contents: write   # needed to commit ops file deletions after execution
+
+jobs:
+  apply:
+    name: ${{ github.event_name == 'push' && 'Apply' || 'Dry-run' }}
+    # Self-hosted runner required: GitHub-hosted runners cannot reach the PLC subnet
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need HEAD~1 for changed-file detection
+
+      - uses: actions/checkout@v4
+        with:
+          repository: WagoAlex/wago-plc-mcp-server
+          path: mcp-server
+          sparse-checkout: |
+            scripts/apply.py
+            src/wda_client.py
+            src/safety.py
+            src/audit.py
+            src/logging_config.py
+            fwupdate/
+
+      - name: Install deps
+        run: pip install --quiet httpx pyyaml python-dotenv loguru
+
+      - name: Detect changed YAML files
+        id: changed
+        run: |
+          # .example.yaml files are templates, never applied - they carry an
+          # empty approved_by and would fail the run they were merged in.
+          files=$(git diff --name-only HEAD~1 HEAD \
+                  | grep -E '^(plcs|ops)/.+\.yaml$' \
+                  | grep -v '\.example\.yaml$' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$files" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      # The approval is the pull request, not the commit. A commit author is
+      # usually the person who PROPOSED the change, and a squash or merge commit
+      # is authored by GitHub itself - so the commit is the wrong thing to cite.
+      # This resolves the PR that carried these files and who approved it.
+      - name: Resolve the approving pull request
+        id: approval
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+                 --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$pr" ] || [ "$pr" = "null" ]; then
+            echo "approved_by=${{ github.actor }}" >> "$GITHUB_OUTPUT"
+            echo "ref=direct push by ${{ github.actor }} (no pull request)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          reviewers=$(gh api "repos/${{ github.repository }}/pulls/$pr/reviews" \
+                        --jq '[.[] | select(.state=="APPROVED") | .user.login] | unique | join(", ")')
+          author=$(gh api "repos/${{ github.repository }}/pulls/$pr" --jq '.user.login')
+          if [ -z "$reviewers" ]; then
+            # Merged without a review approval. Allowed - the merger is still an
+            # authenticated human - but say so, because it is not four eyes.
+            echo "approved_by=${{ github.actor }}" >> "$GITHUB_OUTPUT"
+            echo "ref=${{ github.repository }}#$pr opened by $author, merged by ${{ github.actor }}, no review approval" >> "$GITHUB_OUTPUT"
+          else
+            echo "approved_by=$reviewers" >> "$GITHUB_OUTPUT"
+            echo "ref=${{ github.repository }}#$pr opened by $author, approved by $reviewers, merged by ${{ github.actor }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ${{ github.event_name == 'push' && 'Apply changes' || 'Dry-run (no PLCs touched)' }}
+        env:
+          DEFAULT_PLC_USERNAME: ${{ secrets.PLC_USERNAME }}
+          DEFAULT_PLC_PASSWORD: ${{ secrets.PLC_PASSWORD }}
+          # Reviewer(s) from the PR when there was one, else the merging actor.
+          WAGO_APPROVED_BY: ${{ steps.approval.outputs.approved_by || github.actor }}
+          WAGO_APPROVAL_REF: ${{ steps.approval.outputs.ref }}
+          WAGO_TIMEOUT_SECONDS: "45"
+          # The runner has no persistent volume, so the hash chain has no home
+          # here. Syslog is the trail for CI-executed operations - without it,
+          # an op applied by CI would leave no audit record anywhere.
+          AUDIT_LOG_FILE: ""
+          AUDIT_SYSLOG: ${{ vars.AUDIT_SYSLOG }}
+          # Where firmware bundles live, for ops/ files with action: firmware_update
+          FIRMWARE_SOURCE: ${{ vars.FIRMWARE_SOURCE }}
+        run: |
+          execute=${{ github.event_name == 'push' && '--execute' || '' }}
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "=== $f ==="
+            python mcp-server/scripts/apply.py "$f" $execute
+          done <<< "${{ steps.changed.outputs.files }}"
+
+      - name: Commit ops file deletions
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No ops files were deleted."
+          else
+            git commit -m "chore: remove executed ops files [skip ci]"
+            git push
+          fi
