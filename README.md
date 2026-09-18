@@ -42,6 +42,8 @@ For more examples and screen recordings, see [Example questions](https://github.
 - The server refuses reboot, factory reset, and firmware methods. An administrator can allow one exact method.
 - An audit log records each write and each method call.
 
+![Read, write, and critical write paths from Claude to a WAGO PLC](https://raw.githubusercontent.com/WagoAlex/wago-plc-mcp-server/main/docs/media/workflow-read-write-critical.svg)
+
 For the full rules, see [How it works](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/how-it-works.md).
 
 ## Next steps

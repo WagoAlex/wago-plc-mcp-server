@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="t d">
+<title id="t">Read, write, and critical write paths of wago-plc-mcp-server</title>
+<desc id="d">Three lanes. Read: Claude, MCP server, WDA, PLC. Write: live mode through the MCP server write gates, or GitOps mode through a pull request, dry run, review, and the CI runner. Critical write: refused in live mode, approved pull request in GitOps mode, and firmware only with the fwupdate tool and a policy committed to Git.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#616a73"/></marker></defs>
+<rect width="1280" height="900" fill="#eff0f1"/>
+<text x="20" y="38" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#1f2837" text-anchor="start">How a request reaches a WAGO PLC</text>
+<text x="20" y="60" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#616a73" text-anchor="start">Read, write, and critical write (reboot, factory reset, firmware) - and which gate stops each one</text>
+<rect x="20" y="78" width="1240" height="118" rx="6" fill="#ffffff" stroke="#dedfe1"/>
+<rect x="20" y="78" width="6" height="118" rx="2" fill="#6ec800"/>
+<text x="40" y="106" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2837" text-anchor="start">Read</text>
+<text x="40" y="126" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">Always allowed,</text>
+<text x="40" y="141" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">also on read-only PLCs</text>
+<text x="182" y="104" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">ANY MODE</text>
+<rect x="182" y="112" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="138.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">You ask Claude</text>
+<text x="250.0" y="153.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">"Show the LED state"</text>
+<line x1="320" y1="141.0" x2="333" y2="141.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="112" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="404.0" y="132.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">MCP server</text>
+<text x="404.0" y="147.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">get_parameter</text>
+<text x="404.0" y="160.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">bearer auth</text>
+<line x1="474" y1="141.0" x2="487" y2="141.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="112" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="558.0" y="132.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">No write gate</text>
+<text x="558.0" y="147.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">reads are always</text>
+<text x="558.0" y="160.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">allowed</text>
+<line x1="628" y1="141.0" x2="641" y2="141.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="644" y="112" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="712.0" y="132.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">WDA over HTTPS</text>
+<text x="712.0" y="147.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">GET</text>
+<text x="712.0" y="160.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">/wda/parameters</text>
+<line x1="782" y1="141.0" x2="795" y2="141.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="798" y="112" width="136" height="58" rx="4" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="866.0" y="138.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">PLC</text>
+<text x="866.0" y="153.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#1f2837" text-anchor="middle">returns the value</text>
+<rect x="20" y="208" width="1240" height="262" rx="6" fill="#ffffff" stroke="#dedfe1"/>
+<rect x="20" y="208" width="6" height="262" rx="2" fill="#1f2837"/>
+<text x="40" y="236" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2837" text-anchor="start">Write</text>
+<text x="40" y="256" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">Parameters, safe</text>
+<text x="40" y="271" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">methods, file uploads</text>
+<text x="40" y="286" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start"></text>
+<text x="40" y="301" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">Off by default:</text>
+<text x="40" y="316" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">WAGO_ALLOW_WRITES</text>
+<text x="182" y="236" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">LIVE MODE</text>
+<rect x="182" y="244" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="270.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">You ask Claude</text>
+<text x="250.0" y="285.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">"Set the NTP server"</text>
+<line x1="320" y1="273.0" x2="333" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="244" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="404.0" y="264.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Claude confirms</text>
+<text x="404.0" y="279.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">asks you before</text>
+<text x="404.0" y="292.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">the write</text>
+<line x1="474" y1="273.0" x2="487" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="244" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="558.0" y="270.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">MCP server</text>
+<text x="558.0" y="285.5" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">set_parameters</text>
+<line x1="628" y1="273.0" x2="641" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="644" y="244" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="712.0" y="264.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Write gates</text>
+<text x="712.0" y="279.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">writes allowed?</text>
+<text x="712.0" y="292.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">PLC not read-only?</text>
+<line x1="782" y1="273.0" x2="795" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="798" y="244" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="866.0" y="264.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">WDA over HTTPS</text>
+<text x="866.0" y="279.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">PATCH</text>
+<text x="866.0" y="292.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">/wda/parameters</text>
+<line x1="936" y1="273.0" x2="949" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="952" y="244" width="136" height="58" rx="4" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="1020.0" y="270.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">PLC</text>
+<text x="1020.0" y="285.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#1f2837" text-anchor="middle">value changed</text>
+<line x1="1090" y1="273.0" x2="1103" y2="273.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="1106" y="244" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="1174.0" y="264.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Audit log</text>
+<text x="1174.0" y="279.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">hash-chained</text>
+<text x="1174.0" y="292.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">record</text>
+<text x="182" y="354" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">GITOPS MODE (GITOPS_MODE=1)</text>
+<rect x="182" y="362" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="382.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">MCP server</text>
+<text x="250.0" y="397.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">returns YAML,</text>
+<text x="250.0" y="410.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">no write</text>
+<line x1="320" y1="391.0" x2="333" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="362" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="404.0" y="388.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Pull request</text>
+<text x="404.0" y="403.5" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#616a73" text-anchor="middle">plcs/&lt;ip&gt;.yaml</text>
+<line x1="474" y1="391.0" x2="487" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="362" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="558.0" y="382.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Dry-run job</text>
+<text x="558.0" y="397.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">reads the PLC,</text>
+<text x="558.0" y="410.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">shows the drift</text>
+<line x1="628" y1="391.0" x2="641" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="644" y="362" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="712.0" y="382.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Review + merge</text>
+<text x="712.0" y="397.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">a person</text>
+<text x="712.0" y="410.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">approves</text>
+<line x1="782" y1="391.0" x2="795" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="798" y="362" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="866.0" y="382.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">CI runner</text>
+<text x="866.0" y="397.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">apply.py</text>
+<text x="866.0" y="410.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">writes only drift</text>
+<line x1="936" y1="391.0" x2="949" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="952" y="362" width="136" height="58" rx="4" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="1020.0" y="388.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">PLC</text>
+<text x="1020.0" y="403.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#1f2837" text-anchor="middle">value changed</text>
+<line x1="1090" y1="391.0" x2="1103" y2="391.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="1106" y="362" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="1174.0" y="382.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Audit</text>
+<text x="1174.0" y="397.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">syslog</text>
+<text x="1174.0" y="410.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">(AUDIT_SYSLOG)</text>
+<text x="182" y="436" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">After the YAML, the MCP server is not involved. The self-hosted runner connects to the PLC with its own secrets.</text>
+<rect x="20" y="482" width="1240" height="352" rx="6" fill="#ffffff" stroke="#dedfe1"/>
+<rect x="20" y="482" width="6" height="352" rx="2" fill="#bb0522"/>
+<text x="40" y="510" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2837" text-anchor="start">Critical write</text>
+<text x="40" y="530" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">reboot, restart,</text>
+<text x="40" y="545" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">factory reset, firmware,</text>
+<text x="40" y="560" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">format, 0-0-update-*</text>
+<text x="40" y="575" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start"></text>
+<text x="40" y="590" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">Never run by the</text>
+<text x="40" y="605" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">agent on its own</text>
+<text x="182" y="510" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">LIVE MODE</text>
+<rect x="182" y="518" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="538.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">MCP server</text>
+<text x="250.0" y="553.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">invoke_method</text>
+<text x="250.0" y="566.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">reboot</text>
+<line x1="320" y1="547.0" x2="333" y2="547.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="518" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="404.0" y="538.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Denylist</text>
+<text x="404.0" y="553.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">dangerous</text>
+<text x="404.0" y="566.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">method?</text>
+<line x1="474" y1="547.0" x2="487" y2="547.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="518" width="136" height="58" rx="4" fill="#ffffff" stroke="#bb0522" stroke-width="2"/>
+<text x="558.0" y="538.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#bb0522" text-anchor="middle">Refused</text>
+<text x="558.0" y="553.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#bb0522" text-anchor="middle">unless the exact ID is in</text>
+<text x="558.0" y="566.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#bb0522" text-anchor="middle">WAGO_ALLOW_METHODS</text>
+<text x="182" y="622" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">GITOPS MODE</text>
+<rect x="182" y="630" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="650.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">MCP server</text>
+<text x="250.0" y="665.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">returns ops YAML,</text>
+<text x="250.0" y="678.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">flag CRITICAL</text>
+<line x1="320" y1="659.0" x2="333" y2="659.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="630" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="404.0" y="650.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Pull request</text>
+<text x="404.0" y="665.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#616a73" text-anchor="middle">ops/&lt;id&gt;.yaml</text>
+<text x="404.0" y="678.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">approved_by empty</text>
+<line x1="474" y1="659.0" x2="487" y2="659.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="630" width="136" height="58" rx="4" fill="#ffffff" stroke="#bb0522" stroke-width="2"/>
+<text x="558.0" y="650.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#bb0522" text-anchor="middle">Dry-run job</text>
+<text x="558.0" y="665.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#bb0522" text-anchor="middle">refused:</text>
+<text x="558.0" y="678.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#bb0522" text-anchor="middle">no approver yet</text>
+<line x1="628" y1="659.0" x2="641" y2="659.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="644" y="630" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="712.0" y="650.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Review + merge</text>
+<text x="712.0" y="665.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">the reviewer is</text>
+<text x="712.0" y="678.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">the approver</text>
+<line x1="782" y1="659.0" x2="795" y2="659.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="798" y="630" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="866.0" y="650.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">CI runner</text>
+<text x="866.0" y="665.0" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="400" fill="#dedfe1" text-anchor="middle">apply.py</text>
+<text x="866.0" y="678.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">runs once, deletes file</text>
+<line x1="936" y1="659.0" x2="949" y2="659.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="952" y="630" width="136" height="58" rx="4" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="1020.0" y="656.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">PLC</text>
+<text x="1020.0" y="671.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#1f2837" text-anchor="middle">restarts</text>
+<text x="182" y="734" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#616a73" text-anchor="start" letter-spacing="0.5">FIRMWARE UPDATE</text>
+<rect x="182" y="742" width="136" height="58" rx="4" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="250.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">A person</text>
+<text x="250.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">maintenance</text>
+<text x="250.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">window</text>
+<line x1="320" y1="771.0" x2="333" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="336" y="742" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="404.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Policy in Git</text>
+<text x="404.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">committed, exact</text>
+<text x="404.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">revision</text>
+<line x1="474" y1="771.0" x2="487" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="490" y="742" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="558.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">fwupdate dry run</text>
+<text x="558.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">upload + check,</text>
+<text x="558.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">no Start</text>
+<line x1="628" y1="771.0" x2="641" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="644" y="742" width="136" height="58" rx="4" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="712.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">fwupdate</text>
+<text x="712.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">Activate, upload,</text>
+<text x="712.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#dedfe1" text-anchor="middle">Start</text>
+<line x1="782" y1="771.0" x2="795" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="798" y="742" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="866.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Status 4</text>
+<text x="866.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">Unconfirmed:</text>
+<text x="866.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">Finish, Clear</text>
+<line x1="936" y1="771.0" x2="949" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="952" y="742" width="136" height="58" rx="4" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="1020.0" y="768.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">PLC</text>
+<text x="1020.0" y="783.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#1f2837" text-anchor="middle">new firmware</text>
+<line x1="1090" y1="771.0" x2="1103" y2="771.0" stroke="#616a73" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="1106" y="742" width="136" height="58" rx="4" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="1174.0" y="762.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1f2837" text-anchor="middle">Audit log</text>
+<text x="1174.0" y="777.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">hash-chained</text>
+<text x="1174.0" y="790.0" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="middle">record</text>
+<text x="182" y="816" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#616a73" text-anchor="start">The MCP server never flashes firmware. The same approval also works as ops/fw-*.yaml or with Run workflow in CI.</text>
+<rect x="20" y="856" width="22" height="14" rx="2" fill="#ffffff" stroke="#1f2837" stroke-width="1.5"/>
+<text x="50" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1f2837" text-anchor="start">Person or AI client</text>
+<rect x="195.8" y="856" width="22" height="14" rx="2" fill="#1f2837" stroke="#1f2837" stroke-width="1.5"/>
+<text x="225.8" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1f2837" text-anchor="start">Software that acts</text>
+<rect x="365.40000000000003" y="856" width="22" height="14" rx="2" fill="#eff0f1" stroke="#616a73" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="395.40000000000003" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1f2837" text-anchor="start">Check, no write</text>
+<rect x="516.4000000000001" y="856" width="22" height="14" rx="2" fill="#ffffff" stroke="#bb0522" stroke-width="2"/>
+<text x="546.4000000000001" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1f2837" text-anchor="start">Refused</text>
+<rect x="617.8000000000001" y="856" width="22" height="14" rx="2" fill="#6ec800" stroke="#6ec800" stroke-width="1.5"/>
+<text x="647.8000000000001" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1f2837" text-anchor="start">Change on the PLC</text>
+<text x="1260" y="867.5" font-family="'Source Sans Pro', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#616a73" text-anchor="end">wago-plc-mcp-server</text>
+</svg>
