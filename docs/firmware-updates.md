@@ -115,7 +115,7 @@ If Git asks for your name and email, set them one time with
 `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`.
 
 For a team, push this repository to your Git server and approve changes with pull requests.
-The audit log then shows the reviewer. See the [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update).
+The audit log then shows the reviewer. See the [Approve a firmware update](firmware-approvals.md).
 
 ### Step 3 - Configure the connection
 
@@ -210,7 +210,7 @@ For all settings and failure cases, see [`fwupdate/README.md`](../fwupdate/READM
 
 | Question | Document |
 |---|---|
-| Who approves an update, and how do I require two approvers? | [wago-plc-config README](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update) |
+| Who approves an update, and how do I require two approvers? | [Approve a firmware update](firmware-approvals.md) |
 | How do I run an update, and what do I do if it fails? | [`fwupdate/README.md`](../fwupdate/README.md) |
 | What do the REST calls do? | [`docs/wda-firmware-update.md`](wda-firmware-update.md) |
 | I know GitHub but not CI/CD. Where do I start? | [`docs/plc-change-control.html`](plc-change-control.html) |

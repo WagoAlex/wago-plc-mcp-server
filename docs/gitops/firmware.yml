@@ -1,0 +1,74 @@
+# Template for the config repository. Copy it to .github/workflows/firmware.yml
+# in your own config repo. Guide: docs/firmware-approvals.md.
+
+name: Firmware update
+
+# Start a firmware update from the GitHub UI: Actions -> Firmware update ->
+# Run workflow. No file to commit : the authorization is the standing approval
+# already in firmware-policy.yaml, and the approver is you, the authenticated
+# user who clicked the button.
+#
+# For a one-shot that leaves a reviewable artifact instead, commit an
+# ops/fw-*.yaml and let apply.yml execute it on merge.
+
+on:
+  workflow_dispatch:
+    inputs:
+      plc_ip:
+        description: "Device IP (must be approved in firmware-policy.yaml)"
+        required: true
+      target_version:
+        description: "Bundle revision, e.g. 4.9.1"
+        required: true
+        default: "4.9.1"
+      dry_run:
+        description: "Rehearse only - uploads and verifies, never calls Start"
+        type: boolean
+        default: true
+      allow_reflash:
+        description: "Write the version the device already runs"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    name: "${{ inputs.dry_run && 'Dry-run' || 'FLASH' }} ${{ inputs.plc_ip }} -> ${{ inputs.target_version }}"
+    # Self-hosted is not a preference: a GitHub-hosted runner sits in Azure and
+    # has no route to the PLC subnets.
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: WagoAlex/wago-plc-mcp-server
+          path: mcp-server
+          sparse-checkout: |
+            src/audit.py
+            fwupdate/
+
+      - name: Install deps
+        run: pip install --quiet httpx pyyaml boto3
+
+      - name: ${{ inputs.dry_run && 'Rehearse' || 'Apply firmware update' }}
+        env:
+          PLC_IP: ${{ inputs.plc_ip }}
+          PLC_USERNAME: ${{ secrets.PLC_USERNAME }}
+          PLC_PASSWORD: ${{ secrets.PLC_PASSWORD }}
+          TARGET_VERSION: ${{ inputs.target_version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          FW_ALLOW_REFLASH: ${{ inputs.allow_reflash }}
+          # The standing fleet approval in this repo, checked out above.
+          FW_POLICY_FILE: ${{ github.workspace }}/firmware-policy.yaml
+          FIRMWARE_SOURCE: ${{ vars.FIRMWARE_SOURCE }}
+          # Whoever clicked Run workflow - authenticated by GitHub, and recorded
+          # in the audit log as the approver.
+          WAGO_APPROVED_BY: ${{ github.actor }}
+          WAGO_APPROVAL_REF: "workflow_dispatch by ${{ github.actor }} (run ${{ github.run_id }})"
+          AUDIT_SYSLOG: ${{ vars.AUDIT_SYSLOG }}
+          AUDIT_LOG_FILE: ""
+        run: python mcp-server/fwupdate/fw_update.py

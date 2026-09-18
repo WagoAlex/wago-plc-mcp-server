@@ -8,10 +8,6 @@ This tool is **separate from the MCP server on purpose**. The MCP server never r
 so an AI agent cannot flash a PLC. A person runs this tool during a maintenance window.
 The tool does not start until someone commits an approval to Git.
 
-> [!NOTE]
-> Some links on this page go to `wago-plc-config`, our internal config repository.
-> If you cannot open them, use the same sections in your own config repository.
-
 ---
 
 ## Quick start
@@ -103,13 +99,13 @@ The CC100-IEC62443 uses a different build scheme (`02.00.13(04)`), so the tool d
 
 If the tool cannot read the build, it refuses. It does not assume that the build is correct.
 The minimum build for each device class is a fact about the fleet, so it is in the config repository:
-[wago-plc-config → Minimum firmware before updating](https://github.com/WagoAlex/wago-plc-config#minimum-firmware-before-updating).
+[Minimum firmware before an update](../docs/firmware-approvals.md#minimum-firmware-before-an-update).
 
 ## What the tool checks at run time
 
 You write and review approvals **in your config repository**.
 The config repository describes how to write an approval, the entry forms, and who approves it:
-[wago-plc-config → Approve a firmware update](https://github.com/WagoAlex/wago-plc-config#guide-approve-a-firmware-update).
+[Approve a firmware update](../docs/firmware-approvals.md).
 
 This section describes what the container does with that file.
 Before it flashes anything, it refuses unless all of these conditions are true:
@@ -134,7 +130,7 @@ FATAL: refused - 192.168.42.115 is approved for firmware 4.9.1, but the
 
 The allowed revisions for a device are a decision about the fleet.
 So the config repository, where you write approvals, describes the entry forms:
-[wago-plc-config → Standing approval](https://github.com/WagoAlex/wago-plc-config#standing-approval-the-fleet-policy).
+[Standing approval](../docs/firmware-approvals.md#standing-approval-the-fleet-policy).
 
 ### Nobody types their own name
 
@@ -165,7 +161,7 @@ because the commit and the merge **are** the approval.
 The branch-protection settings of your config repository decide if a second person must take part, not this tool.
 The tool records what happened in both cases.
 The config repository describes how to set this up, and who counts as the approver for each type of merge:
-[wago-plc-config → Who counts as the approver](https://github.com/WagoAlex/wago-plc-config#who-counts-as-the-approver).
+[Who counts as the approver](../docs/firmware-approvals.md#who-counts-as-the-approver).
 
 After a successful check, the tool shows the authorizing commit. If the entry names a reviewer, it shows the reviewer too:
 
@@ -310,7 +306,7 @@ Set `FIRMWARE_HOST_DIR` to a directory with `.wup` bundles for any mix of hardwa
 3. It selects the bundle whose `ArticleList` contains the order number of the device.
    If exactly one bundle matches, it uses that bundle. If more than one matches, the container **refuses and lists them**.
    It never guesses, for the reason in
-   [why the revision must be exact](https://github.com/WagoAlex/wago-plc-config#why-the-revision-must-be-exact).
+   [why the revision must be exact](../docs/firmware-approvals.md#why-the-revision-must-be-exact).
    `TARGET_VERSION`, or the revision in the policy for a fleet run, selects one of them.
 4. Before it changes anything, it checks that the current version of the device is in the upgrade or downgrade range that *this bundle* declares.
 5. It refuses to run, and flashes nothing, in these cases: no bundle matches the order number,
