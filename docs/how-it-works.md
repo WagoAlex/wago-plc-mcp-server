@@ -151,13 +151,13 @@ The default configuration is live mode with no read-only hosts.
 
 Three conditions control the result. Read-only status has priority. If the PLC is not read-only, the server mode controls the result.
 
-| Condition | Read | `set_parameters` | Safe `invoke_method` | Dangerous `invoke_method` |
-|---|---|---|---|---|
-| **Read-only PLC** (`WAGO_ALLOW_WRITES` set but not `true`, `WAGO_READONLY_HOSTS`, or `# readonly` in the fleet file), all modes | Allowed | **Refused** | **Refused** | **Refused** |
-| **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Refused** if the ID is not in `WAGO_ALLOW_METHODS` |
-| **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a YAML fragment for a pull request. No direct write. | Returns a YAML fragment | Returns a YAML fragment with `requires_human: CRITICAL`. `apply.py` does not run it until a person sets `approved_by`. |
+| Condition | Read | `set_parameters` | Safe `invoke_method` | Dangerous `invoke_method` | `create_file`, `upload_file` |
+|---|---|---|---|---|---|
+| **Read-only PLC** (`WAGO_ALLOW_WRITES` set but not `true`, `WAGO_READONLY_HOSTS`, or `# readonly` in the fleet file), all modes | Allowed | **Refused** | **Refused** | **Refused** | **Refused** |
+| **Live mode** (`GITOPS_MODE=0`, default) | Allowed | Allowed if writeable | Allowed | **Refused** if the ID is not in `WAGO_ALLOW_METHODS` | Allowed |
+| **GitOps mode** (`GITOPS_MODE=1`) | Allowed | Returns a YAML fragment for a pull request. No direct write. | Returns a YAML fragment | Returns a YAML fragment with `requires_human: CRITICAL`. `apply.py` does not run it until a person sets `approved_by`. | **Refused**. File uploads do not have a pull-request path yet. |
 
-The [audit log](security.md#audit-log) records each write and each method call, also when the server refuses it.
+The [audit log](security.md#audit-log) records each write, each method call, and each file upload, also when the server refuses it.
 
 ## Safety gates
 
@@ -171,6 +171,7 @@ The server enforces these gates in code. **The agent cannot override them.**
 | **Fleet-wide write switch** | Makes all PLCs read-only. If the variable is not set, writes are possible. Any value other than `true` blocks writes, so a typo fails closed. The Claude Desktop extension sets this from its "Allow writes" checkbox, which is off by default. | `WAGO_ALLOW_WRITES=true` allows writes. `WAGO_ALLOW_WRITES=false` blocks them. |
 | **Dangerous-method denylist** | In live mode, the server refuses reboot, restart, factory reset, firmware, and format methods, and all `0-0-update-*` methods. | `WAGO_ALLOW_METHODS=<exact-method-id>` allows one method |
 | **Human approval for dangerous operations** | In GitOps mode, these operations become a pull request with `requires_human: CRITICAL`. `apply.py` does not run until a person sets `approved_by`. | Set `approved_by` during the review, or set `WAGO_APPROVED_BY` in CI |
+| **No file uploads in GitOps mode** | In GitOps mode, the server refuses `create_file` and `upload_file`. A file upload cannot skip the pull-request review. | `GITOPS_MODE=1` |
 
 For a high-consequence action, use a pull request that a person reviews. The audit log records it.
 A refusal is correct behavior, not a failure.

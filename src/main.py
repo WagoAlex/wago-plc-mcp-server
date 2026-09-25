@@ -778,20 +778,38 @@ async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict
 # ───────────────────────── Tools: files (file_id-typed parameters) ─────────────────────────
 # ponytail: whole-file transfer only, no chunked upload tool — see wda_client.upload_file.
 
+def _file_write_refused(action: str, plc_ip: str, details: dict) -> dict | None:
+    """Write gates for file tools. GitOps mode has no ops-file format for uploads,
+    so a direct upload would skip the pull-request review: refuse it instead."""
+    if _is_readonly(plc_ip):
+        _audit_log(action, plc_ip, details, "refused: read-only host")
+        return {"error": f"PLC {plc_ip} is read-only; {action} refused."}
+    if _GITOPS_MODE:
+        _audit_log(action, plc_ip, details, "refused: gitops mode")
+        return {"error": (
+            f"{action} is refused in GitOps mode: file uploads have no pull-request path yet. "
+            f"Upload the file out-of-band, or use a server with GITOPS_MODE=0."
+        )}
+    return None
+
+
 @mcp.tool()
 async def create_file(ctx: Context, plc_ip: str, context_parameter_id: str) -> dict:
     """Allocate a file_id for uploading content into a file_id-typed parameter."""
     plc, err = _require_plc(plc_ip)
     if err:
         return err
-    if _is_readonly(plc_ip):
-        return {"error": f"PLC {plc_ip} is read-only; file allocation refused."}
+    details = {"context": context_parameter_id}
+    if refused := _file_write_refused("create_file", plc_ip, details):
+        return refused
     if context_parameter_id not in plc.parameters:
         return {"error": f"Unknown parameter '{context_parameter_id}'"}
     try:
         file_id = await plc.client.create_file(context_parameter_id)
+        _audit_log("create_file", plc_ip, {**details, "file_id": file_id}, "ok")
         return {"file_id": file_id}
     except Exception as e:
+        _audit_log("create_file", plc_ip, details, f"error: {e}")
         return {"error": str(e)}
 
 
@@ -803,8 +821,8 @@ async def upload_file(
     plc, err = _require_plc(plc_ip)
     if err:
         return err
-    if _is_readonly(plc_ip):
-        return {"error": f"PLC {plc_ip} is read-only; file upload refused."}
+    if refused := _file_write_refused("upload_file", plc_ip, {"file_id": file_id}):
+        return refused
     try:
         content = base64.b64decode(content_base64)
         result = await plc.client.upload_file(file_id, content, content_type)
