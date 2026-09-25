@@ -61,6 +61,7 @@ docs/.obsidian/
 
 # graphify knowledge-graph cache — regenerated locally, not release content
 /graphify-out/
+/.graphifyignore
 
 # Source video recordings — GIFs are committed instead
 docs/media/*.mp4

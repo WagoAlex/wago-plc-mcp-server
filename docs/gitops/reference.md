@@ -388,7 +388,7 @@ To change the list, edit `src/safety.py`. To allow one method, add its ID to `WA
 ### Gate 2 - Per-PLC read-only
 
 A PLC in `WAGO_READONLY_HOSTS` (comma-separated), or with `# readonly` on its line in
-`WAGO_PLC_HOSTS_FILE`, refuses **both** `set_parameters` and `invoke_method` in **all** modes.
+`WAGO_PLC_HOSTS_FILE`, refuses `set_parameters`, `invoke_method`, and file uploads in **all** modes.
 Use this for a production PLC that the agent must never change.
 
 ```env
@@ -406,6 +406,13 @@ WAGO_READONLY_HOSTS=192.168.42.118,192.168.42.119
 - `apply.py` **refuses** a dangerous operation if `approved_by` is empty.
   The agent never writes a value in this field. With the CI workflow, the merge sets it from the approving reviewer.
 - If `AUDIT_LOG_FILE` is set, `apply.py` adds a record to the tamper-evident audit chain for each run.
+
+### File uploads in GitOps mode
+
+The ops files do not have a format for file uploads.
+Thus, in GitOps mode the server refuses `create_file` and `upload_file`.
+The audit log records each refusal as `refused: gitops mode`.
+To upload a file, use a server with `GITOPS_MODE=0`.
 
 ### Try it (dry run, no PLC changes)
 

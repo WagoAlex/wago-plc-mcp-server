@@ -60,6 +60,9 @@ One `read_watchlist` call returns all values in one request.
 | `download_file(plc_ip, file_id)` | Downloads the file content as base64 |
 | `get_file_metadata(plc_ip, file_id)` | Returns size and type without the file content |
 
+In GitOps mode (`GITOPS_MODE=1`), the server refuses `create_file` and `upload_file`.
+The audit log records each `create_file` and `upload_file` call, also when the server refuses it.
+
 > [!NOTE]
 > The class-instance and file tools follow the WDA specification, but we did not test them on real hardware.
 > No device in our test fleet has an `instantiations` or `file_id` parameter. See `docs/functional-test-status.md`.
@@ -115,7 +118,7 @@ These settings apply only to the HTTP server. The extension always uses stdio.
 | `PLC_PASSWORDS_FILE` | - | Path to a file with one `ip=pwd` per line (`#` comments) |
 | `PLC_PASSWORDS_<ip_underscores>` | - | Password for one PLC |
 | `MCP_API_KEY` | - | Bearer token for `/mcp`. The server makes one if this is not set. |
-| `GITOPS_MODE` | `0` | `1` returns YAML fragments instead of writes |
+| `GITOPS_MODE` | `0` | `1` returns YAML fragments instead of writes, and refuses file uploads |
 | `WAGO_GITOPS_REPO` | `wago-plc-config` | Config repository name in the `next_step` of the returned YAML. Set it for a fork or a renamed repository. |
 | `WAGO_READONLY_HOSTS` | - | PLC IPs, separated by commas, that refuse `set_parameters`, `invoke_method`, and file uploads in all modes |
 | `WAGO_ALLOW_WRITES` | - (writes allowed) | Fleet-wide switch. `true` allows writes. All other values (`false`, empty) make **all** PLCs read-only. |

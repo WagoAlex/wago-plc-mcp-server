@@ -40,7 +40,8 @@ For more examples and screen recordings, see [Example questions](https://github.
 
 - The server only reads. It refuses all writes until you select **Allow writes and method calls**.
 - The server refuses reboot, factory reset, and firmware methods. An administrator can allow one exact method.
-- An audit log records each write and each method call.
+- In GitOps mode, the server refuses file uploads. File uploads do not have a pull-request path yet.
+- An audit log records each write, each method call, and each file upload.
 
 ![Read, write, and critical write paths from Claude to a WAGO PLC](https://raw.githubusercontent.com/WagoAlex/wago-plc-mcp-server/main/docs/media/workflow-read-write-critical.svg)
 
