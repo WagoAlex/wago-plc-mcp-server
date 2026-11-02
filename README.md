@@ -53,10 +53,11 @@ For the full rules, see [How it works](https://github.com/WagoAlex/wago-plc-mcp-
 |---|---|
 | Connect many PLCs, install the WAGO skill, or watch the demos | [Claude Desktop and Claude Code](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/claude-desktop.md) |
 | Know what the server does on my PLCs | [How it works](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/how-it-works.md) |
-| Learn the internal operation step by step | [Learning page](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/how-the-server-works.html) ([Deutsch](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/how-the-server-works.de.html)). Download the file and open it in a browser. |
+| Learn the internal operation step by step | [Learning page](https://wagoalex.github.io/wago-plc-mcp-server/how-the-server-works.html) ([Deutsch](https://wagoalex.github.io/wago-plc-mcp-server/how-the-server-works.de.html)) |
 | Run one server for a team | [Deployment](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/deployment.md) |
 | Review each change in a pull request before it goes to a PLC | [GitOps](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/gitops/README.md) |
 | Update firmware | [Firmware updates](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/firmware-updates.md) |
+| See what a firmware update needs on one page | [Firmware update overview](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.html) ([Deutsch](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.de.html)) |
 | Configure TLS, API keys, and the audit log | [Security](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/security.md) |
 | Find all tools and settings | [Reference](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/reference.md) |
 | Find an answer to a common question | [FAQ](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/faq.md) |
