@@ -15,7 +15,8 @@ on:
     paths: [plcs/**, ops/**]
 
 permissions:
-  contents: write   # needed to commit ops file deletions after execution
+  contents: write        # needed to commit ops file deletions after execution
+  pull-requests: read    # needed to find the approving review in a private repo
 
 jobs:
   apply:
@@ -41,14 +42,18 @@ jobs:
             fwupdate/
 
       - name: Install deps
-        run: pip install --quiet httpx pyyaml python-dotenv loguru
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet httpx pyyaml python-dotenv loguru
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Detect changed YAML files
         id: changed
         run: |
           # .example.yaml files are templates, never applied - they carry an
           # empty approved_by and would fail the run they were merged in.
-          files=$(git diff --name-only HEAD~1 HEAD \
+          # --diff-filter=d: a deleted file has nothing to apply.
+          files=$(git diff --name-only --diff-filter=d HEAD~1 HEAD \
                   | grep -E '^(plcs|ops)/.+\.yaml$' \
                   | grep -v '\.example\.yaml$' || true)
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
@@ -113,7 +118,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          # ops/ only: the workspace also holds mcp-server/ and .venv/.
+          git add -A ops/
           if git diff --staged --quiet; then
             echo "No ops files were deleted."
           else

@@ -223,7 +223,8 @@ The record shows `self_approved: true`, so a later review can see that only one 
 
 **The settings of your config repository decide if two people must approve.**
 The tools record what occurred, but they cannot require a second person.
-To require a second person, go to **Settings → Branches → Branch protection rules** and enable branch protection on `main`:
+GitHub does not offer branch protection for a private repository on the Free plan.
+To require a second person on another plan, enable branch protection on `main` in **Settings → Branches → Branch protection rules**:
 
 1. Select *Require a pull request before merging*.
 2. Set *Require approvals* to 1.
