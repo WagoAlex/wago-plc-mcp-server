@@ -41,7 +41,7 @@ You create the config repository yourself, one time. After that, each change nee
 You need:
 
 - A GitHub repository that you control. Make it private, because it contains your PLC IP addresses and settings.
-- A Linux host that can reach the PLCs, for the self-hosted runner. It needs Python 3.11 or later with `pip`, and `git`. The host can be the same host as the Docker deployment.
+- A Linux host that can reach the PLCs, for the self-hosted runner. It needs `git`, Python 3.11 or later, `python3-venv`, and the `gh` CLI. CI uses `gh` to find the approver. The host can be the same host as the Docker deployment.
 - A GitHub tool for Claude, for example the GitHub MCP server or the `gh` CLI in Claude Code. Without a GitHub tool, Claude gives you the YAML and you commit it yourself.
 
 **Step 1 - Create the config repository**
@@ -62,6 +62,7 @@ You need:
    CI commits the deletion of `ops/` files after it runs them.
 4. Recommended: go to **Settings → Branches** and add a rule for `main` that requires a pull request with one approval.
    Without this rule, the person who proposes a change can also merge it.
+   GitHub does not offer this rule for a private repository on the Free plan. On that plan, the merge is the only gate.
 
 **Step 3 - Register a self-hosted runner**
 
