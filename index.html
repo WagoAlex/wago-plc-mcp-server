@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WAGO PLC MCP server guides</title>
+<meta name="description" content="Guides for the WAGO PLC MCP server in English and German.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap">
+<style>
+  :root {
+    --green: #6ec800; --green-hover: #8bd633; --anthracite: #1f2837;
+    --page: #eff0f1; --surface: #ffffff; --ink: #1f2837; --muted: #616a73; --rule: #dedfe1; --link: #1f2837;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --page: #1f2837; --surface: #333b48; --ink: #ffffff; --muted: #a5a8af; --rule: #616a73; --link: #ffffff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 400 1rem/1.5 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  header { background: var(--anthracite); color: #fff; padding: 32px 0 40px; }
+  .logo { display: block; width: 104px; height: auto; fill: var(--green); margin-bottom: 32px; }
+  h1 { margin: 0 0 8px; font-size: clamp(2rem, 1.4rem + 2.6vw, 3rem); line-height: 1.1; font-weight: 700; }
+  header p { margin: 0; color: #dedfe1; font-size: 1.125rem; }
+  main.wrap { padding-top: 32px; padding-bottom: 16px; }
+  .guide { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 32px; background: var(--surface); border-left: 6px solid var(--green); padding: 28px; margin-bottom: 20px; }
+  .tile { width: 56px; height: 56px; display: grid; place-items: center; background: var(--green); color: var(--anthracite); }
+  .label { margin: 0 0 6px; font-size: .75rem; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+  h2 { margin: 0 0 8px; font-size: 1.3rem; line-height: 1.2; font-weight: 700; }
+  h2 a { color: var(--link); text-decoration: none; }
+  h2 a:hover { text-decoration: underline; text-decoration-color: var(--green); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  .lang-block p:not(.label) { margin: 0 0 16px; }
+  .lang-block + .lang-block { border-left: 1px solid var(--rule); padding-left: 32px; }
+  .open { display: inline-block; min-height: 44px; padding: 10px 18px; background: var(--green); color: var(--anthracite); font-weight: 600; text-decoration: none; }
+  .open:hover { background: var(--green-hover); }
+  a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  footer.wrap { padding-top: 8px; padding-bottom: 40px; font-size: .875rem; color: var(--muted); }
+  footer a { color: var(--link); }
+  @media (max-width: 760px) {
+    .wrap { padding: 0 16px; }
+    .guide { grid-template-columns: 1fr; gap: 20px; padding: 20px; }
+    .lang-block + .lang-block { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <svg class="logo" viewBox="256.48 241.45 309.78 111.87" role="img" aria-label="WAGO"><path d="M460.53,293.85v7.09h9.92v6.38h-19.84v-19.84h42.52v-22.68h-56.69c-4.7,0-8.5,3.81-8.5,8.5v48.19 c0,4.7,3.81,8.5,8.5,8.5h48.19c4.7,0,8.5-3.81,8.5-8.5v-27.64H460.53z"/><path d="M557.76,264.79h-48.19c-4.7,0-8.5,3.81-8.5,8.5v48.19c0,4.7,3.81,8.5,8.5,8.5h48.19c4.7,0,8.5-3.81,8.5-8.5 v-48.19C566.26,268.6,562.45,264.79,557.76,264.79 M543.58,307.31h-19.84v-19.84h19.84V307.31z"/><path d="M381.88,264.79l-46.94,72.28h-8.13l10.55,16.25l34.8-16.25h-10.18l11.97-18.43h23.37v11.34h22.68v-65.2H381.88 z M381.31,307.31l16-24.64v24.64H381.31z"/><polygon points="283.44,329.99 303.11,299.71 303.11,329.99 330.34,329.99 377.28,257.7 384.63,257.7 374.08,241.45 339.27,257.7 349.99,257.7 325.78,294.99 325.78,264.79 298.74,264.79 279.15,294.96 279.15,264.79 256.48,264.79 256.48,329.99 "/></svg>
+    <h1>WAGO PLC MCP server</h1>
+    <p>Guides in English and German. <span lang="de">Anleitungen auf Englisch und Deutsch.</span></p>
+  </div>
+</header>
+<main class="wrap">
+    <section class="guide">
+      <div class="tile"><svg aria-hidden="true" width="28" height="28" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+  <path d="M20.803 14.207v-3.646l2.147-1.15-11.045-5.129-10.839 5.13 5.669 3.093v5.24l.27.225c.03.024 2.039 1.66 4.944 1.66 1.447 0 3.116-.406 4.873-1.619l.324-.224V12.52l2.157-1.155v2.843a1.48 1.48 0 0 0-.736 1.276 1.486 1.486 0 0 0 2.972 0c0-.545-.297-1.017-.735-1.276h-.001Zm-8.892-8.269 7.684 3.57-7.684 4.112-7.539-4.114 7.539-3.568Zm3.735 11.052c-3.557 2.241-6.519.63-7.41.024v-3.69l3.669 2.001 3.741-2.003v3.668Z"/>
+</svg></div>
+      <div class="lang-block">
+        <p class="label">English</p>
+        <h2><a href="how-the-server-works.html">How the server works</a></h2>
+        <p>Learn the parts, the startup, the tools, the safety gates, and the audit log.</p>
+        <a class="open" href="how-the-server-works.html" aria-label="Open page: How the server works">Open page</a>
+      </div>
+      <div class="lang-block" lang="de">
+        <p class="label">Deutsch</p>
+        <h2><a href="how-the-server-works.de.html">Wie der Server funktioniert</a></h2>
+        <p>Lernen Sie die Teile, den Start, die Tools, die Sicherheitsprüfungen und das Audit-Log kennen.</p>
+        <a class="open" href="how-the-server-works.de.html" aria-label="Seite öffnen: Wie der Server funktioniert">Seite öffnen</a>
+      </div>
+    </section>
+    <section class="guide">
+      <div class="tile"><svg aria-hidden="true" width="28" height="28" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+  <path d="M4.13 2v6.88h1.5V3.5h12.68v13.31h-3.19V20H12.2v1.5h3.98l3.63-3.63V2H4.13Z"/>
+  <path d="M13.99 13.73h-1.33v-1.19h-1.33v1.19H10v-1.19h-.67v-.85H8.18v-1.33h1.15V9.03H8.18V7.7h1.15V7H10V5.81h1.33V7h1.33V5.81h1.33V7h.67v.7h1.15v1.33h-1.15v1.33h1.15v1.33h-1.15v.85h-.67v1.19ZM10.65 8.4v2.75h2.68V8.4h-2.68Zm-1.9 7.44 1.06 1.06-3.95 3.95-3.95-3.95 1.06-1.06 2.14 2.13v-6.54h1.5v6.54l2.14-2.13ZM1 21.26h9.82v1.5H1v-1.5Z"/>
+</svg></div>
+      <div class="lang-block">
+        <p class="label">English</p>
+        <h2><a href="firmware-update-overview.html">Firmware update overview</a></h2>
+        <p>See what you need for a firmware update and how to run it.</p>
+        <a class="open" href="firmware-update-overview.html" aria-label="Open page: Firmware update overview">Open page</a>
+      </div>
+      <div class="lang-block" lang="de">
+        <p class="label">Deutsch</p>
+        <h2><a href="firmware-update-overview.de.html">Übersicht zum Firmware-Update</a></h2>
+        <p>Sehen Sie, was Sie für ein Firmware-Update brauchen und wie Sie es ausführen.</p>
+        <a class="open" href="firmware-update-overview.de.html" aria-label="Seite öffnen: Übersicht zum Firmware-Update">Seite öffnen</a>
+      </div>
+    </section>
+</main>
+<footer class="wrap"><a href="https://github.com/WagoAlex/wago-plc-mcp-server">Repository on GitHub</a></footer>
+</body>
+</html>
