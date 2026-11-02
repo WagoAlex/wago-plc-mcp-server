@@ -210,6 +210,7 @@ For all settings and failure cases, see [`fwupdate/README.md`](../fwupdate/READM
 
 | Question | Document |
 |---|---|
+| What do I need for an update? Show me one page. | [`docs/firmware-update-overview.html`](firmware-update-overview.html) ([Deutsch](firmware-update-overview.de.html)). Download the file and open it in a browser. |
 | Who approves an update, and how do I require two approvers? | [Approve a firmware update](firmware-approvals.md) |
 | How do I run an update, and what do I do if it fails? | [`fwupdate/README.md`](../fwupdate/README.md) |
 | What do the REST calls do? | [`docs/wda-firmware-update.md`](wda-firmware-update.md) |

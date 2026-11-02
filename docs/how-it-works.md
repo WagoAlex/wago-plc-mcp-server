@@ -2,6 +2,9 @@
 
 This page tells you what the server does on your PLCs and when it allows or refuses a write.
 
+To learn the internal operation step by step, use the learning page [`docs/how-the-server-works.html`](how-the-server-works.html) ([Deutsch](how-the-server-works.de.html)).
+Download the file and open it in a browser.
+
 ## Architecture
 
 ```mermaid
