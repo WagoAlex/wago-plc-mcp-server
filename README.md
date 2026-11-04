@@ -5,6 +5,7 @@
 [![Docker pulls](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?label=Docker%20pulls&color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![PyPI](https://img.shields.io/pypi/v/wago-plc-mcp-server?label=PyPI&color=6EC800)](https://pypi.org/project/wago-plc-mcp-server/)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-6EC800.svg)](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/LICENSE)
+[![Docs: GitHub Pages](https://img.shields.io/badge/Docs-GitHub%20Pages-6EC800)](https://wagoalex.github.io/wago-plc-mcp-server/)
 
 # wago-plc-mcp-server
 
@@ -58,6 +59,7 @@ For the full rules, see [How it works](https://github.com/WagoAlex/wago-plc-mcp-
 | Review each change in a pull request before it goes to a PLC | [GitOps](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/gitops/README.md) |
 | Update firmware | [Firmware updates](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/firmware-updates.md) |
 | See what a firmware update needs on one page | [Firmware update overview](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.html) ([Deutsch](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.de.html)) |
+| See all HTML pages, in English and German | [Project pages](https://wagoalex.github.io/wago-plc-mcp-server/) |
 | Configure TLS, API keys, and the audit log | [Security](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/security.md) |
 | Find all tools and settings | [Reference](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/reference.md) |
 | Find an answer to a common question | [FAQ](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/faq.md) |
