@@ -5,6 +5,7 @@
 [![Docker pulls](https://img.shields.io/docker/pulls/wagoalex/wago-plc-mcp-server?label=Docker%20pulls&color=6EC800)](https://hub.docker.com/r/wagoalex/wago-plc-mcp-server)
 [![PyPI](https://img.shields.io/pypi/v/wago-plc-mcp-server?label=PyPI&color=6EC800)](https://pypi.org/project/wago-plc-mcp-server/)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-6EC800.svg)](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/LICENSE)
+[![Docs: GitHub Pages](https://img.shields.io/badge/Docs-GitHub%20Pages-6EC800)](https://wagoalex.github.io/wago-plc-mcp-server/)
 
 # wago-plc-mcp-server
 
