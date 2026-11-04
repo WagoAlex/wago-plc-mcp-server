@@ -58,6 +58,7 @@ For the full rules, see [How it works](https://github.com/WagoAlex/wago-plc-mcp-
 | Review each change in a pull request before it goes to a PLC | [GitOps](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/gitops/README.md) |
 | Update firmware | [Firmware updates](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/firmware-updates.md) |
 | See what a firmware update needs on one page | [Firmware update overview](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.html) ([Deutsch](https://wagoalex.github.io/wago-plc-mcp-server/firmware-update-overview.de.html)) |
+| See all HTML pages, in English and German | [Project pages](https://wagoalex.github.io/wago-plc-mcp-server/) |
 | Configure TLS, API keys, and the audit log | [Security](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/security.md) |
 | Find all tools and settings | [Reference](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/reference.md) |
 | Find an answer to a common question | [FAQ](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/faq.md) |
