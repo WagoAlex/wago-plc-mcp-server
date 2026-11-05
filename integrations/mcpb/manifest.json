@@ -5,7 +5,7 @@
   "display_name": "WAGO PLC",
   "version": "2.4.4",
   "description": "Read and monitor WAGO PLC parameters over the WDA REST API. The server blocks writes until you allow them.",
-  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you select *Allow writes and method calls*. The server also refuses reboot, factory reset, and firmware methods, unless you allow one exact method in *Allowed dangerous methods*.\n\n**GitOps mode.** Select *GitOps mode* to get a YAML file for a reviewed pull request instead of a direct write.\n\nThis bundle is for one user and a few PLCs. For a shared or production fleet, use the Docker deployment: https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/deployment.md",
+  "long_description": "This extension connects Claude Desktop to WAGO PLCs (CC100, PFC100/200/300, Edge Controller, WP400, TP600) on your local network. It uses the WDA REST API over HTTPS.\n\n**Before you start.** Make sure that this computer can reach each PLC on HTTPS port 443. To test the connection, open https://<PLC IP address> in a browser. On a company laptop, a VPN or firewall can block this connection.\n\n**Read-only by default.** The server refuses parameter writes, method calls, and file uploads until you select *Allow writes and method calls*. The server also refuses reboot, factory reset, and firmware methods, unless you allow one exact method in *Allowed dangerous methods*.\n\n**GitOps mode.** Select *GitOps mode* to get a YAML file for a reviewed pull request instead of a direct write.\n\nThis bundle is for one user and a few PLCs. For a shared or production fleet, use the Docker deployment: https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/deployment.md",
   "author": {
     "name": "Alexander Fugmann",
     "email": "alexander.fugmann@wago.com",
@@ -73,171 +73,171 @@
     "plc_hosts": {
       "type": "string",
       "title": "PLC IP addresses",
-      "description": "Comma-separated list of PLC IP addresses. Example: 192.168.1.10,192.168.1.11. Use this field for a few PLCs. For many PLCs, use the file field below. You can use both fields together.",
+      "description": "Required unless you select a PLC IP list file below. Use commas between the addresses. Example: 192.168.1.10,192.168.1.11.",
       "default": "",
-      "required": false
-    },
-    "hosts_file": {
-      "type": "file",
-      "title": "PLC IP list file (optional, for many PLCs)",
-      "description": "A text file with one IP address on each line. A line that starts with '#' is a comment. This file is easier to manage than the field above when you have many PLCs. Enter at least one of the two IP fields.",
       "required": false
     },
     "username": {
       "type": "string",
       "title": "PLC username",
-      "description": "Web-based management (WBM) username on the PLCs. WDA allows only one username for each PLC. The server uses this username for every PLC in the list above.",
+      "description": "The WBM username on the PLCs. The server uses this username for all PLCs.",
       "default": "admin",
       "required": true
     },
     "password": {
       "type": "string",
       "title": "Default PLC password",
-      "description": "Password for that username. The server uses this password for every PLC unless you set a different password below. Your operating system keychain stores this password.",
+      "description": "The server uses this password for all PLCs, unless you set a different password below. Your operating system keychain stores this password.",
       "sensitive": true,
       "required": true
     },
+    "allow_writes": {
+      "type": "boolean",
+      "title": "Allow writes and method calls",
+      "description": "Off: Claude can only read the PLCs. On: Claude can change parameters, run methods, and upload files. Turn this on only for PLCs that you have permission to change. All fields below this field are optional.",
+      "default": false
+    },
+    "hosts_file": {
+      "type": "file",
+      "title": "Many PLCs: PLC IP list file",
+      "description": "Select a text file with one IP address on each line. A line that starts with # is a comment. The server also uses the addresses in the first field.",
+      "required": false
+    },
     "per_plc_passwords": {
       "type": "string",
-      "title": "Per-PLC passwords (optional, a few PLCs)",
-      "description": "Use this field only for PLCs with a different password than the default above. Enter comma-separated ip=password pairs. Example: 192.168.1.11=secretB,192.168.1.12=secretC. This field hides your text as you type. For many PLCs, use the file field below instead.",
+      "title": "Different passwords: IP=password pairs",
+      "description": "Use this field for a few PLCs with a different password. Use commas between the pairs. Example: 192.168.1.11=secretB,192.168.1.12=secretC. The form hides this text.",
       "sensitive": true,
       "default": "",
       "required": false
     },
     "passwords_file": {
       "type": "file",
-      "title": "Per-PLC passwords file (optional, many PLCs)",
-      "description": "A text file with one ip=password pair on each line. A line that starts with '#' is a comment. Unlike the field above, this file shows your text and you can edit it. If an IP address is in both places, the server uses the password from this file. This form does not hide the file content. Keep this file private: set file permissions and do not add it to a code repository.",
+      "title": "Different passwords: Per-PLC passwords file",
+      "description": "Select a text file with one IP=password pair on each line. This file has priority over the field above. The file is not encrypted. Windows: keep the file in your user folder, not in a synced folder such as OneDrive. Linux: set the file permission with chmod 600.",
       "required": false
-    },
-    "timeout_seconds": {
-      "type": "number",
-      "title": "Request timeout (seconds)",
-      "description": "The CC100 PLC needs 45 seconds or more. Other PLCs work with 15 seconds.",
-      "default": 45,
-      "min": 5,
-      "max": 300
-    },
-    "allow_writes": {
-      "type": "boolean",
-      "title": "Allow writes and method calls",
-      "description": "When off, every PLC allows only read access. When on, Claude can change parameters, run methods, and upload files on the listed PLCs. Select this setting only for PLCs that you have permission to change.",
-      "default": false
     },
     "readonly_hosts": {
       "type": "string",
-      "title": "Force read-only on these PLCs (optional)",
-      "description": "Comma-separated list of PLC IP addresses. These PLCs stay read-only even when 'Allow writes and method calls' is on.",
+      "title": "Safety: read-only PLCs",
+      "description": "These PLCs stay read-only when 'Allow writes and method calls' is on. Use commas between the IP addresses.",
+      "default": "",
+      "required": false
+    },
+    "allow_methods": {
+      "type": "string",
+      "title": "Safety: allowed dangerous methods",
+      "description": "The server refuses reboot, restart, factory reset, firmware, format, and 0-0-update-* methods. Enter exact method IDs to allow them in live mode. Use commas between the IDs. Example: 0-0-reboot-beginreboot. This field has no effect in GitOps mode.",
       "default": "",
       "required": false
     },
     "gitops_mode": {
       "type": "boolean",
       "title": "GitOps mode (propose changes for review)",
-      "description": "When on, the server does not write to the PLCs. Parameter writes and method calls return a YAML file for a pull request in your config repository. A person reviews the pull request, and CI applies it. This setting has an effect only when 'Allow writes and method calls' is on.",
+      "description": "On: the server does not write to the PLCs. Parameter writes and method calls return a YAML file for a pull request. A person reviews the pull request, and CI applies it. This setting has an effect only when 'Allow writes and method calls' is on.",
       "default": false
     },
     "gitops_repo": {
       "type": "string",
-      "title": "GitOps config repository (optional)",
-      "description": "Name of the repository that receives the YAML files. The server shows this name in the next step of each YAML file. Leave blank to use wago-plc-config.",
+      "title": "GitOps config repository",
+      "description": "The name of the repository that receives the YAML files. The server shows this name in the next step of each YAML file. Leave blank to use wago-plc-config.",
       "default": "wago-plc-config",
       "required": false
     },
-    "page_limit": {
-      "type": "number",
-      "title": "Bulk-read page size",
-      "description": "Number of parameters on each page when the server reads a PLC's full parameter list. The WDA API allows a maximum of 255, no matter what value you enter here.",
-      "default": 500,
-      "min": 50,
-      "max": 500
-    },
-    "max_concurrent_registrations": {
-      "type": "number",
-      "title": "Parallel PLC startup limit",
-      "description": "Number of PLCs that register at the same time when the server starts. Lower this number if a slow network causes registration timeouts.",
-      "default": 5,
-      "min": 1,
-      "max": 50
-    },
-    "max_concurrent_reads": {
-      "type": "number",
-      "title": "Parallel read limit (bulk reads)",
-      "description": "Number of PLCs that the server queries at the same time during one bulk-read call.",
-      "default": 10,
-      "min": 1,
-      "max": 50
-    },
     "tls_ca": {
       "type": "string",
-      "title": "Verify PLC TLS certificates (optional)",
-      "description": "Leave this field blank to skip certificate verification. This is the default setting. Enter 'true' to verify against your system trust store. Or enter the file path to a CA bundle.",
-      "default": "",
-      "required": false
-    },
-    "allow_methods": {
-      "type": "string",
-      "title": "Allowed dangerous methods (advanced)",
-      "description": "The server refuses reboot, restart, factory reset, firmware, format, and 0-0-update-* methods. Enter exact method IDs, separated by commas, to allow them in live mode. Example: 0-0-reboot-beginreboot. Leave blank to keep all of them blocked. This has no effect in GitOps mode.",
+      "title": "Security: verify PLC TLS certificates",
+      "description": "Blank: the server does not verify PLC certificates. true: the server uses the system trust store. A full file path: the server uses this CA bundle. Windows example: C:\\certs\\plc-ca.pem. Linux example: /etc/ssl/certs/plc-ca.pem.",
       "default": "",
       "required": false
     },
     "security_profile": {
       "type": "string",
-      "title": "Security profile (advanced)",
-      "description": "Leave blank for the default. Enter 'hardened' to stop the server at startup if PLC certificate verification is off. The hardened profile needs the field 'Verify PLC TLS certificates'.",
+      "title": "Security: profile",
+      "description": "Enter hardened to stop the server at startup if PLC certificate verification is off. Leave blank for the default.",
       "default": "",
       "required": false
     },
     "audit_log_file": {
       "type": "string",
-      "title": "Audit log file",
-      "description": "Path of the hash-chained audit log. The server records each write, method call, and refusal in this file. Do not leave it blank: a blank value disables the local audit log.",
-      "default": "${HOME}/.wago-plc-mcp/audit.log",
+      "title": "Logs: audit log file",
+      "description": "The server records each write, method call, and refusal in this file. Do not leave this field blank: a blank value disables the local audit log. ~ is your user folder on Windows and Linux. Windows example: C:\\Users\\name\\.wago-plc-mcp\\audit.log. Linux example: /home/name/.wago-plc-mcp/audit.log.",
+      "default": "~/.wago-plc-mcp/audit.log",
+      "required": false
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Logs: detail level",
+      "description": "Enter DEBUG, INFO, WARNING, or ERROR. WARNING shows only important messages. Use DEBUG to find a connection problem.",
+      "default": "WARNING",
+      "required": false
+    },
+    "log_file": {
+      "type": "string",
+      "title": "Logs: debug log file",
+      "description": "Leave blank to log only to the Claude Desktop log. ~ is your user folder on Windows and Linux. Example: ~/.wago-plc-mcp/debug.log.",
+      "default": "",
       "required": false
     },
     "audit_syslog": {
       "type": "string",
-      "title": "Audit records to syslog (optional)",
-      "description": "Also send each hash-chained audit record to a syslog server. Example: udp://10.0.0.5:514 or tcp://10.0.0.5:514. Leave blank to use only the local file.",
+      "title": "Logs: audit records to syslog",
+      "description": "The server also sends each audit record to this syslog server. Example: udp://10.0.0.5:514 or tcp://10.0.0.5:514. Leave blank to use only the local file.",
       "default": "",
       "required": false
     },
     "syslog_host": {
       "type": "string",
-      "title": "SIEM syslog host (optional)",
-      "description": "Host name or IP of a syslog or SIEM server that receives the audit entries. When you set it, the server keeps fewer local audit files (2 instead of 5). Leave blank to send nothing. Both syslog fields send audit entries. Most setups need only one of them.",
+      "title": "Logs: SIEM syslog host",
+      "description": "The host name or IP address of a SIEM that receives the audit records. The server then keeps 2 local audit files instead of 5. Most setups need only one of the two syslog destinations.",
       "default": "",
       "required": false
     },
     "syslog_port": {
       "type": "number",
-      "title": "SIEM syslog port",
-      "description": "Port of the SIEM syslog host. The server uses it only when 'SIEM syslog host' is set.",
+      "title": "Logs: SIEM syslog port",
+      "description": "The server uses this port only when 'Logs: SIEM syslog host' has a value.",
       "default": 514,
       "min": 1,
       "max": 65535
     },
     "syslog_tcp": {
       "type": "boolean",
-      "title": "SIEM syslog over TCP",
-      "description": "When on, the server sends to the SIEM syslog host over TCP. When off, it uses UDP.",
+      "title": "Logs: SIEM syslog over TCP",
+      "description": "On: the server sends to the SIEM syslog host over TCP. Off: the server uses UDP.",
       "default": false
     },
-    "log_file": {
-      "type": "string",
-      "title": "Debug log file (optional)",
-      "description": "Path of a file for the server log. Leave blank to log only to the Claude Desktop log. Use it with 'Log detail level' DEBUG to find a problem.",
-      "default": "",
-      "required": false
+    "timeout_seconds": {
+      "type": "number",
+      "title": "Tuning: request timeout (seconds)",
+      "description": "The CC100 PLC needs 45 seconds or more. Other PLCs work with 15 seconds.",
+      "default": 45,
+      "min": 5,
+      "max": 300
     },
-    "log_level": {
-      "type": "string",
-      "title": "Log detail level",
-      "description": "Enter DEBUG, INFO, WARNING, or ERROR. WARNING shows only important messages. Use DEBUG to find a connection problem.",
-      "default": "WARNING",
-      "required": false
+    "page_limit": {
+      "type": "number",
+      "title": "Tuning: bulk-read page size",
+      "description": "The number of parameters on each page when the server reads a full parameter list. The WDA API returns a maximum of 255 on each page.",
+      "default": 500,
+      "min": 50,
+      "max": 500
+    },
+    "max_concurrent_registrations": {
+      "type": "number",
+      "title": "Tuning: parallel PLC startup limit",
+      "description": "The number of PLCs that register at the same time when the server starts. Lower this number if a slow network causes registration timeouts.",
+      "default": 5,
+      "min": 1,
+      "max": 50
+    },
+    "max_concurrent_reads": {
+      "type": "number",
+      "title": "Tuning: parallel read limit",
+      "description": "The number of PLCs that the server queries at the same time during one bulk-read call.",
+      "default": 10,
+      "min": 1,
+      "max": 50
     }
   },
   "compatibility": {

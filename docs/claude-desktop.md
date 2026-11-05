@@ -28,8 +28,8 @@ For a shared server, go to [Deployment options](deployment.md#deployment-options
 ### Step 2 - Complete the install form
 
 You must supply the PLC IP address, the WBM username (usually `admin`), and the password.
-All other fields have default values.
-The form also has the advanced settings: allowed dangerous methods, security profile, audit log file, syslog export, and debug log file.
+These fields and **Allow writes and method calls** are at the top of the form.
+All other fields are optional. They have a group name in the title: **Many PLCs**, **Different passwords**, **Safety**, **GitOps**, **Security**, **Logs**, and **Tuning**.
 For the meaning of each setting, see the [Configuration reference](reference.md#configuration-reference).
 
 **A small number of PLCs with the same password:**
@@ -58,9 +58,17 @@ For the meaning of each setting, see the [Configuration reference](reference.md#
    192.168.1.12=a-different-password-for-this-one
    ```
 
-3. Select the files with the **Browse...** buttons next to **PLC IP list file** and **Per-PLC passwords file**.
+3. Select the files with the **Browse...** buttons next to **Many PLCs: PLC IP list file** and **Different passwords: Per-PLC passwords file**.
 
 The server merges the IP field and the IP file. You can use both.
+
+**File paths on Windows and Linux:**
+
+| Item | Windows | Linux |
+|---|---|---|
+| Your user folder (`~`) | `C:\Users\name` | `/home/name` |
+| Audit log (default) | `C:\Users\name\.wago-plc-mcp\audit.log` | `/home/name/.wago-plc-mcp/audit.log` |
+| Keep the password file private | Keep the file in your user folder, not in a synced folder such as OneDrive | Run `chmod 600` on the file |
 
 > [!WARNING]
 > The IPs and passwords above are examples. Replace them with your values.
@@ -76,7 +84,10 @@ For more information, see [GitOps write-gate](gitops/README.md#gitops-write-gate
 
 ### Step 3 - Ask a question
 
-Save the form. Then ask Claude in plain English:
+1. Save the form.
+2. Make sure that this computer can reach each PLC on HTTPS port 443. To test the connection, open `https://<PLC IP address>` in a browser. On a company laptop, a VPN or firewall can block this connection.
+3. Open a new chat.
+4. Ask Claude in plain English:
 
 > "List my PLCs"
 > "What firmware is running on 192.168.1.10?"

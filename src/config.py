@@ -18,6 +18,16 @@ def read_secret(name: str) -> str | None:
         return None
 
 
+def resolve_user_path(path: str | None) -> str | None:
+    """Expand `~` and a literal `${HOME}` in a log path from the environment.
+
+    A .mcpb install keeps the `${HOME}` of a saved form value: mcpb does not expand
+    placeholders inside user_config values. loguru would read `{HOME}` as a format
+    field and raise KeyError. expanduser uses USERPROFILE on Windows.
+    """
+    return os.path.expanduser(path.replace("${HOME}", "~")) if path else path
+
+
 def check_security_profile() -> None:
     """Fail closed at startup when SECURITY_PROFILE=hardened but TLS isn't
     fully configured on both legs (server<->PLC and client<->server).
