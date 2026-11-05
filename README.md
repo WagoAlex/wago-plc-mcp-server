@@ -20,10 +20,11 @@ You do not need scripts or parameter IDs.
 You need Claude Desktop and a PLC that your computer can reach on the network.
 
 1. Download `wago-plc-mcp-server-<version>.mcpb` from the [latest release](https://github.com/WagoAlex/wago-plc-mcp-server/releases/latest).
-2. In Claude Desktop, go to **Settings → Extensions**.
-3. Drag the `.mcpb` file onto the window.
-4. In the form, enter the PLC IP address and the WBM password. Then save the form.
-5. Ask Claude: "List my PLCs".
+2. Install the `.mcpb` file:
+   - **Linux:** Double-click the file.
+   - **Windows and macOS:** Drag the file onto **Settings → Extensions** in Claude Desktop.
+3. In the form, enter the PLC IP address and the WBM password. Then save the form.
+4. Ask Claude: "List my PLCs".
 
 If the installer does not start on Windows, or if you have many PLCs, see [Claude Desktop and Claude Code](https://github.com/WagoAlex/wago-plc-mcp-server/blob/main/docs/claude-desktop.md).
 
