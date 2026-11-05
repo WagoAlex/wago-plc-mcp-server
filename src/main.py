@@ -440,24 +440,31 @@ async def set_parameters(
     parameters: list of {"id": str, "value": any}
     Example: [{"id": "0-0-systemtime-local-now", "value": "2026-05-13T14:30:00"}]
     """
+    # Refusals record IDs only: redaction matches known names, so a mistyped ID
+    # must not put the value of a secret into the permanent audit chain.
+    refused_details = {"param_ids": [p.get("id") for p in parameters]}
     plc, err = _require_plc(plc_ip)
     if err:
+        _audit_log("set_parameters", plc_ip, refused_details, "refused: PLC not registered")
         return err
 
     if _is_readonly(plc_ip):
-        _audit_log("set_parameters", plc_ip, {"params": parameters}, "refused: read-only host")
+        _audit_log("set_parameters", plc_ip, refused_details, "refused: read-only host")
         return {"error": f"PLC {plc_ip} is read-only (WAGO_ALLOW_WRITES / WAGO_READONLY_HOSTS / fleet.txt '# readonly'); writes refused."}
 
     unknown = [p.get("id") for p in parameters if p.get("id") not in plc.parameters]
     if unknown:
+        _audit_log("set_parameters", plc_ip, refused_details, "refused: unknown parameter")
         return {"error": f"Unknown parameter IDs: {unknown}"}
 
     read_only = [p["id"] for p in parameters if p["id"] not in plc.param_writeable]
     if read_only:
+        _audit_log("set_parameters", plc_ip, refused_details, "refused: parameter not writeable")
         return {"error": f"Read-only parameter IDs (cannot be set): {read_only}"}
 
     if _GITOPS_MODE:
         from gitops import desired_state_fragment
+        _audit_log("set_parameters.proposed", plc_ip, {"params": parameters}, "proposed")
         return desired_state_fragment(plc_ip, parameters, repo=_GITOPS_REPO)
 
     try:
@@ -583,8 +590,10 @@ async def invoke_method(
     """
     plc, err = _require_plc(plc_ip)
     if err:
+        _audit_log("invoke_method", plc_ip, {"method": method_id}, "refused: PLC not registered")
         return err
     if method_id not in plc.methods:
+        _audit_log("invoke_method", plc_ip, {"method": method_id}, "refused: unknown method")
         matches = get_close_matches(method_id, plc.methods, n=3, cutoff=0.6)
         return {
             "error": f"Unknown method '{method_id}'"
@@ -592,7 +601,7 @@ async def invoke_method(
         }
 
     if _is_readonly(plc_ip):
-        _audit_log("invoke_method", plc_ip, {"method": method_id, "args": arguments or {}}, "refused: read-only host")
+        _audit_log("invoke_method", plc_ip, {"method": method_id}, "refused: read-only host")
         return {"error": f"PLC {plc_ip} is read-only (WAGO_ALLOW_WRITES / WAGO_READONLY_HOSTS / fleet.txt '# readonly'); method invocation refused."}
 
     # Gate 1: a dangerous method (reboot/reset/firmware) is never executed
@@ -602,9 +611,9 @@ async def invoke_method(
 
     if _GITOPS_MODE:
         from gitops import ops_fragment
-        if dangerous:
-            _audit_log("invoke_method.proposed", plc_ip,
-                       {"method": method_id, "args": arguments or {}, "danger": True}, "proposed-critical")
+        _audit_log("invoke_method.proposed", plc_ip,
+                   {"method": method_id, "args": arguments or {}, "danger": dangerous},
+                   "proposed-critical" if dangerous else "proposed")
         return ops_fragment(plc_ip, method_id, arguments, _AGENT_ID, dangerous=dangerous, repo=_GITOPS_REPO)
 
     if dangerous:
@@ -796,13 +805,15 @@ def _file_write_refused(action: str, plc_ip: str, details: dict) -> dict | None:
 @mcp.tool()
 async def create_file(ctx: Context, plc_ip: str, context_parameter_id: str) -> dict:
     """Allocate a file_id for uploading content into a file_id-typed parameter."""
+    details = {"context": context_parameter_id}
     plc, err = _require_plc(plc_ip)
     if err:
+        _audit_log("create_file", plc_ip, details, "refused: PLC not registered")
         return err
-    details = {"context": context_parameter_id}
     if refused := _file_write_refused("create_file", plc_ip, details):
         return refused
     if context_parameter_id not in plc.parameters:
+        _audit_log("create_file", plc_ip, details, "refused: unknown parameter")
         return {"error": f"Unknown parameter '{context_parameter_id}'"}
     try:
         file_id = await plc.client.create_file(context_parameter_id)
@@ -820,6 +831,7 @@ async def upload_file(
     """Upload whole file content (base64-encoded) to a file_id from create_file."""
     plc, err = _require_plc(plc_ip)
     if err:
+        _audit_log("upload_file", plc_ip, {"file_id": file_id}, "refused: PLC not registered")
         return err
     if refused := _file_write_refused("upload_file", plc_ip, {"file_id": file_id}):
         return refused
