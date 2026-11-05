@@ -64,7 +64,8 @@ You can copy these example files: [plc_hosts.example.txt](examples/plc_hosts.exa
 3. Select the files with the **Browse...** buttons next to **Many PLCs: PLC IP list file** and **Different passwords: Per-PLC passwords file**.
 
 The server merges the IP field and the IP file. You can use both.
-A per-PLC password cannot contain `#` or `,`. This applies to the IP=password field and to the password file. It does not apply to **Default PLC password**.
+In the password file, all text after `=` is the password, so a password can contain `#` and `,`. Write each comment on its own line.
+In the IP=password field, a password cannot contain `,`.
 
 **File paths on Windows and Linux:**
 

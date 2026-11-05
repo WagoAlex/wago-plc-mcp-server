@@ -361,9 +361,11 @@ runs `docker rm -f wmcp && docker compose up -d`.
   The server log has a `[<ip>] skipped` line with the reason.
   Tell the user to open `https://<ip>` in a browser on the same computer.
   If this fails, a VPN, a firewall, or the PLC itself is the cause.
-- **A login fails for a PLC with its own password** - a per-PLC password cannot
-  contain `#` or `,`. The server cuts the password at `#` and splits it at `,`.
-  The server does not show a warning. **Default PLC password** does not have this limit.
+- **A login fails for a PLC with its own password** - in the IP=password field,
+  a password cannot contain `,`. The server splits the field at each comma and logs
+  a warning. In the password file, all text after `=` is the password, so a comment
+  on the same line becomes part of the password. Versions up to 2.4.4 also cut a
+  per-PLC password at `#`, with no warning.
 - **The WAGO tools are absent, or the status is "Server disconnected"** - the
   server did not start. Ask the user for the extension log. Do not guess the cause.
   Do not tell the user to edit the files of the installed extension.

@@ -114,8 +114,8 @@ These settings apply only to the HTTP server. The extension always uses stdio.
 | `WAGO_PLC_HOSTS_FILE` | - | Path to a file with one IP per line |
 | `DEFAULT_PLC_USERNAME` | `admin` | Shared username |
 | `DEFAULT_PLC_PASSWORD` | `wago` | Shared password. Use a Docker Secret instead. |
-| `PLC_PASSWORDS` | - | Per-PLC passwords as `ip=pwd,ip=pwd` |
-| `PLC_PASSWORDS_FILE` | - | Path to a file with one `ip=pwd` per line (`#` comments) |
+| `PLC_PASSWORDS` | - | Per-PLC passwords as `ip=pwd,ip=pwd`. A password cannot contain `,`. |
+| `PLC_PASSWORDS_FILE` | - | Path to a file with one `ip=pwd` per line. A comment has its own line that starts with `#`. |
 | `PLC_PASSWORDS_<ip_underscores>` | - | Password for one PLC |
 | `MCP_API_KEY` | - | Bearer token for `/mcp`. The server makes one if this is not set. |
 | `GITOPS_MODE` | `0` | `1` returns YAML fragments instead of writes, and refuses file uploads |
