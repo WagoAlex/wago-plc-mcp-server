@@ -1,0 +1,20 @@
+# PLC IP list file for the WAGO PLC extension or WAGO_PLC_HOSTS_FILE.
+# Use this file for more than 10 PLCs. For fewer PLCs, use the form field.
+#
+# 1. Copy this file and replace the example IP addresses.
+# 2. Save the file as plain text.
+# 3. Select the file in "Many PLCs: PLC IP list file".
+#
+# Write one IP address on each line. Text after '#' is a comment.
+# A comment with the word "readonly" keeps that PLC read-only.
+
+# Packaging line
+192.168.1.10   # PFC200
+192.168.1.11   # PFC200
+
+# Utility room
+192.168.1.12   # CC100
+
+# Line 2
+192.168.1.20   # Edge Controller
+192.168.1.21   # Edge Controller, readonly
