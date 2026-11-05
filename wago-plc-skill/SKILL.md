@@ -14,6 +14,7 @@ description: >-
   even without the words WAGO or PLC if the conversation is about an
   industrial controller or factory-floor device by IP. Does not cover raw
   WDA REST/HTTP internals - this is the MCP tool layer, not the protocol.
+  Also covers adding PLCs and server startup problems.
 license: MPL-2.0
 compatibility: >-
   Requires the wago-plc-mcp-server MCP server connected and reachable to
@@ -318,6 +319,33 @@ fleet without first confirming via `describe_plc` and a live
 units are slower to respond (ARM CPU) - don't assume PFC200/PFC300 response
 times apply uniformly across the fleet.
 
+## Add a PLC
+
+You cannot add or remove a PLC. No tool does this, and this is intentional.
+A person edits the PLC list. The server reads the list only when it starts.
+
+Tell the user to change the fields in **Settings → Extensions → WAGO PLC**:
+
+| Task | Field |
+|---|---|
+| Up to 10 PLCs | **PLC IP addresses**, with commas between the addresses |
+| More than 10 PLCs | **Many PLCs: PLC IP list file** |
+| A few PLCs with a different password | **Different passwords: IP=password pairs** |
+| Many PLCs with different passwords | **Different passwords: Per-PLC passwords file** |
+| One read-only PLC | Add a `# readonly` comment to its line in the IP list file |
+
+The repository has templates for the two files:
+https://github.com/WagoAlex/wago-plc-mcp-server/tree/main/docs/examples
+
+After a change, tell the user to do these steps:
+
+1. Save the form.
+2. Turn the extension off, then on.
+3. Open a new chat.
+
+On a Docker server, the user edits `WAGO_PLC_HOSTS` or `data/fleet.txt`, then
+runs `docker rm -f wmcp && docker compose up -d`.
+
 ## When something goes wrong
 
 - **"Unable to connect" / timeout** - one of three things: wrong IP, a
@@ -328,6 +356,20 @@ times apply uniformly across the fleet.
   but the device never answered - often a slow/loaded device rather than a
   network problem). Some older controllers also take 30+ seconds to
   respond.
+- **`list_plcs` is empty, or the error says "not registered"** - the server
+  skips a PLC that fails at startup. It does not try again until it restarts.
+  The server log has a `[<ip>] skipped` line with the reason.
+  Tell the user to open `https://<ip>` in a browser on the same computer.
+  If this fails, a VPN, a firewall, or the PLC itself is the cause.
+- **A login fails for a PLC with its own password** - a per-PLC password cannot
+  contain `#` or `,`. The server cuts the password at `#` and splits it at `,`.
+  The server does not show a warning. **Default PLC password** does not have this limit.
+- **The WAGO tools are absent, or the status is "Server disconnected"** - the
+  server did not start. Ask the user for the extension log. Do not guess the cause.
+  Do not tell the user to edit the files of the installed extension.
+- **The log shows `KeyError: 'HOME'`** - versions 2.4.2 to 2.4.4 have this bug.
+  Tell the user to install the latest release. Alternatively, set the audit log
+  field to a full path, for example `C:\Users\name\.wago-plc-mcp\audit.log`.
 - **"Parameter not found"** - use `find_parameters` first; a name that
   worked on one device generation may not exist, or may exist under a
   completely different path, on another (see "Device generations" above).

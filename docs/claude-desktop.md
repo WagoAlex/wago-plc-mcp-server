@@ -39,6 +39,9 @@ For the meaning of each setting, see the [Configuration reference](reference.md#
 
 **Many PLCs, or PLCs with different passwords:**
 
+Use a form field for up to 10 PLCs. Use a file for more than 10 PLCs. The server treats both in the same way.
+You can copy these example files: [plc_hosts.example.txt](examples/plc_hosts.example.txt) and [plc_passwords.example.txt](examples/plc_passwords.example.txt).
+
 1. Make a text file with one IP on each line, for example `~/.wago-plc-mcp/plc_hosts.txt`:
 
    ```
@@ -61,6 +64,7 @@ For the meaning of each setting, see the [Configuration reference](reference.md#
 3. Select the files with the **Browse...** buttons next to **Many PLCs: PLC IP list file** and **Different passwords: Per-PLC passwords file**.
 
 The server merges the IP field and the IP file. You can use both.
+A per-PLC password cannot contain `#` or `,`. This applies to the IP=password field and to the password file. It does not apply to **Default PLC password**.
 
 **File paths on Windows and Linux:**
 
