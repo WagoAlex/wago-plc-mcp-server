@@ -194,7 +194,7 @@
       "type": "string",
       "title": "Audit log file",
       "description": "Path of the hash-chained audit log. The server records each write, method call, and refusal in this file. Do not leave it blank: a blank value disables the local audit log.",
-      "default": "${HOME}/.wago-plc-mcp/audit.log",
+      "default": "~/.wago-plc-mcp/audit.log",
       "required": false
     },
     "audit_syslog": {

@@ -21,18 +21,18 @@ from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
-from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify
+from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify, resolve_user_path
 from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods, writes_allowed
 
 # ───────────────────────── Bootstrap ─────────────────────────
 
 load_dotenv()
 setup_logging(
-    log_file=os.getenv("LOG_FILE"),
+    log_file=resolve_user_path(os.getenv("LOG_FILE")),
     level=os.getenv("LOG_LEVEL", "INFO"),
 )
 setup_audit_logging(
-    audit_log_file=os.getenv("AUDIT_LOG_FILE"),
+    audit_log_file=resolve_user_path(os.getenv("AUDIT_LOG_FILE")),
     syslog_host=os.getenv("SYSLOG_HOST") or None,
     syslog_port=int(os.getenv("SYSLOG_PORT", "514")),
     syslog_tcp=os.getenv("SYSLOG_TCP", "").lower() in {"1", "true"},
@@ -199,7 +199,7 @@ async def get_plc_audit_log(
     plus action-specific fields.
     """
     limit = min(max(1, limit), 500)
-    audit_path = Path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
+    audit_path = Path(resolve_user_path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG)))
 
     if not audit_path.exists():
         return {"entries": [], "total": 0, "note": "Audit log not yet created"}
@@ -916,7 +916,7 @@ def wago_assistant(query: str) -> list[base.Message]:
 async def main() -> None:
     global _AGENT_ID
     check_security_profile()  # fail closed before touching any PLC in plaintext
-    _seed_audit_hash(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG))
+    _seed_audit_hash(resolve_user_path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG)))
 
     plcs = parse_plcs_from_env()
     logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")
