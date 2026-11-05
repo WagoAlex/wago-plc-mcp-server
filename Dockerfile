@@ -1,3 +1,22 @@
+# curl from source: Debian trixie has 8.14.1 and backports has 8.21.0, both with open
+# CVEs on curl.se. Only the healthcheck uses curl, so this build keeps it self-contained.
+# ponytail: pinned by hand, CI does not scan the image. Update both values for a new
+# curl release, after you check the .asc signature (key 27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2).
+FROM python:3.14-slim AS curl-build
+ARG CURL_VERSION=8.23.0
+ARG CURL_SHA256=e3de77cfa6367083c776a26647fc9f633b538c06c3baa73d931a252ac8f72b49
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc make libc6-dev libssl-dev \
+    && python -c "import urllib.request as u; u.urlretrieve('https://curl.se/download/curl-${CURL_VERSION}.tar.gz', '/tmp/curl.tar.gz')" \
+    && echo "${CURL_SHA256}  /tmp/curl.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/curl.tar.gz -C /tmp \
+    && cd "/tmp/curl-${CURL_VERSION}" \
+    && ./configure --with-openssl --disable-shared --disable-ldap --disable-manual \
+        --without-libpsl --without-nghttp2 --without-libidn2 --without-brotli --without-zstd \
+    && make -j"$(nproc)" \
+    && make install \
+    && strip /usr/local/bin/curl
+
 FROM python:3.14-slim AS base
 
 # MCP Registry ownership marker for the OCI package; must equal server.json "name"
@@ -6,9 +25,7 @@ LABEL io.modelcontextprotocol.server.name="io.github.WagoAlex/wago-plc-mcp-serve
 WORKDIR /app
 
 # curl is required for the docker-compose healthcheck
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=curl-build /usr/local/bin/curl /usr/local/bin/curl
 
 # uv for fast, reproducible dependency resolution
 RUN pip install --no-cache-dir uv
