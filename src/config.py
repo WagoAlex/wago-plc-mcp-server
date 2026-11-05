@@ -110,24 +110,32 @@ def _load_per_plc_secrets() -> dict[str, str]:
     return result
 
 
-def _parse_password_overrides(blob: str) -> dict[str, str]:
-    """Parse 'ip=pwd' pairs, comma- or newline-separated, into {ip: password}.
-
-    Comma form is PLC_PASSWORDS (one .mcpb text field); newline form is the
-    contents of PLC_PASSWORDS_FILE (one .mcpb file picker) - a masked
-    single-line field stops being usable once there are more than a handful
-    of overrides, so a plain file with one 'ip=password' per line is the
-    scale-up path, mirroring WAGO_PLC_HOSTS_FILE for the host list itself.
-    '#' starts a comment, consistent with WAGO_PLC_HOSTS_FILE.
-    """
+def _password_pairs(entries: list[str], source: str, unit: str) -> dict[str, str]:
+    """Parse 'ip=pwd' entries into {ip: password}. Log the position of a problem, never its text."""
     result: dict[str, str] = {}
-    for pair in re.split(r"[,\n]", blob):
-        line = pair.split("#")[0].strip()
-        ip, sep, pwd = line.partition("=")
-        ip, pwd = ip.strip(), pwd.strip()
+    for number, entry in enumerate(entries, 1):
+        ip, sep, pwd = (part.strip() for part in entry.partition("="))
         if sep and ip and pwd:
             result[ip] = pwd
+            if " #" in pwd:
+                logger.warning(
+                    f"[config] {source} {unit} {number}: the password contains ' #' and the server uses "
+                    "the full text. Write a comment on its own line."
+                )
+        elif entry.strip():
+            logger.warning(f"[config] {source} {unit} {number}: not ip=password - skipping")
     return result
+
+
+def _parse_password_field(blob: str) -> dict[str, str]:
+    """PLC_PASSWORDS: comma-separated pairs, so a password cannot contain a comma."""
+    return _password_pairs(blob.split(","), "PLC_PASSWORDS", "entry")
+
+
+def _parse_password_file(text: str) -> dict[str, str]:
+    """PLC_PASSWORDS_FILE: one pair per line. A comment has its own line, so a password can hold any character."""
+    lines = ["" if line.lstrip().startswith("#") else line for line in text.splitlines()]
+    return _password_pairs(lines, "PLC_PASSWORDS_FILE", "line")
 
 
 def parse_plcs_from_env() -> list[tuple[str, str, str]]:
@@ -160,12 +168,12 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
             "[config] DEFAULT_PLC_PASSWORD is a known factory default - "
             "set a strong password via Docker Secret (plc_default_password) or env var"
         )
-    password_overrides = _parse_password_overrides(os.getenv("PLC_PASSWORDS", ""))
+    password_overrides = _parse_password_field(os.getenv("PLC_PASSWORDS", ""))
     overrides_file = os.getenv("PLC_PASSWORDS_FILE", "").strip()
     if overrides_file:
         p = Path(overrides_file)
         if p.exists():
-            password_overrides = {**password_overrides, **_parse_password_overrides(p.read_text())}
+            password_overrides = {**password_overrides, **_parse_password_file(p.read_text())}
         else:
             logger.warning(f"[config] PLC_PASSWORDS_FILE={overrides_file} not found - skipping")
     per_plc_secrets = {**password_overrides, **_load_per_plc_secrets()}
