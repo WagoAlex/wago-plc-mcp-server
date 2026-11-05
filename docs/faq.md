@@ -37,7 +37,7 @@ PLC_PASSWORDS_FILE=/app/data/passwords.txt        # one ip=password per line, fo
 ```
 
 In Docker, use per-PLC secrets (`secrets/plc_password_<ip_underscores>.txt`). They have priority over all the variables above.
-In the Claude Desktop extension, use the **Per-PLC passwords file** field.
+In the Claude Desktop extension, use the **Different passwords: Per-PLC passwords file** field.
 
 </details>
 
