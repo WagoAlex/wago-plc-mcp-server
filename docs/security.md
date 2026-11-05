@@ -82,7 +82,8 @@ The check makes sure that TLS is configured. It does not check if a trusted CA s
 
 ## Audit log
 
-The server adds each `set_parameters` and `invoke_method` call to a hash-chained JSON Lines log.
+The server adds each `set_parameters`, `invoke_method`, `create_file`, and `upload_file` call to a hash-chained JSON Lines log.
+This also applies to a call that the server refuses, and to a proposal in GitOps mode.
 Each entry contains the hash of the previous entry, so you can find changes to the file.
 
 ```
@@ -93,6 +94,11 @@ Entry 3  {"ts":"…","action":"set_parameters",…,"prev":"7b2e…91fa"}
 
 Each entry has the timestamp, PLC IP, parameter IDs and values, and `key-<first 8 characters of the API key>`.
 With one key for each engineer, you can see who made each change.
+
+If `set_parameters` refuses a call, the entry has the parameter IDs but not the values.
+If `invoke_method` refuses an unknown method, an unregistered PLC, or a read-only host, the entry has the method ID but not the arguments.
+If the server denies a dangerous method, the entry also has the arguments.
+The redaction finds secrets by name, so this rule keeps a secret with a mistyped name out of the log.
 
 ```bash
 # Tail live log
