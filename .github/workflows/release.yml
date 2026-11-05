@@ -65,6 +65,27 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Stop before anything is published. The .mcpb ships uv.lock, so a flagged pin
+      # reaches users. only-fixed: a finding with no fix cannot block a release.
+      - name: Generate SBOM for the CVE gate
+        if: inputs.resume_version == ''
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-gate.json
+          upload-artifact: false
+
+      - name: Stop on a fixable HIGH or CRITICAL CVE
+        if: inputs.resume_version == ''
+        uses: anchore/scan-action@v7
+        with:
+          sbom: sbom-gate.json
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+          output-format: table
+
       # docker/setup-buildx-action@v3 and docker/login-action@v3 use Node.js 20
       # which GitHub forced to Node.js 24 on 2026-06-16, breaking secret injection.
       # Using plain shell commands until upstream actions ship Node.js 24 builds.

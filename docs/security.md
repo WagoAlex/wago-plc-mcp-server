@@ -119,7 +119,7 @@ To send each record to a syslog collector outside the host, set `AUDIT_SYSLOG=ud
 | TLS - MCP endpoint | ⚙️ Off by default. Enable with `MCP_TLS_CERT` and `MCP_TLS_KEY`. |
 | CycloneDX SBOM | ✅ Published with each release image |
 | Docker Secrets | ✅ For PLC passwords, the MCP key, and TLS certificates |
-| CVE scanning | ✅ Weekly grype scan of the SBOM. HIGH or CRITICAL findings fail CI. |
+| CVE scanning | ✅ Weekly grype scan of the SBOM. HIGH or CRITICAL findings fail CI. If a fixed version exists, the scan opens a pull request with the update, and the Release workflow stops until the fix is merged. |
 
 ## Security and CRA compliance
 
