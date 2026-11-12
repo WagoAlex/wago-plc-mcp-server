@@ -144,22 +144,33 @@ CONFIG_PROBLEMS: list[str] = []
 
 
 def log_location_hint(platform: str | None = None, transport: str | None = None) -> str:
-    """Tell the user where the server log is. The answer depends on the OS and on the transport."""
+    """Tell the user where to find the server log. The answer depends on the OS and on the transport.
+
+    The Claude Desktop screen is the documented way. The folders are the known places of the
+    log files. For an extension (.mcpb) Anthropic does not document the file names.
+    """
     platform = platform or sys.platform
     transport = transport or os.getenv("TRANSPORT", "streamable-http").strip().lower()
+    log_file = resolve_user_path(os.getenv("LOG_FILE"))
     if transport != "stdio":
         hint = "Server log: run 'docker logs wmcp' on the Docker host."
-    elif platform == "win32":
-        hint = (
-            r"Server log: the folder %APPDATA%\Claude\logs, file mcp-server-*.log. "
-            r"Microsoft Store install: %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\logs."
+        return f"{hint} Debug log file: {log_file}." if log_file else hint
+    if platform == "win32":
+        folders = (
+            r"%APPDATA%\Claude\logs. Microsoft Store install: "
+            r"%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\logs"
         )
     elif platform == "darwin":
-        hint = "Server log: the folder ~/Library/Logs/Claude, file mcp-server-*.log."
+        folders = "~/Library/Logs/Claude"
     else:
-        hint = "Server log: the folder ~/.config/Claude/logs, file mcp-server-*.log."
-    log_file = resolve_user_path(os.getenv("LOG_FILE"))
-    return f"{hint} Debug log file: {log_file}." if log_file else hint
+        folders = "~/.config/Claude/logs"
+    hint = (
+        "Server log: open Claude Desktop, then Settings > Desktop app > Extensions > Manage > Local MCP servers. "
+        f"Log files on disk: {folders}. The file name can differ, so look for 'mcp' in the name."
+    )
+    if log_file:
+        return f"{hint} Debug log file of the server: {log_file}."
+    return f"{hint} Tip: set 'Logs: debug log file' in the extension form to get a log file from the server itself."
 
 
 def _read_optional(path: str, name: str) -> str | None:
