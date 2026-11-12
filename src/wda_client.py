@@ -116,6 +116,8 @@ class WDAClient:
             if r.status_code == 426:
                 return {"ok": False, "reason": "HTTPS required (426)"}
             return {"ok": False, "reason": f"unexpected status {r.status_code}"}
+        except httpx.TimeoutException:
+            return {"ok": False, "reason": "no answer from the PLC (timeout). Check the network or VPN and that HTTPS port 443 is open"}
         except Exception as e:
             msg = str(e) or repr(e) or "no detail"
             return {"ok": False, "reason": f"{type(e).__name__}: {msg}"}

@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import time
 from difflib import get_close_matches
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
@@ -21,8 +22,8 @@ from plc_manager import PLCManager, KNOWN_PARAM_COUNTS
 from enricher import enrich_parameter, enrich_method_definition, parse_watchlist_response
 from audit import DEFAULT_AUDIT_LOG, GENESIS, build_entry, forward_to_syslog, read_prev_hash
 from auth import AuthMiddleware, print_key_banner, resolve_api_key
-from config import check_security_profile, parse_plcs_from_env, resolve_tls_verify, resolve_user_path
-from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods, writes_allowed
+from config import CONFIG_PROBLEMS, check_security_profile, log_location_hint, parse_plcs_from_env, resolve_tls_verify, resolve_user_path
+from safety import compute_readonly_hosts, is_dangerous_method, parse_allowed_methods, parse_readonly_hosts, writes_allowed
 
 # ───────────────────────── Bootstrap ─────────────────────────
 
@@ -72,9 +73,14 @@ _GITOPS_REPO: str = os.getenv("WAGO_GITOPS_REPO") or "wago-plc-config"
 # ───────────────────────── Safety gates ─────────────────────────
 # See safety.py + docs/gitops/README.md "Safety model". Read-only hosts merge the
 # WAGO_READONLY_HOSTS env with any `# readonly`-tagged lines in the fleet file.
+# Import reads only the env. _register_fleet() adds the fleet-file tags (a file read
+# can hang on a network share) before the first PLC registers, so no PLC is writable early.
 _ALLOWED_METHODS: frozenset[str] = parse_allowed_methods(os.getenv("WAGO_ALLOW_METHODS"))
-_READONLY_HOSTS: frozenset[str] = compute_readonly_hosts()
+_READONLY_HOSTS: frozenset[str] = parse_readonly_hosts(os.getenv("WAGO_READONLY_HOSTS"))
 _WRITES_ALLOWED: bool = writes_allowed()
+_REGISTERING: bool = True  # False once the startup registration has finished (or failed)
+_STARTUP_ERROR: str | None = None  # why the startup registration failed, shown in every reply
+REGISTRATION_WAIT_SECONDS: float = 30  # a tool call waits this long for a PLC that is still registering
 
 # Make a deliberately-opened dangerous path loud at startup.
 for _m in _ALLOWED_METHODS:
@@ -82,8 +88,6 @@ for _m in _ALLOWED_METHODS:
         logger.warning(f"[safety] WAGO_ALLOW_METHODS re-enables DANGEROUS method for live use: {_m}")
 if not _WRITES_ALLOWED:
     logger.info("[safety] WAGO_ALLOW_WRITES is not 'true': ALL PLCs are read-only (writes/invokes refused)")
-elif _READONLY_HOSTS:
-    logger.info(f"[safety] Read-only PLCs (writes/invokes refused): {sorted(_READONLY_HOSTS)}")
 
 
 def _is_readonly(plc_ip: str) -> bool:
@@ -115,13 +119,43 @@ def _seed_audit_hash(audit_log_path: str) -> None:
         logger.warning(f"[audit] {audit_log_path} exists but yielded genesis — empty/corrupt/partial write; starting fresh")
 
 
-def _require_plc(ip: str):
+async def _wait_for_registration(ip: str | None = None) -> None:
+    """Wait until the startup registration ends, or until `ip` is registered. Never longer than REGISTRATION_WAIT_SECONDS."""
+    deadline = time.monotonic() + REGISTRATION_WAIT_SECONDS
+    while _REGISTERING and (ip is None or plc_manager.get(ip) is None) and time.monotonic() < deadline:
+        await asyncio.sleep(0.25)
+
+
+def _startup_problems() -> list[str]:
+    """Everything that went wrong at startup, in plain words. Shown to the user, not only logged."""
+    problems = [f"Startup failed: {_STARTUP_ERROR}"] if _STARTUP_ERROR else []
+    problems += CONFIG_PROBLEMS
+    problems += [f"PLC {ip}: {why}" for ip, why in plc_manager.failures.items()]
+    return problems
+
+
+async def _require_plc(ip: str):
+    if plc_manager.get(ip) is None:
+        await _wait_for_registration(ip)
     plc = plc_manager.get(ip)
-    if not plc:
-        return None, {
-            "error": f"PLC {ip} not registered. Available: {plc_manager.list_ips()}"
-        }
-    return plc, None
+    if plc:
+        return plc, None
+    if _REGISTERING:
+        return None, {"error": f"PLC {ip} not registered. The server is still registering the PLCs. Retry in a few seconds."}
+    parts = [f"PLC {ip} not registered."]
+    reason = plc_manager.failures.get(ip)
+    if reason:
+        parts.append(f"Reason: {reason}.")
+    elif plc_manager.list_ips():
+        parts.append(f"Available: {plc_manager.list_ips()}")
+    else:
+        parts.append("No PLC is registered.")
+    problems = [p for p in _startup_problems() if not p.startswith(f"PLC {ip}:")]
+    if problems:
+        parts.append("Startup problems: " + " | ".join(problems) + ".")
+    if reason or problems or not plc_manager.list_ips():
+        parts.append(log_location_hint())
+    return None, {"error": " ".join(parts)}
 
 
 def _score(text: str, query: str) -> int:
@@ -155,10 +189,13 @@ def _filter_search(items: set[str], query: str, limit: int) -> list[str]:
 # ───────────────────────── MCP Resource ─────────────────────────
 
 @mcp.resource("wago://catalog")
-def wago_catalog() -> str:
+async def wago_catalog() -> str:
     """Overview of all registered WAGO PLCs and their capability counts. Read this first."""
+    await _wait_for_registration()
+    if _REGISTERING:
+        return "The server is still registering the PLCs. Read this again in a few seconds."
     if not plc_manager.list_ips():
-        return "No PLCs registered. Check startup logs."
+        return " ".join(["No PLCs registered.", *_startup_problems(), log_location_hint()])
     lines = ["# WAGO PLC Catalog\n"]
     for ip in plc_manager.list_ips():
         plc = plc_manager.get(ip)
@@ -178,7 +215,18 @@ def wago_catalog() -> str:
 @mcp.tool()
 async def list_plcs(ctx: Context) -> dict:
     """List all reachable WAGO PLCs. Use first to find a target IP."""
-    return {"plcs": plc_manager.list_ips()}
+    await _wait_for_registration()
+    result: dict = {"plcs": plc_manager.list_ips()}
+    if _REGISTERING:
+        result["registering"] = True
+        result["note"] = "The server is still registering the PLCs. Call list_plcs again in a few seconds."
+        return result
+    problems = _startup_problems()
+    if problems:
+        result["problems"] = problems
+    if problems or not result["plcs"]:
+        result["logs"] = log_location_hint()
+    return result
 
 
 @mcp.tool()
@@ -240,7 +288,7 @@ async def get_plc_audit_log(
 @mcp.tool()
 async def describe_plc(ctx: Context, plc_ip: str) -> dict:
     """Get capability summary for a PLC: counts + feature names. Cheap, cached."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     actual = len(plc.parameters)
@@ -270,7 +318,7 @@ async def describe_plc(ctx: Context, plc_ip: str) -> dict:
 @mcp.tool()
 async def get_device(ctx: Context, plc_ip: str, device_id: str) -> dict:
     """Get a device resource plus the features it exposes (one call)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     if device_id not in plc.devices:
@@ -289,7 +337,7 @@ async def get_device(ctx: Context, plc_ip: str, device_id: str) -> dict:
 @mcp.tool()
 async def get_feature(ctx: Context, plc_ip: str, feature_id: str) -> dict:
     """Get a feature plus its composition: nested features, contained parameter/method definitions (one call)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     if feature_id not in plc.features:
@@ -313,7 +361,7 @@ async def get_feature(ctx: Context, plc_ip: str, feature_id: str) -> dict:
 @mcp.tool()
 async def get_enum_definition(ctx: Context, plc_ip: str, enum_id: str) -> dict:
     """Get an enum definition's cases (value → stringValue). Useful to inspect an enum's full case list directly."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -325,7 +373,7 @@ async def get_enum_definition(ctx: Context, plc_ip: str, enum_id: str) -> dict:
 @mcp.tool()
 async def get_parameter_definition(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
     """Get a parameter's definition: writeable, userSetting, dataType, related enum — without reading its value."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -351,7 +399,7 @@ async def find_parameters(
     Set user_settings_only=True to filter user-configurable parameters.
     Empty query returns the first N parameters alphabetically.
     """
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
 
@@ -372,7 +420,7 @@ async def find_parameters(
 @mcp.tool()
 async def get_parameter(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
     """Read a single parameter value. Resolves enum values to human-readable labels."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
 
@@ -413,7 +461,7 @@ async def get_parameters_bulk(
     async def _fetch(req: dict) -> dict:
         ip = req.get("plc_ip", "")
         pid = req.get("parameter_id", "")
-        plc, err = _require_plc(ip)
+        plc, err = await _require_plc(ip)
         if err:
             return {"plc_ip": ip, "parameter_id": pid, "error": err["error"]}
         if pid not in plc.parameters:
@@ -443,7 +491,7 @@ async def set_parameters(
     # Refusals record IDs only: redaction matches known names, so a mistyped ID
     # must not put the value of a secret into the permanent audit chain.
     refused_details = {"param_ids": [p.get("id") for p in parameters]}
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         _audit_log("set_parameters", plc_ip, refused_details, "refused: PLC not registered")
         return err
@@ -487,7 +535,7 @@ async def set_parameter(ctx: Context, plc_ip: str, parameter_id: str, value) -> 
 @mcp.tool()
 async def get_parameter_referenced_instances(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
     """For an instance_identity_ref-typed parameter: the class instances that reference it."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -499,7 +547,7 @@ async def get_parameter_referenced_instances(ctx: Context, plc_ip: str, paramete
 @mcp.tool()
 async def list_parameter_instances(ctx: Context, plc_ip: str, parameter_id: str) -> dict:
     """List instance numbers of a class-typed parameter (dataType 'instantiations'). Use get_parameter_instance for detail."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -511,7 +559,7 @@ async def list_parameter_instances(ctx: Context, plc_ip: str, parameter_id: str)
 @mcp.tool()
 async def get_parameter_instance(ctx: Context, plc_ip: str, parameter_id: str, instance_no: str) -> dict:
     """Get one class-parameter instance: its device, own parameters, and methods (one call)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -537,7 +585,7 @@ async def find_methods(
     ctx: Context, plc_ip: str, query: str = "", limit: int = FIND_LIMIT_DEFAULT
 ) -> dict:
     """Search method IDs by substring/fuzzy match. Returns up to `limit` matches (default 20)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
 
@@ -552,7 +600,7 @@ async def find_methods(
 @mcp.tool()
 async def get_method(ctx: Context, plc_ip: str, method_id: str) -> dict:
     """Get method metadata with inline inArgs/outArgs signatures. One call gives the full schema needed for invoke_method."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     if method_id not in plc.methods:
@@ -588,7 +636,7 @@ async def invoke_method(
     wait=False: returns immediately with run_id; poll with get_method_run.
     Example: invoke_method(plc_ip, "0-0-ntpclient-updatetime")
     """
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         _audit_log("invoke_method", plc_ip, {"method": method_id}, "refused: PLC not registered")
         return err
@@ -651,7 +699,7 @@ async def get_method_run(
     ctx: Context, plc_ip: str, method_id: str, run_id: str
 ) -> dict:
     """Poll an async method run. Use after invoke_method(wait=False) to check status."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -671,7 +719,7 @@ async def get_method_run(
 @mcp.tool()
 async def list_method_runs(ctx: Context, plc_ip: str, method_id: str) -> dict:
     """List past runs of a method still held server-side (audit/inspection use)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -687,7 +735,7 @@ async def list_method_runs(ctx: Context, plc_ip: str, method_id: str) -> dict:
 @mcp.tool()
 async def delete_method_run(ctx: Context, plc_ip: str, method_id: str, run_id: str) -> dict:
     """Free a server-side run result before it expires on its own. Optional housekeeping, not required for correctness."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -702,7 +750,7 @@ async def delete_method_run(ctx: Context, plc_ip: str, method_id: str, run_id: s
 @mcp.tool()
 async def list_watchlists(ctx: Context, plc_ip: str) -> dict:
     """List watchlist IDs still active server-side (e.g. after a restart, to find orphans)."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -725,7 +773,7 @@ async def create_watchlist(
     Watchlist auto-expires after timeout_seconds of inactivity (reset on each read).
     Use timeout_seconds=0 for one-shot read.
     """
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
 
@@ -755,7 +803,7 @@ async def create_watchlist(
 @mcp.tool()
 async def read_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict:
     """Read current values from an existing watchlist. Resets the timeout."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -773,7 +821,7 @@ async def read_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict:
 @mcp.tool()
 async def delete_watchlist(ctx: Context, plc_ip: str, watchlist_id: str) -> dict:
     """Delete a watchlist to free server resources before timeout."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -806,7 +854,7 @@ def _file_write_refused(action: str, plc_ip: str, details: dict) -> dict | None:
 async def create_file(ctx: Context, plc_ip: str, context_parameter_id: str) -> dict:
     """Allocate a file_id for uploading content into a file_id-typed parameter."""
     details = {"context": context_parameter_id}
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         _audit_log("create_file", plc_ip, details, "refused: PLC not registered")
         return err
@@ -829,7 +877,7 @@ async def upload_file(
     ctx: Context, plc_ip: str, file_id: str, content_base64: str, content_type: str = "application/octet-stream"
 ) -> dict:
     """Upload whole file content (base64-encoded) to a file_id from create_file."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         _audit_log("upload_file", plc_ip, {"file_id": file_id}, "refused: PLC not registered")
         return err
@@ -848,7 +896,7 @@ async def upload_file(
 @mcp.tool()
 async def download_file(ctx: Context, plc_ip: str, file_id: str) -> dict:
     """Download a file's content as base64. Pairs with a parameter whose dataType is file_id."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -861,7 +909,7 @@ async def download_file(ctx: Context, plc_ip: str, file_id: str) -> dict:
 @mcp.tool()
 async def get_file_metadata(ctx: Context, plc_ip: str, file_id: str) -> dict:
     """HEAD a file_id — size/content-type without downloading the body."""
-    plc, err = _require_plc(plc_ip)
+    plc, err = await _require_plc(plc_ip)
     if err:
         return err
     try:
@@ -925,23 +973,52 @@ def wago_assistant(query: str) -> list[base.Message]:
 
 # ───────────────────────── Entry point ─────────────────────────
 
+async def _register_fleet() -> None:
+    """Read the fleet files and register the PLCs.
+
+    The file reads run in a thread so a slow or unreachable network share cannot block
+    the event loop. The read-only set is final before the first PLC registers.
+    """
+    global _READONLY_HOSTS, _REGISTERING, _STARTUP_ERROR
+    try:
+        # ponytail: a read that hangs on SMB keeps its worker thread until the OS gives up
+        _READONLY_HOSTS = await asyncio.to_thread(compute_readonly_hosts)
+        if _WRITES_ALLOWED and _READONLY_HOSTS:
+            logger.info(f"[safety] Read-only PLCs (writes/invokes refused): {sorted(_READONLY_HOSTS)}")
+
+        plcs = await asyncio.to_thread(parse_plcs_from_env)
+        logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")
+
+        ok, failed = await plc_manager.register_many(plcs)
+
+        logger.info(f"Registration: {len(ok)}/{len(plcs)} ready")
+        if failed:
+            logger.info(f"Skipped: {', '.join(failed)}")
+    except Exception as e:
+        logger.exception("Registration failed")
+        _STARTUP_ERROR = f"{type(e).__name__}: {e}"
+    finally:
+        _REGISTERING = False
+
+
 async def main() -> None:
     global _AGENT_ID
     check_security_profile()  # fail closed before touching any PLC in plaintext
     _seed_audit_hash(resolve_user_path(os.getenv("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG)))
 
-    plcs = parse_plcs_from_env()
-    logger.info(f"Discovering {len(plcs)} PLC(s) in parallel…")
+    transport = os.getenv("TRANSPORT", "streamable-http").strip().lower()
 
-    ok, failed = await plc_manager.register_many(plcs)
-
-    logger.info(f"Registration: {len(ok)}/{len(plcs)} ready")
-    if failed:
-        logger.info(f"Skipped: {', '.join(failed)}")
+    # stdio: Claude Desktop drops the server when the handshake is late, so serve first
+    # and register in the background. HTTP keeps the old order: register, then listen.
+    # A failed registration stays visible: stdio shows it in every reply, HTTP stops the server.
+    registration = asyncio.create_task(_register_fleet())
+    if transport != "stdio":
+        await registration
+        if _STARTUP_ERROR:
+            raise RuntimeError(f"PLC registration failed: {_STARTUP_ERROR}. {log_location_hint()}")
 
     host = os.getenv("HOST", "0.0.0.0")
     port = os.getenv("PORT", "6042")
-    transport = os.getenv("TRANSPORT", "streamable-http").strip().lower()
 
     # stdio has no HTTP endpoint, so no bearer key or TLS. It must run before
     # resolve_api_key(): the key banner prints to stdout, which is the JSON-RPC
@@ -952,6 +1029,8 @@ async def main() -> None:
         try:
             await mcp.run_stdio_async()
         finally:
+            registration.cancel()
+            await asyncio.gather(registration, return_exceptions=True)
             await plc_manager.close_all()
         return
 
