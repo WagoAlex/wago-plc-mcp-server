@@ -100,7 +100,7 @@
     "hosts_file": {
       "type": "file",
       "title": "Many PLCs: PLC IP list file",
-      "description": "Select a text file with one IP address on each line. A line that starts with # is a comment. The server also uses the addresses in the first field.",
+      "description": "Select a text file with one IP address on each line. A line that starts with # is a comment. The server also uses the addresses in the first field. Keep the file on a local disk of this computer. Do not use a network share, a NAS, or a synced folder such as OneDrive.",
       "required": false
     },
     "per_plc_passwords": {
@@ -114,7 +114,7 @@
     "passwords_file": {
       "type": "file",
       "title": "Different passwords: Per-PLC passwords file",
-      "description": "Select a text file with one IP=password pair on each line. All text after = is the password. Write each comment on its own line. This file has priority over the field above. The file is not encrypted. Windows: keep the file in your user folder, not in a synced folder such as OneDrive. Linux: set the file permission with chmod 600.",
+      "description": "Select a text file with one IP=password pair on each line. All text after = is the password. Write each comment on its own line. This file has priority over the field above. The file is not encrypted. Windows: keep the file in your user folder. Do not use a network share, a NAS, or a synced folder such as OneDrive. Linux: set the file permission with chmod 600.",
       "required": false
     },
     "readonly_hosts": {

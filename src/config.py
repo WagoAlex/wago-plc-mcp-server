@@ -5,6 +5,7 @@ Docker Secrets into runtime configuration. No side effects at import time.
 """
 import os
 import re
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -138,6 +139,43 @@ def _parse_password_file(text: str) -> dict[str, str]:
     return _password_pairs(lines, "PLC_PASSWORDS_FILE", "line")
 
 
+# Problems of the last parse_plcs_from_env() run. The server shows them in its tool replies.
+CONFIG_PROBLEMS: list[str] = []
+
+
+def log_location_hint(platform: str | None = None, transport: str | None = None) -> str:
+    """Tell the user where the server log is. The answer depends on the OS and on the transport."""
+    platform = platform or sys.platform
+    transport = transport or os.getenv("TRANSPORT", "streamable-http").strip().lower()
+    if transport != "stdio":
+        hint = "Server log: run 'docker logs wmcp' on the Docker host."
+    elif platform == "win32":
+        hint = (
+            r"Server log: the folder %APPDATA%\Claude\logs, file mcp-server-*.log. "
+            r"Microsoft Store install: %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\logs."
+        )
+    elif platform == "darwin":
+        hint = "Server log: the folder ~/Library/Logs/Claude, file mcp-server-*.log."
+    else:
+        hint = "Server log: the folder ~/.config/Claude/logs, file mcp-server-*.log."
+    log_file = resolve_user_path(os.getenv("LOG_FILE"))
+    return f"{hint} Debug log file: {log_file}." if log_file else hint
+
+
+def _read_optional(path: str, name: str) -> str | None:
+    """Read a config file. A missing or unreadable file (for example on a network share) is skipped, never fatal."""
+    try:
+        return Path(path).read_text()
+    except FileNotFoundError:
+        problem = f"{name}={path} not found"
+        logger.warning(f"[config] {problem} - skipping")
+    except OSError as e:
+        problem = f"{name}={path} cannot be read ({e}). Keep this file on a local disk, not on a network share"
+        logger.error(f"[config] {problem} - skipping")
+    CONFIG_PROBLEMS.append(problem)
+    return None
+
+
 def parse_plcs_from_env() -> list[tuple[str, str, str]]:
     """Parse PLC list from environment + Docker Secrets, supporting three formats.
 
@@ -158,6 +196,7 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
       PLC_PASSWORDS_FILE=/app/data/passwords.txt                (bulk per-PLC file, also extends host list)
     Per-PLC credentials override the shared default for matching IPs.
     """
+    CONFIG_PROBLEMS.clear()
     user = os.getenv("DEFAULT_PLC_USERNAME", "admin")
     default_pwd = (
         read_secret("plc_default_password")
@@ -171,11 +210,9 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
     password_overrides = _parse_password_field(os.getenv("PLC_PASSWORDS", ""))
     overrides_file = os.getenv("PLC_PASSWORDS_FILE", "").strip()
     if overrides_file:
-        p = Path(overrides_file)
-        if p.exists():
-            password_overrides = {**password_overrides, **_parse_password_file(p.read_text())}
-        else:
-            logger.warning(f"[config] PLC_PASSWORDS_FILE={overrides_file} not found - skipping")
+        text = _read_optional(overrides_file, "PLC_PASSWORDS_FILE")
+        if text is not None:
+            password_overrides = {**password_overrides, **_parse_password_file(text)}
     per_plc_secrets = {**password_overrides, **_load_per_plc_secrets()}
     plcs: dict[str, tuple[str, str]] = {}
 
@@ -187,14 +224,11 @@ def parse_plcs_from_env() -> list[tuple[str, str, str]]:
 
     hosts_file = os.getenv("WAGO_PLC_HOSTS_FILE", "").strip()
     if hosts_file:
-        p = Path(hosts_file)
-        if p.exists():
-            for line in p.read_text().splitlines():
-                ip = line.split("#")[0].strip()
-                if ip:
-                    plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
-        else:
-            logger.warning(f"[config] WAGO_PLC_HOSTS_FILE={hosts_file} not found - skipping")
+        text = _read_optional(hosts_file, "WAGO_PLC_HOSTS_FILE")
+        for line in (text or "").splitlines():
+            ip = line.split("#")[0].strip()
+            if ip:
+                plcs[ip] = (user, per_plc_secrets.get(ip, default_pwd))
 
     for key, val in os.environ.items():
         m = re.match(r"^PLC_PASSWORDS_(\d+_\d+_\d+_\d+)$", key)

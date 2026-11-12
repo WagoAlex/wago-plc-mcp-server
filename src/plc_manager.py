@@ -123,6 +123,7 @@ class PLCManager:
         self.max_concurrent_registrations = max_concurrent_registrations
         self.ssl_verify = ssl_verify
         self._lock = asyncio.Lock()
+        self.failures: dict[str, str] = {}  # ip -> why the PLC did not register, shown to the user
 
     async def register(self, ip: str, username: str, password: str) -> PLCEntry | None:
         # Per-PLC cert pinning: Docker Secret plc_cert_<ip_underscored> overrides global ssl_verify
@@ -141,6 +142,7 @@ class PLCManager:
         probe = await client.ping()
         if not probe["ok"]:
             logger.warning(f"[{ip}] skipped — {probe['reason']}")
+            self.failures[ip] = str(probe["reason"])
             await client.close()
             return None
 
@@ -149,11 +151,13 @@ class PLCManager:
             logger.warning(
                 f"[{ip}] skipped — essential cache failed (parameters or methods unreachable)"
             )
+            self.failures[ip] = "could not read the parameters or the methods"
             await client.close()
             return None
 
         async with self._lock:
             self.plcs[ip] = entry
+            self.failures.pop(ip, None)
 
         logger.info(
             f"[{ip}] registered — params={len(entry.parameters)} "

@@ -67,13 +67,16 @@ The server merges the IP field and the IP file. You can use both.
 In the password file, all text after `=` is the password, so a password can contain `#` and `,`. Write each comment on its own line.
 In the IP=password field, a password cannot contain `,`.
 
+Keep both files on a local disk of this computer. Do not use a network share or a NAS.
+A network share can be slow or unreachable, for example through a VPN. The server then cannot read the file.
+
 **File paths on Windows and Linux:**
 
 | Item | Windows | Linux |
 |---|---|---|
 | Your user folder (`~`) | `C:\Users\name` | `/home/name` |
 | Audit log (default) | `C:\Users\name\.wago-plc-mcp\audit.log` | `/home/name/.wago-plc-mcp/audit.log` |
-| Keep the password file private | Keep the file in your user folder, not in a synced folder such as OneDrive | Run `chmod 600` on the file |
+| Keep the password file private | Keep the file in your user folder. Do not use a network share, a NAS, or a synced folder such as OneDrive | Run `chmod 600` on the file |
 
 > [!WARNING]
 > The IPs and passwords above are examples. Replace them with your values.
@@ -108,6 +111,37 @@ With the skill, Claude finds the correct parameter faster.
 3. Add the downloaded file.
 
 For Claude Code, claude.ai, and the Agent SDK, see [WAGO skill](deployment.md#wago-skill).
+
+## Troubleshooting
+
+### Claude Desktop shows "Connection to the extension server is not possible"
+
+Claude Desktop shows this message when the server does not start or does not answer in time.
+
+1. Find the server log. The file name starts with `mcp-server-`.
+
+   | System | Log folder |
+   |---|---|
+   | Windows | `%APPDATA%\Claude\logs` |
+   | Windows, Microsoft Store install | `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\logs` |
+   | Linux | `~/.config/Claude/logs` |
+   | macOS | `~/Library/Logs/Claude` |
+
+2. Read the last lines of the file. A line that starts with `[config]` names a problem with a file.
+3. If the log shows `cannot be read`, move the PLC list file and the passwords file to your user folder. Select the files again in the install form.
+4. Close Claude Desktop completely. Open it again.
+
+### Claude says that no PLC is registered
+
+The server starts first and registers the PLCs after that. If a PLC does not register, Claude shows the reason and the log folder. The answer of the `list_plcs` tool has the fields `problems` and `logs`.
+
+| Reason in the answer | Action |
+|---|---|
+| `no answer from the PLC (timeout)` | Check the VPN, the firewall, and that HTTPS port 443 is open. |
+| `auth failed` | Check the username and the password in the install form. |
+| `cannot be read` | Move the file to a local disk. Do not use a network share. |
+
+The server registers the PLCs only when it starts. After you fix the cause, close Claude Desktop completely and open it again.
 
 ## Example questions
 
