@@ -175,7 +175,7 @@
     "log_file": {
       "type": "string",
       "title": "Logs: debug log file",
-      "description": "Leave blank to log only to the Claude Desktop log. ~ is your user folder on Windows and Linux. Example: ~/.wago-plc-mcp/debug.log.",
+      "description": "Leave blank to log only to the Claude Desktop log. For troubleshooting, set a file. The server then writes its own log, and this file does not depend on the Claude Desktop version. ~ is your user folder on Windows and Linux. Example: ~/.wago-plc-mcp/debug.log.",
       "default": "",
       "required": false
     },

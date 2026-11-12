@@ -118,18 +118,22 @@ For Claude Code, claude.ai, and the Agent SDK, see [WAGO skill](deployment.md#wa
 
 Claude Desktop shows this message when the server does not start or does not answer in time.
 
-1. Find the server log. The file name starts with `mcp-server-`.
+1. Open the server log in Claude Desktop. Go to **Settings > Desktop app**. Select **Manage** next to **Extensions**. Open **Local MCP servers**. In the older layout, go to **Settings > Developer**.
+2. To find the log files on disk, look in the folder for your system. The file name can differ. Look for `mcp` in the name.
 
    | System | Log folder |
    |---|---|
    | Windows | `%APPDATA%\Claude\logs` |
-   | Windows, Microsoft Store install | `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\logs` |
+   | Windows, Microsoft Store install | `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\logs` |
    | Linux | `~/.config/Claude/logs` |
    | macOS | `~/Library/Logs/Claude` |
 
-2. Read the last lines of the file. A line that starts with `[config]` names a problem with a file.
-3. If the log shows `cannot be read`, move the PLC list file and the passwords file to your user folder. Select the files again in the install form.
-4. Close Claude Desktop completely. Open it again.
+   To check the package name of the Microsoft Store install, run `(Get-AppxPackage -Name "*Claude*").PackageFamilyName` in PowerShell.
+
+3. To get a log file that the server writes itself, set **Logs: debug log file** in the install form. Example: `~/.wago-plc-mcp/debug.log`. This file does not depend on the Claude Desktop version.
+4. Read the last lines of the log. A line that starts with `[config]` names a problem with a file.
+5. If the log shows `cannot be read`, move the PLC list file and the passwords file to your user folder. Select the files again in the install form.
+6. Close Claude Desktop completely. Open it again.
 
 ### Claude says that no PLC is registered
 
