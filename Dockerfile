@@ -2,7 +2,7 @@
 # CVEs on curl.se. Only the healthcheck uses curl, so this build keeps it self-contained.
 # ponytail: pinned by hand, CI does not scan the image. Update both values for a new
 # curl release, after you check the .asc signature (key 27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2).
-FROM python:3.14-slim AS curl-build
+FROM python:3.15-slim AS curl-build
 ARG CURL_VERSION=8.23.0
 ARG CURL_SHA256=e3de77cfa6367083c776a26647fc9f633b538c06c3baa73d931a252ac8f72b49
 RUN apt-get update \
@@ -17,7 +17,7 @@ RUN apt-get update \
     && make install \
     && strip /usr/local/bin/curl
 
-FROM python:3.14-slim AS base
+FROM python:3.15-slim AS base
 
 # MCP Registry ownership marker for the OCI package; must equal server.json "name"
 LABEL io.modelcontextprotocol.server.name="io.github.WagoAlex/wago-plc-mcp-server"
